@@ -54,6 +54,27 @@ Function Install-ITS247Agent {
 	Invoke-WebRequest https://download.ambitionsgroup.com/Sites/Install_ITS247_Agent.txt -UseBasicParsing | Invoke-Expression
 }
 
+Function Update-ITS247Agent {
+	$DisplayVersion = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).DisplayVersion
+	$TYPE = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).TYPE
+	$AvailableVersion = (Invoke-WebRequest http://download.ambitionsgroup.com/Sites/ITS247Agent/DPMAVersion.txt -UseBasicParsing)
+
+	if(($DisplayVersion -ne $AvailableVersion) -and ($TYPE -eq "DPMA")) {
+	 WRITE-HOST "Updating Agent from $DisplayVersion to $AvailableVersion"
+		 $SaveFolder = 'C:\Ambitions'
+		 New-Item -ItemType Directory -Force -Path $SaveFolder
+		 $PatchPath = $SaveFolder + '\DPMAPatch' + $AvailableVersion + '.exe'
+		 (New-Object System.Net.WebClient).DownloadFile('http://update.itsupport247.net/agtupdt/DPMAPatch.exe', $PatchPath)
+		 & $PatchPath | Wait-Process
+		 $DisplayVersion = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).DisplayVersion
+	 WRITE-HOST "Agent is now version $DisplayVersion"
+	}
+<#
+    .DESCRIPTION
+		Updates the Continuum ITS247 Desktop agent to the latest available. No parameters are needed.
+#>
+}
+
 Function Deploy-AppDefaults {
 	Write-Host "Downloading App Defaults"
 	New-Item -ItemType Directory -Force -Path C:\Ambitions\ITS247Agent
@@ -167,12 +188,22 @@ Function Install-NetExtender {
 Function Connect-NetExtender {
 	param
 	(
+		[Parameter(Mandatory=$False)]
 		[string]$DC,
+		
+		[Parameter(Mandatory=$true)]
 		[string]$VPNuri,
+		
+		[Parameter(Mandatory=$true)]
 		[string]$VPNuser,
+		
+		[Parameter(Mandatory=$true)]
 		[string]$VPNpassword,
+		
+		[Parameter(Mandatory=$true)]
 		[string]$VPNdomain
 	)
+
 	If (([string]::IsNullOrWhiteSpace($DC)) -or (-not (Test-Connection -comp $DC -quiet))) {
 		If (!(Test-Path -LiteralPath 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe')) { 
 			Install-NetExtender
@@ -180,6 +211,23 @@ Function Connect-NetExtender {
 		Write-host "Initiating VPN connection"
 		echo y | & 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe' connect -s $VPNuri -u $VPNuser -p $VPNpassword -d $VPNdomain
 	}
+<#
+    .DESCRIPTION
+		Initiates an SSLVPN connection to a site using Sonicwall NetExtender
+	.PARAMETER DC
+		(Optional) A domain controller whose connection to can be tested to see if the vpn connection is needed. Example -DC "tsdc"
+	.PARAMETER VPNuri
+		The connection URL and port. Example -VPNuri "vpn.ambitinsgroup.com:4433"
+	.PARAMETER VPNuser
+		The vpn enable user to be used. Example -VPNuser "vpnuser"
+    .PARAMETER VPNpassword
+		The vpn user's password to be used. Example -VPNpassword "s0m3Gr3@tPw"
+	.PARAMETER VPNdomain
+		The SSLVPN domain to be used, found in the sonicwall settings. Example -VPNdomain "LocalDomain"
+	.EXAMPLE
+		Connect-NetExtender -DC "TSDC" -VPNuri "vpn.ts.com:4433" -VPNuser "tsadmin" -VPNpassword "R@nD0m!" -VPNdomain "LocalDomain"
+		This example connects to the client Test Site, if such a client were to exist.
+#>
 }
 
 Function Update-WindowsApps {
@@ -299,11 +347,23 @@ Write-Host "Join Domain"
 	Add-Computer -DomainName $Domain -Credential $credential
 }
 
-Function Remove-ITS247Installer {
+Function Remove-ITS247InstallFolder {
 	Write-Host "Cleaning up and Restarting Computer"
 	PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "If (Test-Path C:\Ambitions\ITS247Agent){Remove-Item -LiteralPath 'C:\Ambitions\ITS247Agent' -Force -Recurse};Restart-Computer -Force"
 	Stop-transcript
 	Restart-Computer -Force
+}
+
+Function Rename-ClientComputer {
+	Write-Host "Rename Computer"
+		$title = 'Rename Computer'
+		$msg   = 'Enter the client shortcode (e.g. AAIHB) or Dept code'
+		$SerialNumber = (Get-WmiObject win32_bios).SerialNumber
+		#Message box prompts onscreen for input
+		[void][Reflection.Assembly]::LoadWithPartialName('Microsoft.VisualBasic')
+		$ClientCode = [Microsoft.VisualBasic.Interaction]::InputBox($msg, $title)
+		Rename-Computer ($ClientCode + "-" + $SerialNumber) -Force
+	Write-Host "End of Rename Computer"
 }
 
 Function Connect-O365 {
@@ -320,4 +380,3 @@ Function Run-Win10Decrap {
 	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
 	Invoke-WebRequest https://download.ambitionsgroup.com/Scripts/Windows10Decrapifier.txt -UseBasicParsing | Invoke-Expression
 }
-
