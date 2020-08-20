@@ -380,3 +380,14 @@ Function Run-Win10Decrap {
 	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
 	Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Win-10-DeCrapifier/Windows10Decrapifier.txt -UseBasicParsing | Invoke-Expression
 }
+
+# Print out functions from this file
+$scriptFunctions = Get-ChildItem function:
+
+Write-Host `n====================================================
+Write-Host The below functions are now loaded and ready to use:
+Write-Host ====================================================`n
+
+ForEach ($func in $scriptFunctions | Where-Object { $_.Name -match "-" } ) {
+	Write-Host $func.Name
+}
