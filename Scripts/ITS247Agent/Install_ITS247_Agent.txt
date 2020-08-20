@@ -1,0 +1,197 @@
+<#
+.Synopsis
+	Installs the Ambitions Consulting Group Continuum Agent
+.Description
+	Determines the site code from IP or manually, then downloads and installs the appropriate config file for the site.
+.Example
+	InstallAgent.ps1 -Code ACG
+	Installs the agent for the site Ambitions Consulting Group. Will prompt for silent install confirmation.
+.Example
+	InstallAgent.ps1 -Silent
+	Attempts to detect the site and installs the agent without a GUI. Will prompt for site confirmation.
+.Example
+	InstallAgent.ps1 -Code AAIHB -Silent
+	Installs the agent for the site 'Albuqurque Area Indian Health Board' and installs the agent with a GUI
+.Example
+	InstallAgent.ps1 -Auto
+	Attempts to detect the site and installs the agent without a GUI. Will not prompt for anything.
+.Notes
+	For a list of site codes, go to:
+	http://download.ambitionsgroup.com/Sites/ITS247Agent/SiteAgentConfigs.csv
+#>
+
+#Requires -RunAsAdministrator
+
+[cmdletbinding()]
+param(
+	#Shortcode of the site you want to install, list available at http://download.ambitionsgroup.com/Sites/ITS247Agent/SiteAgentConfigs.csv
+	[string]$Code,
+	#Installs the agent silently
+	[switch]$Silent,
+	#Uses ip detection to silently install the script
+	[switch]$Auto
+)
+Write-Host Ambitions Desktop Agent Installer
+#Dowload config file index
+	$SiteConfigs = @()
+	$SiteConfigs = (Invoke-WebRequest -uri "http://download.ambitionsgroup.com/Sites/ITS247Agent/SiteAgentConfigs.csv" -UseBasicParsing).Content | convertfrom-csv -Delimiter ','
+
+function Start-Presentation {
+	Write-Host "Temporarily disabling power saving settings"
+	#Set keys to allow presentation mode on desktops
+	if((Test-Path -LiteralPath "HKCU:\Software\Microsoft\MobilePC\AdaptableSettings") -ne $true) {  New-Item "HKCU:\Software\Microsoft\MobilePC\AdaptableSettings" -force -ea SilentlyContinue };
+	if((Test-Path -LiteralPath "HKCU:\Software\Microsoft\MobilePC\MobilityCenter") -ne $true) {  New-Item "HKCU:\Software\Microsoft\MobilePC\MobilityCenter" -force -ea SilentlyContinue };
+	New-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\MobilePC\AdaptableSettings' -Name 'SkipBatteryCheck' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue;
+	New-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\MobilePC\MobilityCenter' -Name 'RunOnDesktop' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue;
+	#Start presentation mode
+	presentationsettings /start
+}
+
+function Stop-Presentation {
+	Write-Host "Restoring power saving settings"
+	#Stop presentation mode
+	presentationsettings /stop
+	#Resets keys that allow presentation mode on desktops
+	if((Test-Path -LiteralPath "HKCU:\Software\Microsoft\MobilePC\AdaptableSettings") -ne $true) {  New-Item "HKCU:\Software\Microsoft\MobilePC\AdaptableSettings" -force -ea SilentlyContinue };
+	if((Test-Path -LiteralPath "HKCU:\Software\Microsoft\MobilePC\MobilityCenter") -ne $true) {  New-Item "HKCU:\Software\Microsoft\MobilePC\MobilityCenter" -force -ea SilentlyContinue };
+	Remove-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\MobilePC\AdaptableSettings' -Name 'SkipBatteryCheck' -Force -ea SilentlyContinue;
+	Remove-ItemProperty -LiteralPath 'HKCU:\Software\Microsoft\MobilePC\MobilityCenter' -Name 'RunOnDesktop' -Force -ea SilentlyContinue;
+}
+
+function InstallAgent {
+	Write-Host
+	Write-Host ================ Agent Installation ================
+	Write-Host Downloading the agent for $SelectedSite.Site
+	$iniLoc = $SelectedSite.IniLoc
+	$null = (New-Item -ItemType Directory -Force -Path 'C:\Ambitions\ITS247Agent')
+	if (Test-Path 'C:\Ambitions\ITS247Agent\SaazMobile.ini') {Remove-Item 'C:\Ambitions\ITS247Agent\SaazMobile.ini'}
+	if (Test-Path 'C:\Ambitions\ITS247Agent\DPMASetup.exe') {Remove-Item 'C:\Ambitions\ITS247Agent\DPMASetup.exe'}
+	(New-Object System.Net.WebClient).DownloadFile('http://download.ambitionsgroup.com/Sites/ITS247Agent/DPMASetup.exe', 'C:\Ambitions\ITS247Agent\DPMASetup.exe')
+	(New-Object System.Net.WebClient).DownloadFile($iniLoc, 'C:\Ambitions\ITS247Agent\SaazMobile.ini')
+	Get-ChildItem 'C:\Ambitions\ITS247Agent' | Unblock-File
+	Write-Host Disabling Windows Defender Real Time Scanning
+		Set-MpPreference -DisableRealtimeMonitoring $true
+	Start-Presentation
+	If ($Silent){
+		Write-Host Installing the agent for $SelectedSite.Site silently. No errors will be shown.
+		Start-Process -wait -Verb RunAs -FilePath 'C:\Ambitions\ITS247Agent\DPMASetup.exe' -ArgumentList '/S SaazMobile.ini'
+	} else {
+		Write-Host Installing the agent for $SelectedSite.Site interactively
+		Start-Process -wait -Verb RunAs -FilePath 'C:\Ambitions\ITS247Agent\DPMASetup.exe' -ArgumentList 'SaazMobile.ini'
+	}
+	Stop-Presentation
+	Exit
+} #End of InstallAgent
+
+function AskSilent {
+	#Prompt for Silent install
+	$message  = "Do you want to install the agent silently?"
+	$question = 'Note: Errors will not be shown.'
+	$choices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
+	$choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
+	$choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
+	$decision = $Host.UI.PromptForChoice($message, $question, $choices, 1)
+	Write-Host
+	if ($decision -eq 0) {
+		Write-Host 'Selection Confirmed: Silent installation'
+		$Silent = $True
+		InstallAgent
+	} else {
+		Write-Host 'Selection Confirmed: Interactive installation'
+		$Silent = $False
+		InstallAgent
+	}
+} #End of AskSilent
+
+function Show-Menu {
+	param (
+		[string]$Title = 'Site Selection'
+	)
+	Clear-Host
+	Write-Host Ambitions Desktop Agent Installer
+	Write-Host
+	Write-Host "================ $Title ================"
+	Foreach ($Site in $SiteConfigs){
+	Write-Host "Enter "$Site.Code"`t for "$Site.Site
+	}
+	Write-Host "Enter 'Q' to quit"
+	Write-Host
+} #End of Show-Menu
+
+function Create-Menu {
+	$selection = $null
+	do
+	{
+		Show-Menu -Title 'Site Selection'
+		If (!($selection)) {$selection = Read-Host "Please make a selection"}
+		$SelectedSite = $SiteConfigs.Where({$PSItem.Code -like $selection})
+		If ($selection -eq 'q') {exit}
+		If ($SelectedSite){
+			Write-Host
+			Write-Host Selection Confirmed: $SelectedSite.Site
+			AskSilent
+			InstallAgent
+		} else {
+			$selection = Read-Host "Invalid code. Please make a valid selection"
+		}
+	}
+	until ($selection -eq 'q')
+} #End of Create-Menu
+
+
+
+if ($Auto) {
+	
+}
+
+
+# Check for preassigned site code, offer choices if not
+If (Get-Variable -Name SiteCode) {$Code = $SiteCode}
+If ($Code) {
+	$SelectedSite = $SiteConfigs.Where({$PSItem.Code -like $code})
+	If ($SelectedSite){
+			InstallAgent
+		} else {
+			do{
+				Show-Menu -Title 'Site Selection'
+				$selection = Read-Host "Invalid code. Please make a valid selection"
+			}
+			until ($selection -eq 'q')
+		}
+} else {
+	$DetectedIP = (Invoke-WebRequest -uri "http://ip.ambitionsgroup.com/" -UseBasicParsing).Content
+	$searchterm = '*' + $DetectedIP + '*'
+	$DetectedSite = $SiteConfigs.Where({$PSItem.ExtIPs -like $searchterm})
+	If ($DetectedSite){
+		$DetectedIni = $DetectedSite.iniLoc
+		$DetectedCode = $DetectedSite.Code
+		$DetectedTitle = $DetectedSite.Site
+		
+		if ($Auto) { #Silently install automatically
+			Write-Host Automatic mode, hold on!
+			$SelectedSite = $DetectedSite
+			$Silent = $True
+			InstallAgent
+		} else { #Prompt for auto install
+			$message  = "Based on your external IP address of $DetectedIP, you are at $DetectedTitle"
+			$question = 'Do you want to proceed installing the agent for this site?'
+			$choices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
+			$choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
+			$choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
+			$decision = $Host.UI.PromptForChoice($message, $question, $choices, 0)
+			if ($decision -eq 0) {
+			  Write-Host "Selection Confirmed: $DetectedTitle"
+			  $SelectedSite = $DetectedSite
+			  AskSilent
+			  InstallAgent
+			} else {
+			  Write-Host Generating a site selection menu
+			  Create-Menu
+			}
+		#Pause
+		}
+	} else {
+		Write-Host No site detected based on your external IP address
+		Create-Menu
+	}
+}
