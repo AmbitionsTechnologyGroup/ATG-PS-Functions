@@ -17,14 +17,14 @@
 	Attempts to detect the site and installs the agent without a GUI. Will not prompt for anything.
 .Notes
 	For a list of site codes, go to:
-	http://download.ambitionsgroup.com/Sites/ITS247Agent/SiteAgentConfigs.csv
+	https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/raw/master/Scripts/ITS247Agent/SiteAgentConfigs.csv
 #>
 
 #Requires -RunAsAdministrator
 
 [cmdletbinding()]
 param(
-	#Shortcode of the site you want to install, list available at http://download.ambitionsgroup.com/Sites/ITS247Agent/SiteAgentConfigs.csv
+	#Shortcode of the site you want to install, list available at https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/raw/master/Scripts/ITS247Agent/SiteAgentConfigs.csv
 	[string]$Code,
 	#Installs the agent silently
 	[switch]$Silent,
@@ -34,7 +34,7 @@ param(
 Write-Host Ambitions Desktop Agent Installer
 #Dowload config file index
 	$SiteConfigs = @()
-	$SiteConfigs = (Invoke-WebRequest -uri "http://download.ambitionsgroup.com/Sites/ITS247Agent/SiteAgentConfigs.csv" -UseBasicParsing).Content | convertfrom-csv -Delimiter ','
+	$SiteConfigs = (Invoke-WebRequest -uri "https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/raw/master/Scripts/ITS247Agent/SiteAgentConfigs.csv" -UseBasicParsing).Content | convertfrom-csv -Delimiter ','
 
 function Start-Presentation {
 	Write-Host "Temporarily disabling power saving settings"
