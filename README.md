@@ -34,7 +34,8 @@ List of functions (can be entered as powershell commands):
 - Install-O365
 - Install-WindowsUpdates
 - Join-Domain
-- Remove-ITS247Installer
+- Remove-ITS247InstallFolder
+- Rename-ClientComputer
 - Run-Win10Decrap
 - Set-AutoLogon
 - Set-DailyReboot
@@ -43,6 +44,7 @@ List of functions (can be entered as powershell commands):
 - Set-RunOnceScript
 - Start-PPKGLog
 - Update-Edge
+- Update-ITS247Agent
 - Update-PWSH
 - Update-WindowsApps
 - Update-WindowTitle
