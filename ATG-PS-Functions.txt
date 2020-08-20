@@ -388,6 +388,10 @@ Write-Host `n====================================================
 Write-Host The below functions are now loaded and ready to use:
 Write-Host ====================================================`n
 
-ForEach ($func in $scriptFunctions | Where-Object { $_.Name -match "-" } ) {
+ForEach ($func in $scriptFunctions | Where-Object { $_.Name -match "-" -and $_.Name -ne "Clear-Host" } ) {
 	Write-Host $func.Name
 }
+
+Write-Host `n====================================================
+Write-Host "    Type:  Help <function name> for more info         "
+Write-Host ====================================================`n
