@@ -7,10 +7,10 @@ We are moving to a **function-based system**. There are 2 ways to load the funct
 
 1) Powershell method- Run this:
 ```powershell
-Invoke-WebRequest psfunc.ambitionsgroup.com -UseBasicParsing | Invoke-Expression
+Invoke-WebRequest git.io/ATGPS -UseBasicParsing | Invoke-Expression
 ```
 2) Browser method:
-Open a browser to [psfunc.ambitionsgroup.com](http://psfunc.ambitionsgroup.com)
+Open a browser to [https://git.io/ATGPS](https://git.io/ATGPS)
 Select all the contents (CTRL+A), copy them (CTRL+C), and paste into a powershell window (Admin)
 
 
