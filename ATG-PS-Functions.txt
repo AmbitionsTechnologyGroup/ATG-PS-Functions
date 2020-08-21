@@ -157,21 +157,21 @@ Function Install-O2016STD([String] $MSPURL){
 		& 'C:\Ambitions\O2016STD\setup.exe' /adminfile $MSPfilepath | Wait-Process
 
 	Write-Host "Placing Shortcuts"
-		$TargetFile = 'C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE'
+		$TargetFile = 'C:\Program Files\Microsoft Office\Office16\OUTLOOK.EXE'
 		$ShortcutFile = "$env:Public\Desktop\Outlook.lnk"
 		$WScriptShell = New-Object -ComObject WScript.Shell
 		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
 		$Shortcut.TargetPath = $TargetFile
 		$Shortcut.Save()
 
-		$TargetFile = 'C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE'
+		$TargetFile = 'C:\Program Files\Microsoft Office\Office16\EXCEL.EXE'
 		$ShortcutFile = "$env:Public\Desktop\Excel.lnk"
 		$WScriptShell = New-Object -ComObject WScript.Shell
 		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
 		$Shortcut.TargetPath = $TargetFile
 		$Shortcut.Save()
 		
-		$TargetFile = 'C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE'
+		$TargetFile = 'C:\Program Files\Microsoft Office\Office16\WINWORD.EXE'
 		$ShortcutFile = "$env:Public\Desktop\Word.lnk"
 		$WScriptShell = New-Object -ComObject WScript.Shell
 		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
