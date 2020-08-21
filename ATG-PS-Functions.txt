@@ -392,7 +392,7 @@ Write-Host `n====================================================
 Write-Host The below functions are now loaded and ready to use:
 Write-Host ====================================================`n
 
-Get-ChildItem function: | Where-Object { $_.Name -match "-" -and $_.Name -ne "Clear-Host" -and $_.Source -eq "$null"} | Sort-Object | Format-Wide -Column 3
+Get-ChildItem function: | Where-Object { $_.Name -match "-" -and $_.Name -ne "Clear-Host" -and $_.Source -eq "ATGPS"} | Sort-Object | Format-Wide -Column 3
 
 Write-Host `n====================================================
 Write-Host "Type: 'Help <function name> -Detailed' for more info"
