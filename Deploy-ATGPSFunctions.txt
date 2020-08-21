@@ -1,0 +1,26 @@
+Function Deploy-ATGPSFunctions {
+$ProfileContent = @'
+Function Get-ATGPS {
+	$progressPreference = 'silentlyContinue'
+	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+	Invoke-WebRequest git.io/ATGPS -UseBasicParsing | Invoke-Expression
+}
+'@
+$ProfileContent | Out-String | Out-File $Profile.AllUsersCurrentHost -Append
+}
+
+If (Test-Path $Profile.AllUsersCurrentHost){
+	Write-Host "Profile exists"
+	If (Select-String -Path $Profile.AllUsersCurrentHost -Pattern "Get-ATGPS" -SimpleMatch -Quiet)
+	{
+		Write-Host "Function already exists"
+	} Else {
+		Echo "Function does not already exist, deploying."
+		Deploy-ATGPSFunctions
+	}
+	
+} Else {
+	Write-Host "Profile does not exist"
+	New-Item $Profile.AllUsersCurrentHost -ItemType file -Force
+	Deploy-ATGPSFunctions
+}
