@@ -75,7 +75,7 @@ Function Update-ITS247Agent {
 #>
 }
 
-Function Deploy-AppDefaults {
+Function Install-AppDefaults {
 	Write-Host "Downloading App Defaults"
 	New-Item -ItemType Directory -Force -Path C:\Ambitions\ITS247Agent
 	(New-Object System.Net.WebClient).DownloadFile('https://download.ambitionsgroup.com/AppDefaults.xml', 'C:\Ambitions\AppDefaults.xml')
@@ -375,7 +375,7 @@ Function Connect-O365 {
 	Write-Host '!!!REMEMBER!!! When you want to disconnect from Office 365, type in "Remove-PSSession $Session"'
 }
 
-Function Run-Win10Decrap {
+Function Invoke-Win10Decrap {
 	Write-Host "Windows 10 Decrapifier"
 	$progressPreference = 'silentlyContinue'
 	Set-ExecutionPolicy Bypass -Scope Process -Force
@@ -392,7 +392,7 @@ Write-Host `n====================================================
 Write-Host The below functions are now loaded and ready to use:
 Write-Host ====================================================`n
 
-Get-ChildItem function: | Where-Object { $_.Name -match "-" -and $_.Name -ne "Clear-Host" } | Sort-Object | Format-Wide -Column 3
+Get-ChildItem function: | Where-Object { $_.Name -match "-" -and $_.Name -ne "Clear-Host" -and $_.Source -eq "$null"} | Sort-Object | Format-Wide -Column 3
 
 Write-Host `n====================================================
 Write-Host "Type: 'Help <function name> -Detailed' for more info"
