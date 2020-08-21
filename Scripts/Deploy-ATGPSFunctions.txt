@@ -18,7 +18,7 @@ If (Test-Path $Profile.AllUsersCurrentHost){
 	{
 		Write-Host "Function already exists"
 	} Else {
-		Echo "Function does not already exist, deploying."
+		Write-Host "Function does not already exist, deploying."
 		Deploy-ATGPSFunctions
 	}
 	
