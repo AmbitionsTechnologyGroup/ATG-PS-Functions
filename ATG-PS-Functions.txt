@@ -382,16 +382,12 @@ Function Run-Win10Decrap {
 }
 
 # Print out functions from this file
-$scriptFunctions = Get-ChildItem function:
-
 Write-Host `n====================================================
 Write-Host The below functions are now loaded and ready to use:
 Write-Host ====================================================`n
 
-ForEach ($func in $scriptFunctions | Where-Object { $_.Name -match "-" -and $_.Name -ne "Clear-Host" } ) {
-	Write-Host $func.Name
-}
+Get-ChildItem function: | Where-Object { $_.Name -match "-" -and $_.Name -ne "Clear-Host" } | Sort-Object | Format-Wide -Column 3
 
 Write-Host `n====================================================
-Write-Host "    Type:  Help <function name> for more info         "
+Write-Host "Type: 'Help <function name> -Detailed' for more info"
 Write-Host ====================================================`n
