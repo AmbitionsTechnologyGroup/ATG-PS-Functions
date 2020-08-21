@@ -26,7 +26,7 @@ Function Install-Choco {
 	$progressPreference = 'silentlyContinue'
 	Set-ExecutionPolicy Bypass -Scope Process -Force
 	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-	Invoke-WebRequest https://download.ambitionsgroup.com/Scripts/installchoco.txt -UseBasicParsing | Invoke-Expression
+	Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Chocolatey/installchoco.txt -UseBasicParsing | Invoke-Expression
 }
 
 Function Update-Edge {
@@ -51,13 +51,13 @@ Function Install-ITS247Agent {
 	$progressPreference = 'silentlyContinue'
 	Set-ExecutionPolicy Bypass -Scope Process -Force
 	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-	Invoke-WebRequest https://download.ambitionsgroup.com/Sites/Install_ITS247_Agent.txt -UseBasicParsing | Invoke-Expression
+	Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/ITS247Agent/Install_ITS247_Agent.txt -UseBasicParsing | Invoke-Expression
 }
 
 Function Update-ITS247Agent {
 	$DisplayVersion = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).DisplayVersion
 	$TYPE = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).TYPE
-	$AvailableVersion = (Invoke-WebRequest http://download.ambitionsgroup.com/Sites/ITS247Agent/DPMAVersion.txt -UseBasicParsing)
+	$AvailableVersion = (Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/ITS247Agent/DPMAVersion.txt -UseBasicParsing)
 
 	if(($DisplayVersion -ne $AvailableVersion) -and ($TYPE -eq "DPMA")) {
 	 WRITE-HOST "Updating Agent from $DisplayVersion to $AvailableVersion"
@@ -293,7 +293,7 @@ Function Install-WindowsUpdates {
 	Write-Host "Install Windows Updates"
 		Set-ExecutionPolicy Bypass -Scope Process -Force
 		[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-		Invoke-WebRequest https://download.ambitionsgroup.com/Scripts/UpdateWindows.txt -UseBasicParsing | Invoke-Expression
+		Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Windows-Update/UpdateWindows.txt -UseBasicParsing | Invoke-Expression
 	Write-Host "End of Install Windows Updates"
 }
 
@@ -303,7 +303,7 @@ Function Install-DellUpdates {
 		if( $Manufact -like "*Dell*")
 		{
 			[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-			Set-ExecutionPolicy Bypass -Scope Process -Force; Invoke-WebRequest https://download.ambitionsgroup.com/Scripts/DCU_AUTO.txt -UseBasicParsing | Invoke-Expression
+			Set-ExecutionPolicy Bypass -Scope Process -Force; Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Dell-Command-Update/DCU_AUTO.txt -UseBasicParsing | Invoke-Expression
 		} else { Write-Host This is not a Dell Computer}
 	Write-Host "End of Dell Updates"
 }
@@ -378,6 +378,5 @@ Function Run-Win10Decrap {
 	$progressPreference = 'silentlyContinue'
 	Set-ExecutionPolicy Bypass -Scope Process -Force
 	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-	Invoke-WebRequest https://download.ambitionsgroup.com/Scripts/Windows10Decrapifier.txt -UseBasicParsing | Invoke-Expression
+	Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Win-10-DeCrapifier/Windows10Decrapifier.txt -UseBasicParsing | Invoke-Expression
 }
-
