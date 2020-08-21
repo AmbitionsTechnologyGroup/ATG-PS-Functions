@@ -1,12 +1,13 @@
 Function Deploy-ATGPSFunctions {
-$ProfileContent = @'
+	$ProfileContent = @'
 Function Get-ATGPS {
 	$progressPreference = 'silentlyContinue'
 	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
 	Invoke-WebRequest git.io/ATGPS -UseBasicParsing | Invoke-Expression
 }
 '@
-$ProfileContent | Out-String | Out-File $Profile.AllUsersCurrentHost -Append
+	$ProfileContent | Out-String | Out-File $Profile.AllUsersCurrentHost -Append
+	Set-ExecutionPolicy RemoteSigned -Scope LocalMachine -ErrorAction SilentlyContinue
 }
 
 If (Test-Path $Profile.AllUsersCurrentHost){
