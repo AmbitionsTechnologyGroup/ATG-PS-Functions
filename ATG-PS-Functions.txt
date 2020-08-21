@@ -383,6 +383,10 @@ Function Run-Win10Decrap {
 	Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Win-10-DeCrapifier/Windows10Decrapifier.txt -UseBasicParsing | Invoke-Expression
 }
 
+Function Expand-Terminal {
+	mode con: cols=160 lines=120
+}
+
 # Print out functions from this file
 Write-Host `n====================================================
 Write-Host The below functions are now loaded and ready to use:
