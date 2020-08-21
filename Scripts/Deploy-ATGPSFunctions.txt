@@ -3,7 +3,9 @@ Function Deploy-ATGPSFunctions {
 Function Get-ATGPS {
 	$progressPreference = 'silentlyContinue'
 	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-	Invoke-WebRequest git.io/ATGPS -UseBasicParsing | Invoke-Expression
+	$Destination = $Env:temp + "\ATGPS.psm1"
+	(Invoke-WebRequest git.io/ATGPS -UseBasicParsing).Content | Out-File -FilePath $Destination
+	Import-Module $Destination -Verbose -Global -PassThru -Force
 }
 '@
 	$ProfileContent | Out-String | Out-File $Profile.AllUsersCurrentHost -Append
