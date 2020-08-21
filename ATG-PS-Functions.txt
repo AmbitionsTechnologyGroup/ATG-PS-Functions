@@ -70,7 +70,7 @@ Function Update-ITS247Agent {
 	 WRITE-HOST "Agent is now version $DisplayVersion"
 	}
 <#
-    .DESCRIPTION
+	.DESCRIPTION
 		Updates the Continuum ITS247 Desktop agent to the latest available. No parameters are needed.
 #>
 }
@@ -212,7 +212,7 @@ Function Connect-NetExtender {
 		echo y | & 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe' connect -s $VPNuri -u $VPNuser -p $VPNpassword -d $VPNdomain
 	}
 <#
-    .DESCRIPTION
+	.DESCRIPTION
 		Initiates an SSLVPN connection to a site using Sonicwall NetExtender
 	.PARAMETER DC
 		(Optional) A domain controller whose connection to can be tested to see if the vpn connection is needed. Example -DC "tsdc"
@@ -220,7 +220,7 @@ Function Connect-NetExtender {
 		The connection URL and port. Example -VPNuri "vpn.ambitinsgroup.com:4433"
 	.PARAMETER VPNuser
 		The vpn enable user to be used. Example -VPNuser "vpnuser"
-    .PARAMETER VPNpassword
+	.PARAMETER VPNpassword
 		The vpn user's password to be used. Example -VPNpassword "s0m3Gr3@tPw"
 	.PARAMETER VPNdomain
 		The SSLVPN domain to be used, found in the sonicwall settings. Example -VPNdomain "LocalDomain"
@@ -329,8 +329,10 @@ Function Set-RunOnceScript {
 		[string]$Label,
 		[string]$Script
 	)
+
+	$RunOnceValue = 'PowerShell.exe -ExecutionPolicy Bypass -File "' + $Script + '"'
 	Write-Host "Install After Reboot"
-	Set-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name $Label -Value "PowerShell.exe -ExecutionPolicy Bypass -File $Script"
+	Set-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name $Label -Value $RunOnceValue
 }
 
 Function Join-Domain {
@@ -367,9 +369,9 @@ Function Rename-ClientComputer {
 }
 
 Function Connect-O365 {
-    $UserCredential = Get-Credential
-    $Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://outlook.office365.com/powershell-liveid/ -Credential $UserCredential -Authentication Basic -AllowRedirection
-    Import-PSSession $Session
+	$UserCredential = Get-Credential
+	$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://outlook.office365.com/powershell-liveid/ -Credential $UserCredential -Authentication Basic -AllowRedirection
+	Import-PSSession $Session
 	Write-Host '!!!REMEMBER!!! When you want to disconnect from Office 365, type in "Remove-PSSession $Session"'
 }
 
