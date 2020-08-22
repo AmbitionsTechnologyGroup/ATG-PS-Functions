@@ -386,13 +386,22 @@ Function Invoke-Win10Decrap {
 Function Expand-Terminal {
 	mode con: cols=160 lines=120
 }
+Function Import-ATGPS {
+	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+	$Destination = $Env:temp + "\ATGPS.psm1"
+	(New-Object System.Net.WebClient).DownloadString('https://git.io/ATGPS') | Out-File -FilePath $Destination
+	Import-Module $Destination -Global -PassThru -Force | Out-Null
+}
 
-# Print out functions from this file
+# Import our functions
+Import-ATGPS
+
+# List imported functions from ATGPS
 Write-Host `n====================================================
-Write-Host The below functions are now loaded and ready to use:
+Write-Host "The below functions are now loaded and ready to use:"
 Write-Host ====================================================`n
 
-(Get-Module ATGPS).ExportedFunctions.Values | Format-Wide -Column 3
+Get-Command -Module ATGPS | Format-Wide -Column 3
 
 Write-Host `n====================================================
 Write-Host "Type: 'Help <function name> -Detailed' for more info"
