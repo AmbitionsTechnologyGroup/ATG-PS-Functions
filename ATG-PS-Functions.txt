@@ -392,12 +392,7 @@ $ATGPSModulePath = $Env:temp + "\ATGPS.psm1"
 If (!(Test-Path $ATGPSModulePath)) {
 	# download this file as a module and import it
 	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-	#(New-Object System.Net.WebClient).DownloadString('https://git.io/ATGPS') | Out-File -FilePath $ATGPSModulePath
-
-	# temp path for testing:
-	(New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/fix-module-acquisition/ATG-PS-Functions.txt') | Out-File -FilePath $ATGPSModulePath
-	## END TESTING
-    
+	(New-Object System.Net.WebClient).DownloadString('https://git.io/ATGPS') | Out-File -FilePath $ATGPSModulePath
 	Import-Module $ATGPSModulePath -Global -Force | Out-Null
 } 
 
