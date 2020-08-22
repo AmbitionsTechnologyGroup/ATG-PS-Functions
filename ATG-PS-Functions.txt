@@ -386,23 +386,34 @@ Function Invoke-Win10Decrap {
 Function Expand-Terminal {
 	mode con: cols=160 lines=120
 }
-Function Import-ATGPS {
+
+$ATGPSModulePath = $Env:temp + "\ATGPS.psm1"
+
+If (!(Test-Path $ATGPSModulePath)) {
+	# download this file as a module and import it
 	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-	$Destination = $Env:temp + "\ATGPS.psm1"
-	(New-Object System.Net.WebClient).DownloadString('https://git.io/ATGPS') | Out-File -FilePath $Destination
-	Import-Module $Destination -Global -PassThru -Force | Out-Null
+	#(New-Object System.Net.WebClient).DownloadString('https://git.io/ATGPS') | Out-File -FilePath $ATGPSModulePath
+
+	# temp path for testing:
+	(New-Object System.Net.WebClient).DownloadString('https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/fix-module-acquisition/ATG-PS-Functions.txt') | Out-File -FilePath $ATGPSModulePath
+	## END TESTING
+    
+	Import-Module $ATGPSModulePath -Global -Force | Out-Null
+} 
+
+If (Get-Module -Name ATGPS -ErrorAction SilentlyContinue){
+	# List imported functions from ATGPS
+	Write-Host `n====================================================
+	Write-Host "The below functions are now loaded and ready to use:"
+	Write-Host ====================================================
+
+	Get-Command -Module ATGPS | Format-Wide -Column 3
+
+	Write-Host ====================================================
+	Write-Host "Type: 'Help <function name> -Detailed' for more info"
+	Write-Host ====================================================`n
 }
 
-# Import our functions
-Import-ATGPS
-
-# List imported functions from ATGPS
-Write-Host `n====================================================
-Write-Host "The below functions are now loaded and ready to use:"
-Write-Host ====================================================`n
-
-Get-Command -Module ATGPS | Format-Wide -Column 3
-
-Write-Host `n====================================================
-Write-Host "Type: 'Help <function name> -Detailed' for more info"
-Write-Host ====================================================`n
+If (Test-Path $ATGPSModulePath) {
+	Remove-Item $ATGPSModulePath -Force
+}
