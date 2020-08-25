@@ -387,13 +387,28 @@ Function Expand-Terminal {
 	mode con: cols=160 lines=120
 }
 
-# Print out functions from this file
-Write-Host `n====================================================
-Write-Host The below functions are now loaded and ready to use:
-Write-Host ====================================================`n
+$ATGPSModulePath = $Env:temp + "\ATGPS.psm1"
 
-(Get-Module ATGPS).ExportedFunctions.Values | Format-Wide -Column 3
+If (!(Test-Path $ATGPSModulePath)) {
+	# download this file as a module and import it
+	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+	(New-Object System.Net.WebClient).DownloadString('https://git.io/ATGPS') | Out-File -FilePath $ATGPSModulePath
+	Import-Module $ATGPSModulePath -Global -Force | Out-Null
+} 
 
-Write-Host `n====================================================
-Write-Host "Type: 'Help <function name> -Detailed' for more info"
-Write-Host ====================================================`n
+If (Get-Module -Name ATGPS -ErrorAction SilentlyContinue){
+	# List imported functions from ATGPS
+	Write-Host `n====================================================
+	Write-Host "The below functions are now loaded and ready to use:"
+	Write-Host ====================================================
+
+	Get-Command -Module ATGPS | Format-Wide -Column 3
+
+	Write-Host ====================================================
+	Write-Host "Type: 'Help <function name> -Detailed' for more info"
+	Write-Host ====================================================`n
+}
+
+If (Test-Path $ATGPSModulePath) {
+	Remove-Item $ATGPSModulePath -Force
+}
