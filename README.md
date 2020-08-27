@@ -7,7 +7,7 @@ We are moving to a **function-based system**. There are 2 ways to load the funct
 
 1) ### Powershell method ###  Run this:
 ```powershell
-$Destination = $Env:temp + "\ATGPS.psm1" ; (Invoke-WebRequest git.io/ATGPS -UseBasicParsing).Content | Out-File -FilePath $Destination ; Import-Module $Destination -Verbose -Global -PassThru -Force
+IEX(New-Object net.webclient).downloadstring('http://get-atgps.ambitionsgroup.com')
 ```
 2) ### Browser method: ###
 Open a browser to [https://git.io/ATGPS](https://git.io/ATGPS)
