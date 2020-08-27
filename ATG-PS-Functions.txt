@@ -1,188 +1,32 @@
-Function Start-PPKGLog ([String] $LogLabel) {
-	Write-Host "Making a log file for debugging"
-		$LogPath = "C:\Ambitions\" + $SiteCode + "-" + $LogLabel + ".log"
-		Start-Transcript -path $LogPath -Force -Append
+Function Add-IEShortcut{
+	param
+	(
+		[string]$Label,
+		[string]$Url
+	)
+
+	$TargetFile = "C:\Program Files\Internet Explorer\iexplore.exe"
+	$ShortcutFile = "$env:Public\Desktop\" + $Label + ".lnk"
+	$WScriptShell = New-Object -ComObject WScript.Shell
+	$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
+	$Shortcut.TargetPath = $TargetFile
+	$Shortcut.Arguments = $Url
+	$Shortcut.Save()
 }
 
-Function Update-WindowTitle ([String] $PassNumber) {
-	Write-Host "Changing window title"
-		$host.ui.RawUI.WindowTitle = "$SiteCode Provisioning | $env:computername | Pass $PassNumber | Please Wait"
-}
+Function Add-WebShortcut{
+	param
+	(
+		[string]$Label,
+		[string]$Url
+	)
 
-Function Enable-SSL {
-	Write-Host "Enabling SSL"
-	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-}
-
-Function Set-MountainTime {
-	Write-Host "Setting local time zone to Mountain Time"
-	Set-TimeZone -Name "Mountain Standard Time"
-	net start W32Time
-	W32tm /resync /force
-}
-
-Function Install-Choco {
-	Write-Host "Installing Chocolatey"
-	$progressPreference = 'silentlyContinue'
-	Set-ExecutionPolicy Bypass -Scope Process -Force
-	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-	Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Chocolatey/installchoco.txt -UseBasicParsing | Invoke-Expression
-}
-
-Function Update-Edge {
-	Write-Host "Updating Microsoft Edge"
-	If (!(Get-Command choco)) {Install-Choco}
-	If (Get-Process MicrosoftEdge -ErrorAction SilentlyContinue) {Get-Process MicrosoftEdge | Stop-Process -Force}
-	Choco upgrade microsoft-edge -y
-}
-
-Function Update-PWSH {
-	Write-Host "Updating PWSH"
-	If (!(Get-Command choco)) {Install-Choco}
-	Choco upgrade pwsh -y
-}
-
-Function Set-NumLock {
-	Write-Host "Setting Numlock on keyboard as default"
-	Reg.exe add "HKU\.DEFAULT\Control Panel\Keyboard" /v "InitialKeyboardIndicators" /t REG_SZ /d "2" /f
-}
-
-Function Install-ITS247Agent {
-	$progressPreference = 'silentlyContinue'
-	Set-ExecutionPolicy Bypass -Scope Process -Force
-	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-	Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/ITS247Agent/Install_ITS247_Agent.txt -UseBasicParsing | Invoke-Expression
-}
-
-Function Update-ITS247Agent {
-	$DisplayVersion = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).DisplayVersion
-	$TYPE = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).TYPE
-	$AvailableVersion = (Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/ITS247Agent/DPMAVersion.txt -UseBasicParsing)
-
-	if(($DisplayVersion -ne $AvailableVersion) -and ($TYPE -eq "DPMA")) {
-	 WRITE-HOST "Updating Agent from $DisplayVersion to $AvailableVersion"
-		 $SaveFolder = 'C:\Ambitions'
-		 New-Item -ItemType Directory -Force -Path $SaveFolder
-		 $PatchPath = $SaveFolder + '\DPMAPatch' + $AvailableVersion + '.exe'
-		 (New-Object System.Net.WebClient).DownloadFile('http://update.itsupport247.net/agtupdt/DPMAPatch.exe', $PatchPath)
-		 & $PatchPath | Wait-Process
-		 $DisplayVersion = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).DisplayVersion
-	 WRITE-HOST "Agent is now version $DisplayVersion"
-	}
-<#
-	.DESCRIPTION
-		Updates the Continuum ITS247 Desktop agent to the latest available. No parameters are needed.
-#>
-}
-
-Function Install-AppDefaults {
-	Write-Host "Downloading App Defaults"
-	New-Item -ItemType Directory -Force -Path C:\Ambitions\ITS247Agent
-	(New-Object System.Net.WebClient).DownloadFile('https://download.ambitionsgroup.com/AppDefaults.xml', 'C:\Ambitions\AppDefaults.xml')
-	Write-Host "Deploying App Defaults"
-	Dism.exe /online /import-defaultappassociations:'C:\Ambitions\AppDefaults.xml'
-}
-
-Function Install-NinitePro {
-	Write-Host "Downloading Ninite Installer"
-	New-Item -ItemType Directory -Force -Path C:\Ambitions
-	(New-Object System.Net.WebClient).DownloadFile('https://download.ambitionsgroup.com/NinitePro.exe', 'C:\Ambitions\NinitePro.exe')
-	Write-Host "Schedule Ninite Updates"
-	$Trigger = New-ScheduledTaskTrigger -AtStartup
-	$User = "NT AUTHORITY\SYSTEM"
-	$Action = New-ScheduledTaskAction -Execute "C:\Ambitions\NinitePro.exe" -Argument "/updateonly /nocache /silent C:\Ambitions\NiniteUpdates.log"
-	Register-ScheduledTask -TaskName "Update Apps" -Trigger $Trigger -User $User -Action $Action -RunLevel Highest -Force
-	Write-Host "End of Schedule Ninite Updates"
-}
-
-Function Install-NiniteApps {
-	If (-not (Test-Path 'C:\Ambitions\NinitePro.exe')) {Install-NinitePro}
-	Write-Host "Install Ninite Apps, waiting for install to complete and logging the results."
-		$NiniteCache = "\\adsaltoxl\data\Software\Ninite\NiniteDownloads"
-		If(test-path $NiniteCache){
-			& C:\Ambitions\NinitePro.exe /select 7-Zip Air Chrome 'Firefox ESR' Flash Greenshot 'Notepad++' 'Paint.NET' Reader Silverlight VLC /cachepath $NiniteCache /silent 'C:\Ambitions\NiniteReport.txt' | Wait-Process
-		} ELSE {
-			& C:\Ambitions\NinitePro.exe /select 7-Zip Air Chrome 'Firefox ESR' Flash Greenshot 'Notepad++' 'Paint.NET' Reader Silverlight VLC /nocache /silent 'C:\Ambitions\NiniteReport.txt' | Wait-Process
-		}
-	Write-Host "End of Install Ninite Apps"
-}
-
-Function Install-O365([String] $SiteCode = "Generic"){
-	Write-Host "Downloading MS Office"
-		Enable-SSL
-		New-Item -ItemType Directory -Force -Path "C:\Ambitions\O365"
-		(New-Object System.Net.WebClient).DownloadFile('https://download.ambitionsgroup.com/O365/setup.exe', 'C:\Ambitions\O365\setup.exe')
-	Write-Host "Downloading MS Office config files"
-		$O365ConfigSource = "https://download.ambitionsgroup.com/Sites/" + $SiteCode + "/" + $SiteCode + "_O365_Config.xml"
-		$O365ConfigDest = "C:\Ambitions\O365\" + $SiteCode + "_O365_Config.xml"
-		(New-Object System.Net.WebClient).DownloadFile($O365ConfigSource, $O365ConfigDest)
-	Write-Host "Installing Office"
-		& C:\Ambitions\O365\setup.exe /configure $O365ConfigDest | Wait-Process
-	Write-Host "Placing Shortcuts"
-		$TargetFile = "C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE"
-		$ShortcutFile = "$env:Public\Desktop\Outlook.lnk"
-		$WScriptShell = New-Object -ComObject WScript.Shell
-		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
-		$Shortcut.TargetPath = $TargetFile
-		$Shortcut.Save()
-
-		$TargetFile = "C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE"
-		$ShortcutFile = "$env:Public\Desktop\Excel.lnk"
-		$WScriptShell = New-Object -ComObject WScript.Shell
-		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
-		$Shortcut.TargetPath = $TargetFile
-		$Shortcut.Save()
-
-		$TargetFile = "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"
-		$ShortcutFile = "$env:Public\Desktop\Word.lnk"
-		$WScriptShell = New-Object -ComObject WScript.Shell
-		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
-		$Shortcut.TargetPath = $TargetFile
-		$Shortcut.Save()
-}
-
-Function Install-O2016STD([String] $MSPURL){
-	Write-Host "Downloading MS Office"
-		Enable-SSL
-		New-Item -ItemType Directory -Force -Path 'C:\Ambitions\O2016STD'
-		(New-Object System.Net.WebClient).DownloadFile('http://download.ambitionsgroup.com/Software/O2016_STD_X64.exe', 'C:\Ambitions\O2016STD\O2016_STD_X64.exe')
-
-	Write-Host "Downloading MS Office config files"
-		$MSPfilename = $MSPURL.Substring($MSPURL.LastIndexOf("/") + 1)
-		$MSPfilepath = 'C:\Ambitions\O2016STD\' + $MSPfilename
-		(New-Object System.Net.WebClient).DownloadFile($MSPURL, $MSPfilepath)
-
-	Write-Host "Installing Office"
-		& 'C:\Ambitions\O2016STD\O2016_STD_X64.exe' -pth!nSong70 -oC:\Ambitions\O2016STD -y | Wait-Process
-		& 'C:\Ambitions\O2016STD\setup.exe' /adminfile $MSPfilepath | Wait-Process
-
-	Write-Host "Placing Shortcuts"
-		$TargetFile = 'C:\Program Files\Microsoft Office\Office16\OUTLOOK.EXE'
-		$ShortcutFile = "$env:Public\Desktop\Outlook.lnk"
-		$WScriptShell = New-Object -ComObject WScript.Shell
-		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
-		$Shortcut.TargetPath = $TargetFile
-		$Shortcut.Save()
-
-		$TargetFile = 'C:\Program Files\Microsoft Office\Office16\EXCEL.EXE'
-		$ShortcutFile = "$env:Public\Desktop\Excel.lnk"
-		$WScriptShell = New-Object -ComObject WScript.Shell
-		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
-		$Shortcut.TargetPath = $TargetFile
-		$Shortcut.Save()
-
-		$TargetFile = 'C:\Program Files\Microsoft Office\Office16\WINWORD.EXE'
-		$ShortcutFile = "$env:Public\Desktop\Word.lnk"
-		$WScriptShell = New-Object -ComObject WScript.Shell
-		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
-		$Shortcut.TargetPath = $TargetFile
-		$Shortcut.Save()
-}
-
-Function Install-NetExtender {
-	Write-Host "Downloading & Installing NetExtender"
-		If (!(Get-Command choco)) {Install-Choco}
-		choco install sonicwall-sslvpn-netextender -y
+	Write-Host "Adding a shortcut to $Label to the desktop"
+	$Shell = New-Object -ComObject ("WScript.Shell")
+	$URLFilePath = $env:Public + "\Desktop\" + $Label + ".url"
+	$Favorite = $Shell.CreateShortcut($URLFilePath)
+	$Favorite.TargetPath = $Url
+	$Favorite.Save()
 }
 
 Function Connect-NetExtender {
@@ -230,43 +74,16 @@ Function Connect-NetExtender {
 #>
 }
 
-Function Update-WindowsApps {
-	Write-Host "Updating Windows Apps"
-		Start-Process ms-windows-store:
-		Start-Sleep -Seconds 5
-		(Get-WmiObject -Namespace "root\cimv2\mdm\dmmap" -Class "MDM_EnterpriseModernAppManagement_AppManagement01").UpdateScanMethod()
-	Write-Host "Update Windows Apps initiated"
+Function Connect-O365 {
+	$UserCredential = Get-Credential
+	$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://outlook.office365.com/powershell-liveid/ -Credential $UserCredential -Authentication Basic -AllowRedirection
+	Import-PSSession $Session
+	Write-Host '!!!REMEMBER!!! When you want to disconnect from Office 365, type in "Remove-PSSession $Session"'
 }
 
-Function Add-WebShortcut{
-	param
-	(
-		[string]$Label,
-		[string]$Url
-	)
-
-	Write-Host "Adding a shortcut to $Label to the desktop"
-	$Shell = New-Object -ComObject ("WScript.Shell")
-	$URLFilePath = $env:Public + "\Desktop\" + $Label + ".url"
-	$Favorite = $Shell.CreateShortcut($URLFilePath)
-	$Favorite.TargetPath = $Url
-	$Favorite.Save()
-}
-
-Function Add-IEShortcut{
-	param
-	(
-		[string]$Label,
-		[string]$Url
-	)
-
-	$TargetFile = "C:\Program Files\Internet Explorer\iexplore.exe"
-	$ShortcutFile = "$env:Public\Desktop\" + $Label + ".lnk"
-	$WScriptShell = New-Object -ComObject WScript.Shell
-	$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
-	$Shortcut.TargetPath = $TargetFile
-	$Shortcut.Arguments = $Url
-	$Shortcut.Save()
+Function Disable-ATGLocalExpiration {
+	Write-Host "Set local ATGLocal account to never expire"
+		Set-LocalUser -Name "ATGLocal" -PasswordNeverExpires $True
 }
 
 Function Disable-FastStartup {
@@ -275,68 +92,150 @@ Function Disable-FastStartup {
 		powercfg -h off
 }
 
-Function Set-DailyReboot {
-	Write-Host "Schedule Daily Restart"
-		$Action = New-ScheduledTaskAction -Execute 'shutdown.exe' -Argument '-f -r -t 0'
-		$Trigger =New-ScheduledTaskTrigger -Daily -At 3am
-		$Idle = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration 00:30:00 -IdleWaitTimeout 02:00:00
-		$User = "NT AUTHORITY\SYSTEM"
-		Register-ScheduledTask -Action $action -Trigger $trigger -User $User -Settings $Idle -TaskName "Daily Restart" -Description "Daily restart"
+Function Enable-SSL {
+	Write-Host "Enabling SSL"
+	Enable-SSL
 }
 
-Function Disable-ATGLocalExpiration {
-	Write-Host "Set local ATGLocal account to never expire"
-		Set-LocalUser -Name "ATGLocal" -PasswordNeverExpires $True
+Function Expand-Terminal {
+	mode con: cols=160 lines=120
 }
 
-Function Update-Windows {
-	Write-Host "Install Windows Updates"
-		Set-ExecutionPolicy Bypass -Scope Process -Force
-		[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-		Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Windows-Update/UpdateWindows.txt -UseBasicParsing | Invoke-Expression
-	Write-Host "End of Install Windows Updates"
+Function Install-AppDefaults {
+	Write-Host "Downloading App Defaults"
+	New-Item -ItemType Directory -Force -Path C:\Ambitions\ITS247Agent
+	(New-Object System.Net.WebClient).DownloadFile('https://download.ambitionsgroup.com/AppDefaults.xml', 'C:\Ambitions\AppDefaults.xml')
+	Write-Host "Deploying App Defaults"
+	Dism.exe /online /import-defaultappassociations:'C:\Ambitions\AppDefaults.xml'
 }
 
-Function Update-DellPackages {
-	Write-Host "Dell Updates"
-		$Manufact = (Get-CimInstance -Class Win32_ComputerSystem).Manufacturer
-		if( $Manufact -like "*Dell*")
-		{
-			[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-			Set-ExecutionPolicy Bypass -Scope Process -Force; Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Dell-Command-Update/DCU_AUTO.txt -UseBasicParsing | Invoke-Expression
-		} else { Write-Host This is not a Dell Computer}
-	Write-Host "End of Dell Updates"
+Function Install-Choco {
+	Write-Host "Installing Chocolatey"
+	$progressPreference = 'silentlyContinue'
+	Set-ExecutionPolicy Bypass -Scope Process -Force
+	Enable-SSL
+	Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Chocolatey/installchoco.txt -UseBasicParsing | Invoke-Expression
 }
 
-Function Set-AutoLogon ([String] $SiteCode) {
-	Write-Host "Set autologon"
-		#Registry path declaration
-		$RegPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
-		$RegROPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\RunOnce"
-		[String]$DefaultUsername = 'ATGLocal'
-		[String]$DefaultPassword = $SiteCode + 'T3mpP@ss'
-		#setting registry values
-		Set-ItemProperty $RegPath "AutoAdminLogon" -Value "1" -type String
-		Set-ItemProperty $RegPath "DefaultUsername" -Value $DefaultUsername -type String
-		Set-ItemProperty $RegPath "DefaultPassword" -Value $DefaultPassword -type String
-		Set-ItemProperty $RegPath "AutoLogonCount" -Value "1" -type DWord
-	Write-Host "End of Set autologon"
+Function Install-ITS247Agent {
+	$progressPreference = 'silentlyContinue'
+	Set-ExecutionPolicy Bypass -Scope Process -Force
+	Enable-SSL
+	Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/ITS247Agent/Install_ITS247_Agent.txt -UseBasicParsing | Invoke-Expression
 }
 
-Function Set-RunOnceScript {
-	param
-	(
-		[string]$Label,
-		[string]$Script
-	)
+Function Install-NetExtender {
+	Write-Host "Downloading & Installing NetExtender"
+		If (!(Get-Command choco)) {Install-Choco}
+		choco install sonicwall-sslvpn-netextender -y
+}
 
-	$RunOnceValue = 'PowerShell.exe -ExecutionPolicy Bypass -File "' + $Script + '"'
-	Write-Host "Install After Reboot"
-	Set-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name $Label -Value $RunOnceValue
+Function Install-NiniteApps {
+	If (-not (Test-Path 'C:\Ambitions\NinitePro.exe')) {Install-NinitePro}
+	Write-Host "Install Ninite Apps, waiting for install to complete and logging the results."
+		$NiniteCache = "\\adsaltoxl\data\Software\Ninite\NiniteDownloads"
+		If(test-path $NiniteCache){
+			& C:\Ambitions\NinitePro.exe /select 7-Zip Air Chrome 'Firefox ESR' Flash Greenshot 'Notepad++' 'Paint.NET' Reader Silverlight VLC /cachepath $NiniteCache /silent 'C:\Ambitions\NiniteReport.txt' | Wait-Process
+		} ELSE {
+			& C:\Ambitions\NinitePro.exe /select 7-Zip Air Chrome 'Firefox ESR' Flash Greenshot 'Notepad++' 'Paint.NET' Reader Silverlight VLC /nocache /silent 'C:\Ambitions\NiniteReport.txt' | Wait-Process
+		}
+	Write-Host "End of Install Ninite Apps"
+}
+
+Function Install-NinitePro {
+	Write-Host "Downloading Ninite Installer"
+	New-Item -ItemType Directory -Force -Path C:\Ambitions
+	(New-Object System.Net.WebClient).DownloadFile('https://download.ambitionsgroup.com/NinitePro.exe', 'C:\Ambitions\NinitePro.exe')
+	Write-Host "Schedule Ninite Updates"
+	$Trigger = New-ScheduledTaskTrigger -AtStartup
+	$User = "NT AUTHORITY\SYSTEM"
+	$Action = New-ScheduledTaskAction -Execute "C:\Ambitions\NinitePro.exe" -Argument "/updateonly /nocache /silent C:\Ambitions\NiniteUpdates.log"
+	Register-ScheduledTask -TaskName "Update Apps" -Trigger $Trigger -User $User -Action $Action -RunLevel Highest -Force
+	Write-Host "End of Schedule Ninite Updates"
+}
+
+Function Install-O2016STD([String] $MSPURL){
+	Write-Host "Downloading MS Office"
+		Enable-SSL
+		New-Item -ItemType Directory -Force -Path 'C:\Ambitions\O2016STD'
+		(New-Object System.Net.WebClient).DownloadFile('http://download.ambitionsgroup.com/Software/O2016_STD_X64.exe', 'C:\Ambitions\O2016STD\O2016_STD_X64.exe')
+
+	Write-Host "Downloading MS Office config files"
+		$MSPfilename = $MSPURL.Substring($MSPURL.LastIndexOf("/") + 1)
+		$MSPfilepath = 'C:\Ambitions\O2016STD\' + $MSPfilename
+		(New-Object System.Net.WebClient).DownloadFile($MSPURL, $MSPfilepath)
+
+	Write-Host "Installing Office"
+		& 'C:\Ambitions\O2016STD\O2016_STD_X64.exe' -pth!nSong70 -oC:\Ambitions\O2016STD -y | Wait-Process
+		& 'C:\Ambitions\O2016STD\setup.exe' /adminfile $MSPfilepath | Wait-Process
+
+	Write-Host "Placing Shortcuts"
+		$TargetFile = 'C:\Program Files\Microsoft Office\Office16\OUTLOOK.EXE'
+		$ShortcutFile = "$env:Public\Desktop\Outlook.lnk"
+		$WScriptShell = New-Object -ComObject WScript.Shell
+		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
+		$Shortcut.TargetPath = $TargetFile
+		$Shortcut.Save()
+
+		$TargetFile = 'C:\Program Files\Microsoft Office\Office16\EXCEL.EXE'
+		$ShortcutFile = "$env:Public\Desktop\Excel.lnk"
+		$WScriptShell = New-Object -ComObject WScript.Shell
+		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
+		$Shortcut.TargetPath = $TargetFile
+		$Shortcut.Save()
+
+		$TargetFile = 'C:\Program Files\Microsoft Office\Office16\WINWORD.EXE'
+		$ShortcutFile = "$env:Public\Desktop\Word.lnk"
+		$WScriptShell = New-Object -ComObject WScript.Shell
+		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
+		$Shortcut.TargetPath = $TargetFile
+		$Shortcut.Save()
+}
+
+Function Install-O365([String] $SiteCode = "Generic"){
+	Write-Host "Downloading MS Office"
+		Enable-SSL
+		New-Item -ItemType Directory -Force -Path "C:\Ambitions\O365"
+		(New-Object System.Net.WebClient).DownloadFile('https://download.ambitionsgroup.com/O365/setup.exe', 'C:\Ambitions\O365\setup.exe')
+	Write-Host "Downloading MS Office config files"
+		$O365ConfigSource = "https://download.ambitionsgroup.com/Sites/" + $SiteCode + "/" + $SiteCode + "_O365_Config.xml"
+		$O365ConfigDest = "C:\Ambitions\O365\" + $SiteCode + "_O365_Config.xml"
+		(New-Object System.Net.WebClient).DownloadFile($O365ConfigSource, $O365ConfigDest)
+	Write-Host "Installing Office"
+		& C:\Ambitions\O365\setup.exe /configure $O365ConfigDest | Wait-Process
+	Write-Host "Placing Shortcuts"
+		$TargetFile = "C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE"
+		$ShortcutFile = "$env:Public\Desktop\Outlook.lnk"
+		$WScriptShell = New-Object -ComObject WScript.Shell
+		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
+		$Shortcut.TargetPath = $TargetFile
+		$Shortcut.Save()
+
+		$TargetFile = "C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE"
+		$ShortcutFile = "$env:Public\Desktop\Excel.lnk"
+		$WScriptShell = New-Object -ComObject WScript.Shell
+		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
+		$Shortcut.TargetPath = $TargetFile
+		$Shortcut.Save()
+
+		$TargetFile = "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"
+		$ShortcutFile = "$env:Public\Desktop\Word.lnk"
+		$WScriptShell = New-Object -ComObject WScript.Shell
+		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
+		$Shortcut.TargetPath = $TargetFile
+		$Shortcut.Save()
+}
+
+Function Invoke-Win10Decrap {
+	Write-Host "Windows 10 Decrapifier"
+	$progressPreference = 'silentlyContinue'
+	Set-ExecutionPolicy Bypass -Scope Process -Force
+	Enable-SSL
+	Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Win-10-DeCrapifier/Windows10Decrapifier.txt -UseBasicParsing | Invoke-Expression
 }
 
 Function Join-Domain {
-Write-Host "Join Domain"
+	Write-Host "Join Domain"
 	param
 	(
 		[string]$Domain,
@@ -368,30 +267,130 @@ Function Rename-ClientComputer {
 	Write-Host "End of Rename Computer"
 }
 
-Function Connect-O365 {
-	$UserCredential = Get-Credential
-	$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://outlook.office365.com/powershell-liveid/ -Credential $UserCredential -Authentication Basic -AllowRedirection
-	Import-PSSession $Session
-	Write-Host '!!!REMEMBER!!! When you want to disconnect from Office 365, type in "Remove-PSSession $Session"'
+Function Set-AutoLogon ([String] $SiteCode) {
+	Write-Host "Set autologon"
+		#Registry path declaration
+		$RegPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+		[String]$DefaultUsername = 'ATGLocal'
+		[String]$DefaultPassword = $SiteCode + 'T3mpP@ss'
+		#setting registry values
+		Set-ItemProperty $RegPath "AutoAdminLogon" -Value "1" -type String
+		Set-ItemProperty $RegPath "DefaultUsername" -Value $DefaultUsername -type String
+		Set-ItemProperty $RegPath "DefaultPassword" -Value $DefaultPassword -type String
+		Set-ItemProperty $RegPath "AutoLogonCount" -Value "1" -type DWord
+	Write-Host "End of Set autologon"
 }
 
-Function Invoke-Win10Decrap {
-	Write-Host "Windows 10 Decrapifier"
-	$progressPreference = 'silentlyContinue'
-	Set-ExecutionPolicy Bypass -Scope Process -Force
-	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-	Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Win-10-DeCrapifier/Windows10Decrapifier.txt -UseBasicParsing | Invoke-Expression
+Function Set-DailyReboot {
+	Write-Host "Schedule Daily Restart"
+		$Action = New-ScheduledTaskAction -Execute 'shutdown.exe' -Argument '-f -r -t 0'
+		$Trigger =New-ScheduledTaskTrigger -Daily -At 3am
+		$Idle = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration 00:30:00 -IdleWaitTimeout 02:00:00
+		$User = "NT AUTHORITY\SYSTEM"
+		Register-ScheduledTask -Action $action -Trigger $trigger -User $User -Settings $Idle -TaskName "Daily Restart" -Description "Daily restart"
 }
 
-Function Expand-Terminal {
-	mode con: cols=160 lines=120
+Function Set-MountainTime {
+	Write-Host "Setting local time zone to Mountain Time"
+	Set-TimeZone -Name "Mountain Standard Time"
+	net start W32Time
+	W32tm /resync /force
+}
+
+Function Set-NumLock {
+	Write-Host "Setting Numlock on keyboard as default"
+	Reg.exe add "HKU\.DEFAULT\Control Panel\Keyboard" /v "InitialKeyboardIndicators" /t REG_SZ /d "2" /f
+}
+
+Function Set-RunOnceScript {
+	param
+	(
+		[string]$Label,
+		[string]$Script
+	)
+
+	$RunOnceValue = 'PowerShell.exe -ExecutionPolicy Bypass -File "' + $Script + '"'
+	Write-Host "Install After Reboot"
+	Set-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name $Label -Value $RunOnceValue
+}
+
+Function Start-PPKGLog ([String] $LogLabel) {
+	Write-Host "Making a log file for debugging"
+		$LogPath = "C:\Ambitions\" + $SiteCode + "-" + $LogLabel + ".log"
+		Start-Transcript -path $LogPath -Force -Append
+}
+
+Function Update-DellPackages {
+	Write-Host "Dell Updates"
+		$Manufact = (Get-CimInstance -Class Win32_ComputerSystem).Manufacturer
+		if( $Manufact -like "*Dell*")
+		{
+			Enable-SSL
+			Set-ExecutionPolicy Bypass -Scope Process -Force; Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Dell-Command-Update/DCU_AUTO.txt -UseBasicParsing | Invoke-Expression
+		} else { Write-Host This is not a Dell Computer}
+	Write-Host "End of Dell Updates"
+}
+
+Function Update-Edge {
+	Write-Host "Updating Microsoft Edge"
+	If (!(Get-Command choco)) {Install-Choco}
+	If (Get-Process MicrosoftEdge -ErrorAction SilentlyContinue) {Get-Process MicrosoftEdge | Stop-Process -Force}
+	Choco upgrade microsoft-edge -y
+}
+
+Function Update-ITS247Agent {
+	$DisplayVersion = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).DisplayVersion
+	$TYPE = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).TYPE
+	$AvailableVersion = (Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/ITS247Agent/DPMAVersion.txt -UseBasicParsing)
+
+	if(($DisplayVersion -ne $AvailableVersion) -and ($TYPE -eq "DPMA")) {
+	 WRITE-HOST "Updating Agent from $DisplayVersion to $AvailableVersion"
+		 $SaveFolder = 'C:\Ambitions'
+		 New-Item -ItemType Directory -Force -Path $SaveFolder
+		 $PatchPath = $SaveFolder + '\DPMAPatch' + $AvailableVersion + '.exe'
+		 (New-Object System.Net.WebClient).DownloadFile('http://update.itsupport247.net/agtupdt/DPMAPatch.exe', $PatchPath)
+		 & $PatchPath | Wait-Process
+		 $DisplayVersion = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).DisplayVersion
+	 WRITE-HOST "Agent is now version $DisplayVersion"
+	}
+<#
+	.DESCRIPTION
+		Updates the Continuum ITS247 Desktop agent to the latest available. No parameters are needed.
+#>
+}
+
+Function Update-PWSH {
+	Write-Host "Updating PWSH"
+	If (!(Get-Command choco)) {Install-Choco}
+	Choco upgrade pwsh -y
+}
+
+Function Update-Windows {
+	Write-Host "Install Windows Updates"
+		Set-ExecutionPolicy Bypass -Scope Process -Force
+		Enable-SSL
+		Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Windows-Update/UpdateWindows.txt -UseBasicParsing | Invoke-Expression
+	Write-Host "End of Install Windows Updates"
+}
+
+Function Update-WindowsApps {
+	Write-Host "Updating Windows Apps"
+		Start-Process ms-windows-store:
+		Start-Sleep -Seconds 5
+		(Get-WmiObject -Namespace "root\cimv2\mdm\dmmap" -Class "MDM_EnterpriseModernAppManagement_AppManagement01").UpdateScanMethod()
+	Write-Host "Update Windows Apps initiated"
+}
+
+Function Update-WindowTitle ([String] $PassNumber) {
+	Write-Host "Changing window title"
+		$host.ui.RawUI.WindowTitle = "$SiteCode Provisioning | $env:computername | Pass $PassNumber | Please Wait"
 }
 
 $ATGPSModulePath = $Env:temp + "\ATGPS.psm1"
 
 If (!(Test-Path $ATGPSModulePath)) {
 	# download this file as a module and import it
-	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+	Enable-SSL
 	(New-Object System.Net.WebClient).DownloadString('https://git.io/ATGPS') | Out-File -FilePath $ATGPSModulePath
 	Import-Module $ATGPSModulePath -Global -Force | Out-Null
 }
@@ -406,7 +405,7 @@ If (Get-Module -Name ATGPS -ErrorAction SilentlyContinue){
 
 	Write-Host ====================================================
 	Write-Host "Type: 'Help <function name> -Detailed' for more info"
-	Write-Host ====================================================`n
+	Write-Host ====================================================
 }
 
 If (Test-Path $ATGPSModulePath) {
