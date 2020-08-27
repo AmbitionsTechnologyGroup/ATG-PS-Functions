@@ -238,8 +238,11 @@ Function Join-Domain {
 	Write-Host "Join Domain"
 	param
 	(
+		[Parameter(Mandatory=$true)]
 		[string]$Domain,
+		[Parameter(Mandatory=$true)]
 		[string]$Username,
+		[Parameter(Mandatory=$true)]
 		[string]$Password
 	)
 	$Password = $Password | ConvertTo-SecureString -asPlainText -Force
