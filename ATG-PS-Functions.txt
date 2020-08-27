@@ -386,13 +386,16 @@ Function Update-WindowTitle ([String] $PassNumber) {
 		$host.ui.RawUI.WindowTitle = "$SiteCode Provisioning | $env:computername | Pass $PassNumber | Please Wait"
 }
 
-$ATGPSModulePath = $Env:temp + "\ATGPS.psm1"
+Function Get-ATGPS {}
+	$ATGPSModulePath = $Env:temp + "\ATGPS.psm1"
 
-If (!(Test-Path $ATGPSModulePath)) {
-	# download this file as a module and import it
-	Enable-SSL
-	(New-Object System.Net.WebClient).DownloadString('https://git.io/ATGPS') | Out-File -FilePath $ATGPSModulePath
-	Import-Module $ATGPSModulePath -Global -Force | Out-Null
+	If (!(Test-Path $ATGPSModulePath)) {
+		# download this file as a module and import it
+		Enable-SSL
+		(New-Object System.Net.WebClient).DownloadString('https://git.io/ATGPS') | Out-File -FilePath $ATGPSModulePath
+		Import-Module $ATGPSModulePath -Global -Force | Out-Null
+		Remove-Item $ATGPSModulePath -Force
+	}
 }
 
 If (Get-Module -Name ATGPS -ErrorAction SilentlyContinue){
@@ -406,8 +409,4 @@ If (Get-Module -Name ATGPS -ErrorAction SilentlyContinue){
 	Write-Host ====================================================
 	Write-Host "Type: 'Help <function name> -Detailed' for more info"
 	Write-Host ====================================================
-}
-
-If (Test-Path $ATGPSModulePath) {
-	Remove-Item $ATGPSModulePath -Force
 }
