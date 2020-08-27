@@ -132,7 +132,7 @@ Function Install-O365([String] $SiteCode = "Generic"){
 		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
 		$Shortcut.TargetPath = $TargetFile
 		$Shortcut.Save()
-		
+
 		$TargetFile = "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"
 		$ShortcutFile = "$env:Public\Desktop\Word.lnk"
 		$WScriptShell = New-Object -ComObject WScript.Shell
@@ -146,7 +146,7 @@ Function Install-O2016STD([String] $MSPURL){
 		Enable-SSL
 		New-Item -ItemType Directory -Force -Path 'C:\Ambitions\O2016STD'
 		(New-Object System.Net.WebClient).DownloadFile('http://download.ambitionsgroup.com/Software/O2016_STD_X64.exe', 'C:\Ambitions\O2016STD\O2016_STD_X64.exe')
-		
+
 	Write-Host "Downloading MS Office config files"
 		$MSPfilename = $MSPURL.Substring($MSPURL.LastIndexOf("/") + 1)
 		$MSPfilepath = 'C:\Ambitions\O2016STD\' + $MSPfilename
@@ -170,7 +170,7 @@ Function Install-O2016STD([String] $MSPURL){
 		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
 		$Shortcut.TargetPath = $TargetFile
 		$Shortcut.Save()
-		
+
 		$TargetFile = 'C:\Program Files\Microsoft Office\Office16\WINWORD.EXE'
 		$ShortcutFile = "$env:Public\Desktop\Word.lnk"
 		$WScriptShell = New-Object -ComObject WScript.Shell
@@ -190,22 +190,22 @@ Function Connect-NetExtender {
 	(
 		[Parameter(Mandatory=$False)]
 		[string]$DC,
-		
+
 		[Parameter(Mandatory=$true)]
 		[string]$VPNuri,
-		
+
 		[Parameter(Mandatory=$true)]
 		[string]$VPNuser,
-		
+
 		[Parameter(Mandatory=$true)]
 		[string]$VPNpassword,
-		
+
 		[Parameter(Mandatory=$true)]
 		[string]$VPNdomain
 	)
 
 	If (([string]::IsNullOrWhiteSpace($DC)) -or (-not (Test-Connection -comp $DC -quiet))) {
-		If (!(Test-Path -LiteralPath 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe')) { 
+		If (!(Test-Path -LiteralPath 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe')) {
 			Install-NetExtender
 		}
 		Write-host "Initiating VPN connection"
@@ -244,7 +244,7 @@ Function Add-WebShortcut{
 		[string]$Label,
 		[string]$Url
 	)
-	
+
 	Write-Host "Adding a shortcut to $Label to the desktop"
 	$Shell = New-Object -ComObject ("WScript.Shell")
 	$URLFilePath = $env:Public + "\Desktop\" + $Label + ".url"
@@ -259,8 +259,8 @@ Function Add-IEShortcut{
 		[string]$Label,
 		[string]$Url
 	)
-	
-	$TargetFile = "C:\Program Files\Internet Explorer\iexplore.exe" 
+
+	$TargetFile = "C:\Program Files\Internet Explorer\iexplore.exe"
 	$ShortcutFile = "$env:Public\Desktop\" + $Label + ".lnk"
 	$WScriptShell = New-Object -ComObject WScript.Shell
 	$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
@@ -289,7 +289,7 @@ Function Disable-ATGLocalExpiration {
 		Set-LocalUser -Name "ATGLocal" -PasswordNeverExpires $True
 }
 
-Function Install-WindowsUpdates {
+Function Update-Windows {
 	Write-Host "Install Windows Updates"
 		Set-ExecutionPolicy Bypass -Scope Process -Force
 		[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
@@ -297,8 +297,8 @@ Function Install-WindowsUpdates {
 	Write-Host "End of Install Windows Updates"
 }
 
-Function Install-DellUpdates {
-	Write-Host "Dell  Updates"
+Function Update-DellPackages {
+	Write-Host "Dell Updates"
 		$Manufact = (Get-CimInstance -Class Win32_ComputerSystem).Manufacturer
 		if( $Manufact -like "*Dell*")
 		{
@@ -359,7 +359,7 @@ Function Remove-ITS247InstallFolder {
 Function Rename-ClientComputer {
 	Write-Host "Rename Computer"
 		$title = 'Rename Computer'
-		$msg   = 'Enter the client shortcode (e.g. AAIHB) or Dept code'
+		$msg = 'Enter the client shortcode (e.g. AAIHB) or Dept code'
 		$SerialNumber = (Get-WmiObject win32_bios).SerialNumber
 		#Message box prompts onscreen for input
 		[void][Reflection.Assembly]::LoadWithPartialName('Microsoft.VisualBasic')
@@ -394,7 +394,7 @@ If (!(Test-Path $ATGPSModulePath)) {
 	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
 	(New-Object System.Net.WebClient).DownloadString('https://git.io/ATGPS') | Out-File -FilePath $ATGPSModulePath
 	Import-Module $ATGPSModulePath -Global -Force | Out-Null
-} 
+}
 
 If (Get-Module -Name ATGPS -ErrorAction SilentlyContinue){
 	# List imported functions from ATGPS
