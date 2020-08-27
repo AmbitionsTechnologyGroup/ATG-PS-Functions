@@ -94,7 +94,7 @@ Function Disable-FastStartup {
 
 Function Enable-SSL {
 	Write-Host "Enabling SSL"
-	Enable-SSL
+	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
 }
 
 Function Expand-Terminal {
