@@ -235,8 +235,7 @@ Function Invoke-Win10Decrap {
 }
 
 Function Join-Domain {
-	Write-Host "Join Domain"
-	param
+		param
 	(
 		[Parameter(Mandatory=$true)]
 		[string]$Domain,
@@ -245,6 +244,7 @@ Function Join-Domain {
 		[Parameter(Mandatory=$true)]
 		[string]$Password
 	)
+	Write-Host "Join Domain"
 	$Password = $Password | ConvertTo-SecureString -asPlainText -Force
 	$Username = $Domain + "\" + $Username
 	$credential = New-Object System.Management.Automation.PSCredential($Username,$Password)
