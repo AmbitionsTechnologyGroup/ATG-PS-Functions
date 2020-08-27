@@ -267,6 +267,29 @@ Function Rename-ClientComputer {
 	Write-Host "End of Rename Computer"
 }
 
+Function Repair-Windows {
+	$StartTime = (Get-Date)
+	(Get-Date).DateTime | Out-Host
+	Write-Host Repair-Volume -DriveLetter $Env:SystemDrive.SubString(0,1) -Scan
+	$chdksk = Repair-Volume -DriveLetter $Env:SystemDrive.SubString(0,1) -Scan
+	If ($chdksk -ne "NoErrorsFound") {Repair-Volume -DriveLetter $Env:SystemDrive.SubString(0,1) -SpotFix}
+	Write-Host Dism /Online /Cleanup-Image /StartComponentCleanup
+	Dism /Online /Cleanup-Image /StartComponentCleanup
+	Write-Host ...
+	(Get-Date).DateTime | Out-Host
+	Write-Host Dism /Online /Cleanup-Image /RestoreHealth
+	Dism /Online /Cleanup-Image /RestoreHealth
+	Write-Host ...
+	(Get-Date).DateTime | Out-Host
+	Write-Host SFC /scannow
+	SFC /scannow
+	(Get-Date).DateTime | Out-Host
+	$EndTime = (Get-Date) - $StartTime
+	Write-Host "This process took:"
+	$EndTime | FT | Out-Host
+	Write-Host "Run this function repeately until no errors show up. If this fails after 3 tries, upgrade or reinstall windows"
+}
+
 Function Set-AutoLogon ([String] $SiteCode) {
 	Write-Host "Set autologon"
 		#Registry path declaration
