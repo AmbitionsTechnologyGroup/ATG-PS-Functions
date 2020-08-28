@@ -75,23 +75,41 @@ Function Connect-NetExtender {
 }
 
 Function Connect-O365 {
-	Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-	Install-Module -Name ExchangeOnlineManagement -AllowClobber -Force
-	Connect-ExchangeOnline -ShowProgress $true
+	If ($PSVersionTable.PSEdition -like "Desktop") {
+		Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+		Install-Module -Name ExchangeOnlineManagement -AllowClobber -Force
+		Connect-ExchangeOnline -ShowProgress $true
 
-	Write-Host -ForegroundColor Green -BackgroundColor DarkRed @"
-	Be sure to disconnect the remote PowerShell session when you're finished.
-	If you close the Windows PowerShell window without disconnecting the session,
-	you could use up all the remote PowerShell sessions available to you,
-	and you'll need to wait for the sessions to expire.
-	To disconnect the remote PowerShell session, run the following command.
+		Write-Host -ForegroundColor Green -BackgroundColor DarkRed @"
+		Be sure to disconnect the remote PowerShell session when you're finished.
+		If you close the Windows PowerShell window without disconnecting the session,
+		you could use up all the remote PowerShell sessions available to you,
+		and you'll need to wait for the sessions to expire.
+		To disconnect the remote PowerShell session, run the following command.
 
-	Disconnect-ExchangeOnline
+		Disconnect-ExchangeOnline
 "@
+	} Else {
+		Write-Host -ForegroundColor Green -BackgroundColor DarkRed "Warning! You are using a CORE edition of Powershell. MFA will be unavailable."
+		$UserCredential = Get-Credential
+		$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://outlook.office365.com/powershell-liveid/ -Credential $UserCredential -Authentication Basic -AllowRedirection
+		Import-PSSession $Session
+		
+		Write-Host -ForegroundColor Green -BackgroundColor DarkRed @"
+		Be sure to disconnect the remote PowerShell session when you're finished.
+		If you close the Windows PowerShell window without disconnecting the session,
+		you could use up all the remote PowerShell sessions available to you,
+		and you'll need to wait for the sessions to expire.
+		To disconnect the remote PowerShell session, run the following command.
+
+		Get-PSSession | Remove-PSSession
+"@
+	}
 	
 <#
 	.DESCRIPTION
-		Initiates an Office 365 Exchange connection that is compatible with MFA
+		Initiates an Office 365 Exchange connection that is compatible with MFA.
+		This is not compatible with Powershell Core.
 		
 	.LINK
 		https://docs.microsoft.com/en-us/powershell/exchange/connect-to-exchange-online-powershell?view=exchange-ps
