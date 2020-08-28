@@ -7,8 +7,14 @@ We are moving to a **function-based system**. There are 2 ways to load the funct
 
 1) ### Powershell method ###  Run this:
 ```powershell
-IEX(New-Object net.webclient).downloadstring('http://get-atgps.ambitionsgroup.com')
+IEX(New-Object net.webclient).downloadstring('http://tinyurl.com/get-atgps')
 ```
+or
+```powershell
+$progressPreference = 'silentlyContinue'
+iwr http://tinyurl.com/get-atgps -usebasicparsing | iex
+```
+
 2) ### Browser method: ###
 Open a browser to [https://git.io/ATGPS](https://git.io/ATGPS)
 Select all the contents (CTRL+A), copy them (CTRL+C), and paste into a powershell window (Admin)
