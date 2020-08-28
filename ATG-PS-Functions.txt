@@ -75,10 +75,31 @@ Function Connect-NetExtender {
 }
 
 Function Connect-O365 {
-	$UserCredential = Get-Credential
-	$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://outlook.office365.com/powershell-liveid/ -Credential $UserCredential -Authentication Basic -AllowRedirection
-	Import-PSSession $Session
-	Write-Host '!!!REMEMBER!!! When you want to disconnect from Office 365, type in "Remove-PSSession $Session"'
+	Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+	Install-Module -Name ExchangeOnlineManagement -AllowClobber -Force
+	Connect-ExchangeOnline -ShowProgress $true
+
+	Write-Host -ForegroundColor Green -BackgroundColor DarkRed @"
+	Be sure to disconnect the remote PowerShell session when you're finished.
+	If you close the Windows PowerShell window without disconnecting the session,
+	you could use up all the remote PowerShell sessions available to you,
+	and you'll need to wait for the sessions to expire.
+	To disconnect the remote PowerShell session, run the following command.
+
+	Disconnect-ExchangeOnline
+"@
+	
+<#
+	.DESCRIPTION
+		Initiates an Office 365 Exchange connection that is compatible with MFA
+		
+	.LINK
+		https://docs.microsoft.com/en-us/powershell/exchange/connect-to-exchange-online-powershell?view=exchange-ps
+		
+	.EXAMPLE
+		Connect-O365
+		Yup, that's it!
+#>
 }
 
 Function Disable-ATGLocalExpiration {
