@@ -146,7 +146,7 @@ if ($Auto) {
 
 
 # Check for preassigned site code, offer choices if not
-If (Get-Variable -Name SiteCode) {$Code = $SiteCode}
+If (Get-Variable -Name SiteCode -ErrorAction SilentlyContinue) {$Code = $SiteCode ; $Silent = $True}
 If ($Code) {
 	$SelectedSite = $SiteConfigs.Where({$PSItem.Code -like $code})
 	If ($SelectedSite){
