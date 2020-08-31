@@ -21,7 +21,7 @@ If ($PSVersionTable.PSVersion.Major -lt "5") {
 	& "C:\ProgramData\chocolatey\bin\choco.exe" install powershell -y
 	Write-Host "Reboot computer and run script again"
 } Else {
-	If ((Get-Command Get-WUInstall -ErrorAction SilentlyContinue) -And ((Get-Command Get-WUInstall).Version.Major -lt "2")) {
+	If ((Get-Command Get-WUInstall -ErrorAction SilentlyContinue) -And ((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Major -lt "2")) {
 		$Module = Get-Module -Name PSWindowsUpdate
 		Write-Host "Removing an out of date PSWindowsUpdate"
 		Uninstall-Module $Module.Name
@@ -29,12 +29,12 @@ If ($PSVersionTable.PSVersion.Major -lt "5") {
 		Remove-Item $Module.ModuleBase -Recurse -Force
 	}
 
-	If (-Not (((Get-Command Get-WUInstall).Version.Major -ge "2") -and ((Get-Command Get-WUInstall).Version.Minor -ge "1"))) {
+	If (-Not (((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Major -ge "2") -and ((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Minor -ge "1"))) {
 		Write-Host "Attempting automatic installation of PSWUI 2.2.0.2"
 		Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.208 -Force -ErrorAction SilentlyContinue
 		Install-Module -Name PSWindowsUpdate -MinimumVersion 2.2.0.2 -Force -ErrorAction SilentlyContinue
 		RegMU
-		If (-Not (((Get-Command Get-WUInstall).Version.Major -ge "2") -and ((Get-Command Get-WUInstall).Version.Minor -ge "1"))) {
+		If (-Not (((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Major -ge "2") -and ((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Minor -ge "1"))) {
 			Write-Host "Auto install Failed, Attempting Manual installation of PSWUI 2.2.0.2"
 			New-Item -ItemType Directory -Force -Path 'C:\Ambitions' -ErrorAction Stop
 			(New-Object System.Net.WebClient).DownloadFile('https://psg-prod-eastus.azureedge.net/packages/pswindowsupdate.2.2.0.2.nupkg', 'C:\Ambitions\pswindowsupdate.2.2.0.2.zip')
@@ -45,7 +45,7 @@ If ($PSVersionTable.PSVersion.Major -lt "5") {
 		}
 	}
 
-	If (((Get-Command Get-WUInstall).Version.Major -ge "2") -and ((Get-Command Get-WUInstall).Version.Minor -ge "1")) {
+	If (((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Major -ge "2") -and ((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Minor -ge "1")) {
 		Write-Host "PSWindowsUpdate is installed! Attempting Updates"
 		Get-WUInstall -MicrosoftUpdate -AcceptAll -Install -UpdateType Software -IgnoreReboot -ErrorAction SilentlyContinue
 	} Else {
