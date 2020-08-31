@@ -21,7 +21,7 @@ If ($PSVersionTable.PSVersion.Major -lt "5") {
 	& "C:\ProgramData\chocolatey\bin\choco.exe" install powershell -y
 	Write-Host "Reboot computer and run script again"
 } Else {
-	If ((Get-Command Get-WUInstall) -And ((Get-Command Get-WUInstall).Version.Major -lt "2")) {
+	If ((Get-Command Get-WUInstall -ErrorAction SilentlyContinue) -And ((Get-Command Get-WUInstall).Version.Major -lt "2")) {
 		$Module = Get-Module -Name PSWindowsUpdate
 		Write-Host "Removing an out of date PSWindowsUpdate"
 		Uninstall-Module $Module.Name
