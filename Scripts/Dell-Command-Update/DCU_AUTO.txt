@@ -19,6 +19,9 @@ If (Get-Command choco -errorAction SilentlyContinue) {
 	#Remove any Windows 10 "Apps"
 	Get-AppxPackage *Dell*Update* | Remove-AppxPackage
 
+#Starts the IPMI Service if needed
+If ((Get-Service -Name IPMIDRV -ErrorAction SilentlyContinue).Status -ne "Running" -and (Get-Service -Name IPMIDRV -ErrorAction SilentlyContinue).Status) {Start-Service -Name IPMIDRV -PassThru}
+
 #Install the latest
 	Choco upgrade dellcommandupdate -y --force --ignorechecksums
 
