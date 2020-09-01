@@ -385,6 +385,12 @@ Function Start-PPKGLog ([String] $LogLabel) {
 		Start-Transcript -path $LogPath -Force -Append
 }
 
+Function Update-DattoAgent {
+	Enable-SSL
+	$progressPreference = 'silentlyContinue'
+	iwr https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Datto-Agent-Update/DattoAgentUpdate.txt -usebasicparsing | iex
+}
+
 Function Update-DellPackages {
 	Write-Host "Dell Updates"
 		$Manufact = (Get-CimInstance -Class Win32_ComputerSystem).Manufacturer
