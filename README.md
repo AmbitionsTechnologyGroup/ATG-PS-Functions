@@ -48,6 +48,7 @@ Set-MountainTime
 Set-NumLock
 Set-RunOnceScript
 Start-PPKGLog
+Update-DattoAgent
 Update-DellPackages
 Update-Edge
 Update-ITS247Agent
