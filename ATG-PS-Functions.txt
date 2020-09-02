@@ -140,6 +140,34 @@ Function Expand-Terminal {
 	mode con: cols=160 lines=120
 }
 
+Function Get-ADUserPassExpirations {
+    <#
+	.DESCRIPTION
+		Retrieves a list of (enabled) Active Directory Users and shows their password expiration times.
+	#>
+
+	# check the name of the parent process.  If it's LogMeIn, we can't use the Out-GridView UI
+	$parentProcessName = (Get-Process -Id ((Get-WmiObject Win32_Process -Filter "processid='$PID'").ParentProcessId)).Name
+
+	# check to see whether Get-AdUser is available
+	if (Get-Command ActiveDirectory\Get-AdUser -ErrorAction SilentlyContinue) {
+
+		$adUserInfo = Get-ADUser -Filter {Enabled -eq $True -and PasswordNeverExpires -eq $False} `
+		–Properties "DisplayName", "userPrincipalName", "msDS-UserPasswordExpiryTimeComputed" | `
+		Select-Object -Property "Displayname","userPrincipalName",@{Name="ExpiryDate";Expression={[datetime]::FromFileTime($_."msDS-UserPasswordExpiryTimeComputed")}}
+
+		# if the parent process of this powershell instance is not explorer.exe, output to PowerShell table.
+		If ($parentProcessName -ne "explorer") {
+			$adUserInfo | Format-Table -AutoSize
+		} else { # otherwise, grid view UI
+			$adUserInfo | Out-GridView -Title "ATG Powershell --> User Password Expirations"
+		}
+
+	} else { # cannot continue, Get-AdUser is not available
+		Write-Host "`n [!] This command must be run on a system with Active Directory Powershell Modules (i.e. a domain controller)`n"
+	}
+}
+
 Function Install-AppDefaults {
 	Write-Host "Downloading App Defaults"
 	New-Item -ItemType Directory -Force -Path C:\Ambitions\ITS247Agent
