@@ -7,7 +7,7 @@ We are moving to a **function-based system**. There are 2 ways to load the funct
 
 1) ### Powershell method ###  Run this:
 ```powershell
-$progressPreference = 'silentlyContinue'
+$progressPreference = 'silentlyContinue' #If running from a LogMeIn terminal
 iwr tinyurl.com/get-atgps -usebasicparsing | iex
 ```
 
