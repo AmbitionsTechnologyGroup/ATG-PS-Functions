@@ -404,7 +404,7 @@ Function Join-Domain {
 		[Parameter(Mandatory=$true)]
 		[string]$Username,
 		[Parameter(Mandatory=$true)]
-		[string]$Password
+		$Password
 	)
 	Write-Host "Join Domain"
 	$Password = $Password | ConvertTo-SecureString -asPlainText -Force
