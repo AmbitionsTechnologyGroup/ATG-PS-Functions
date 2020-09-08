@@ -346,7 +346,7 @@ Function Install-ProofPointExchangeConnectors {
 		148.163.144.0/24
 		148.163.136.0/24
 		148.163.128.0/24
-		"@
+"@
 
 		Function Install-ProofPointInbound {
 			New-InboundConnector -Name “Inbound from ProofPoint” -Comment “Only accept email from ProofPoint transport addresses” -Enabled $false  -SenderDomains * -RestrictDomainsToIPAddresses $true -RequireTls $true -SenderIPAddresses $ExceptIfSenderIpRanges
