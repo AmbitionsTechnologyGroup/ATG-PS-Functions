@@ -532,7 +532,7 @@ Function Set-MountainTime {
 
 Function Set-NumLock {
 	Write-Host "Setting Numlock on keyboard as default"
-	Reg.exe add "HKU\.DEFAULT\Control Panel\Keyboard" /v "InitialKeyboardIndicators" /t REG_SZ /d "2" /f
+	Set-ItemProperty -Path 'Registry::HKU\.DEFAULT\Control Panel\Keyboard' -Name "InitialKeyboardIndicators" -Value "2" -Force -PassThru
 }
 
 Function Set-RunOnceScript {
