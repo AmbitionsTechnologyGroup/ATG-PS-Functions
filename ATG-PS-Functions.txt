@@ -131,6 +131,16 @@ Function Disable-FastStartup {
 		powercfg -h off
 }
 
+Function Disconnect-AllUsers {
+<#
+	.DESCRIPTION
+		Logs off all users from a machine.
+#>	
+	(quser) -replace ">"," " -replace "\s+","," -replace "IDLE,TIME","IDLE TIME" -replace "LOGON,TIME","LOGON TIME" | ConvertFrom-Csv -Delimiter "," | foreach {
+		logoff ($_.ID)
+	}
+}
+
 Function Enable-SSL {
 	Write-Host "Enabling SSL"
 	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
