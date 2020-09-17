@@ -203,7 +203,7 @@ Function Install-ITS247Agent {
 
 Function Install-NetExtender {
 	Write-Host "Downloading & Installing NetExtender"
-		If (!(Get-Command choco)) {Install-Choco}
+		If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
 		choco install sonicwall-sslvpn-netextender -y
 }
 
@@ -594,7 +594,7 @@ Function Update-DellPackages {
 
 Function Update-Edge {
 	Write-Host "Updating Microsoft Edge"
-	If (!(Get-Command choco)) {Install-Choco}
+	If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
 	If (Get-Process MicrosoftEdge -ErrorAction SilentlyContinue) {Get-Process MicrosoftEdge | Stop-Process -Force}
 	Choco upgrade microsoft-edge -y
 }
@@ -638,7 +638,7 @@ Function Update-NiniteApps {
 
 Function Update-PWSH {
 	Write-Host "Updating PWSH"
-	If (!(Get-Command choco)) {Install-Choco}
+	If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
 	Choco upgrade pwsh -y
 }
 
