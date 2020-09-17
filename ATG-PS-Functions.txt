@@ -608,6 +608,22 @@ Function Update-ITS247Agent {
 #>
 }
 
+Function Update-NiniteApps {
+	<#
+	.DESCRIPTION
+		Uses NinitePro to immediately update all applications it is cabable of updating. The log will be at C:\Ambitions\NiniteReport.txt
+	#>
+    If (-not (Test-Path 'C:\Ambitions\NinitePro.exe')) {Install-NinitePro}
+    Write-Host "Install Ninite Apps, waiting for install to complete and logging the results."
+        $NiniteCache = "\\adsaltoxl\data\Software\Ninite\NiniteDownloads"
+        If(test-path $NiniteCache){
+            & C:\Ambitions\NinitePro.exe /select 7-Zip Air Chrome 'Firefox ESR' Flash Greenshot 'Notepad++' 'Paint.NET' Reader Silverlight VLC /cachepath $NiniteCache /silent 'C:\Ambitions\NiniteReport.txt' | Wait-Process
+        } ELSE {
+            & C:\Ambitions\NinitePro.exe /updateonly /nocache /silent 'C:\Ambitions\NiniteReport.txt' | Wait-Process
+        }
+    Write-Host "End of Install Ninite Apps"
+}
+
 Function Update-PWSH {
 	Write-Host "Updating PWSH"
 	If (!(Get-Command choco)) {Install-Choco}
