@@ -141,6 +141,29 @@ Function Disconnect-AllUsers {
 	}
 }
 
+Function Enable-O365AuditLog {
+<#
+	.DESCRIPTION
+		Sets auditig on all mailboxes in the organization as well as sets the default setting.
+	
+	.LINK
+		https://docs.microsoft.com/en-us/microsoft-365/compliance/enable-mailbox-auditing
+		
+	.LINK
+		https://support.microsoft.com/en-us/help/4026501/office-auditing-in-office-365-for-admins
+#>
+	If (Get-Command Get-Mailbox -ErrorAction SilentlyContinue){
+		Write-Host "Enabling Auditing for all existing mailboxes"
+		Get-Mailbox -ResultSize Unlimited -Filter{RecipientTypeDetails -eq "UserMailbox"} | Set-Mailbox -AuditEnabled $true -Verbose
+		Write-Host "Enabling Auditing for the organization as a whole"
+		Set-OrganizationConfig -AuditDisabled $False
+		Write-Host "Checking the orginazation config. If auditing is enabled, this setting should show as 'False'"
+		Get-OrganizationConfig | Format-List AuditDisabled
+	} Else {
+		Write-Host "You are not connected to an exchange server. Try the command 'Connect-O365'"
+	}
+}
+
 Function Enable-SSL {
 	Write-Host "Enabling SSL"
 	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
@@ -315,7 +338,7 @@ Function Install-O365([String] $SiteCode = "Generic"){
 		$Shortcut.Save()
 }
 
-Function Install-ProofPointExchangeConnectors {
+Function Install-O365ProofPointConnectors {
 <#
 	.DESCRIPTION
 		Installs the proofpoint inbound and outbound connectors in exchange online, as well as spam bypass for emails coming from exchange.
