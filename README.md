@@ -32,6 +32,8 @@ Connect-NetExtender
 Connect-O365
 Disable-ATGLocalExpiration
 Disable-FastStartup
+Disconnect-AllUsers
+Enable-O365AuditLog
 Enable-SSL
 Expand-Terminal
 Get-ADUserPassExpirations
@@ -43,7 +45,7 @@ Install-NiniteApps
 Install-NinitePro
 Install-O2016STD
 Install-O365
-Install-ProofPointExchangeConnectors
+Install-O365ProofPointConnectors
 Invoke-Win10Decrap
 Join-Domain
 Remove-ITS247InstallFolder
@@ -59,10 +61,13 @@ Update-DattoAgent
 Update-DellPackages
 Update-Edge
 Update-ITS247Agent
+Update-NiniteApps
 Update-PWSH
 Update-Windows
 Update-WindowsApps
 Update-WindowTitle
+
+#This list can be updated with "Get-Command -Module ATGPS | Select Name"
 ```
 ### For more information on a function, type:
 ```powershell 
