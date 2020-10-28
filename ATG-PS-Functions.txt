@@ -201,6 +201,16 @@ Function Get-ADUserPassExpirations {
 	}
 }
 
+Function Get-ThunderBolt {
+	$Thunderbolt = Get-WmiObject Win32_SystemDriver | Where-Object -Property DisplayName -Like "*Thunder*"
+	If ($Thunderbolt) {
+		Write-Host "The following ThunderBolt controllers have been detected:"
+		$Thunderbolt
+	} Else {
+		Write-Host "No Thunderbolt Controllers have been detected"
+	}
+}
+
 Function Install-AppDefaults {
 	Write-Host "Downloading App Defaults"
 	New-Item -ItemType Directory -Force -Path C:\Ambitions\ITS247Agent
