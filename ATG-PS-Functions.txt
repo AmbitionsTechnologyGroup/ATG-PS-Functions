@@ -584,7 +584,7 @@ Function Update-O365Apps {
 	If (-not (Test-Path 'C:\Program Files\Common Files\Microsoft Shared\ClickToRun\OfficeC2RClient.exe')) {
 		Write-Host "Office 365 Click2Run is not installed. This script does not apply."
 	} Else {
-		$Apps = @('Excel','Outlook','Word','PowerPoint','MsAccess','MSPub','OneNote')
+		$Apps = @('Excel','Outlook','WinWord','PowerPoint','MsAccess','MSPub','OneNote')
 		$OpenApps = @('')
 		$Apps | ForEach-Object {
 			If (Get-Process $_ -ErrorAction SilentlyContinue) {
@@ -624,6 +624,7 @@ Function Update-O365Apps {
 						}
 					}
 					Write-Host "Office 365 Update Channel (Policy Setting): "$O365CurrentPol
+					Write-Host "`n"
 				}
 			}
 
@@ -638,7 +639,7 @@ Function Update-O365Apps {
 					Get-Process OfficeClickToRun -ErrorAction SilentlyContinue | Where-Object -Property Path -Like "*Microsoft Shared\ClickToRun\Updates\*"
 				}
 
-				$Timeout = 120 ## seconds
+				$Timeout = 190 ## seconds
 				Try {
 					$timer = [Diagnostics.Stopwatch]::StartNew()
 					while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not (Get-SpecificProcess))) {
@@ -662,7 +663,7 @@ Function Update-O365Apps {
 										Write-Host -NoNewLine "`rWaiting for $Process to stop. CPU time = $CPU"
 										Start-Sleep -Seconds 5
 							   }
-							   Write-Host "`n$Process Stopped" ; $Status = 'Done'
+							   Write-Host "`n`n$Process Stopped" ; $Status = 'Done'
 							}
 						} Until ($Status)
 					}
@@ -678,12 +679,12 @@ Function Update-O365Apps {
 				& "C:\Program Files\Common Files\Microsoft Shared\ClickToRun\OfficeC2RClient.exe" /changesetting Channel=Current
 			}
 
-			Write-Host "Updating Office, please wait"
+			Write-Host "Updating Office, please wait 120 seconds to see further progress."
 				& "C:\Program Files\Common Files\Microsoft Shared\ClickToRun\OfficeC2RClient.exe" /update user updatepromptuser=false forceappshutdown=true displaylevel=false
-				Restart-Service -Name "ClickToRunSvc" -Force
+				Restart-Service -Name "ClickToRunSvc" -Force -ErrorAction SilentlyContinue
 				Wait-UpdateStop OfficeClickToRun
 
-				Write-Host "Office update complete"
+				Write-Host "`n"
 
 			Get-Office365Version
 		}
