@@ -37,6 +37,7 @@ Enable-O365AuditLog
 Enable-SSL
 Expand-Terminal
 Get-ADUserPassExpirations
+Get-ThunderBolt
 Install-AppDefaults
 Install-Choco
 Install-ITS247Agent
@@ -62,6 +63,7 @@ Update-DellPackages
 Update-Edge
 Update-ITS247Agent
 Update-NiniteApps
+Update-O365Apps
 Update-PWSH
 Update-Windows
 Update-WindowsApps
