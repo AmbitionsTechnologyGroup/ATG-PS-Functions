@@ -29,6 +29,19 @@ Function Add-WebShortcut{
 	$Favorite.Save()
 }
 
+Function Backup-LastUser {
+	$RegKey = "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI"
+	$RegFile = "C:\Ambitions\LastLoggedOnUser.reg"
+	Write-Host "Backuping up last logged on user"
+	reg export $RegKey $RegFile /y
+	Write-Host "Trimming export"
+		(Get-Content $RegFile)[0..10] | Out-File -FilePath $RegFile -Force
+	$NewReg = $RegFile[0..8]
+	$User = (Select-String -Path $RegFile -Pattern '"LastLoggedOnUser"' -SimpleMatch).Line
+	Write-Host "$User has been backed up to $RegFile"
+	Write-Host "`nTry the command Restore-LastUser"
+}
+
 Function Connect-NetExtender {
 	param
 	(
@@ -388,7 +401,9 @@ Function Install-O365ProofPointConnectors {
 			Install-ProofPointOutbound
 		}
 		
-		Set-HostedConnectionFilterPolicy “Default” -IPAllowList 148.163.147.0/24, 148.163.146.0/24, 148.163.145.0/24, 148.163.143.0/24, 148.163.142.0/24, 148.163.141.0/24, 148.163.140.0/24, 148.163.139.0/24, 148.163.138.0/24, 148.163.137.0/24, 148.163.135.0/24, 148.163.134.0/24, 148.163.133.0/24, 148.163.132.0/24, 148.163.131.0/24, 148.163.130.0/24, 148.163.129.0/24, 52.54.85.198, 52.55.243.18, 34.192.199.2, 67.231.156.0/24, 67.231.155.0/24, 67.231.154.0/24, 67.231.153.0/24, 67.231.152.0/24, 67.231.148.0/24, 67.231.147.0/24, 67.231.146.0/24, 67.231.145.0/24, 67.231.144.0/24, 148.163.152.0/24, 148.163.144.0/24, 148.163.136.0/24, 148.163.128.0/24, 67.231.149.0/24
+		Set-HostedConnectionFilterPolicy “Default” -IPAllowList 148.163.147.0/24, 148.163.146.0/24, 148.163.145.0/24, 148.163.143.0/24, 148.163.142.0/24, 148.163.141.0/24, 148.163.140.0/24, 148.163.139.0/24, 148.163.138.0/24, 148.163.137.0/24, 148.163.135.0/24, 148.163.134.0/24, 148.163.133.0/24, 148.163.132.0/24, 148.163.131.0/24, 148.163.130.0/24, 148.163.129.0/24, 52.54.85.198, 52.55.243.18, 34.192.199.2, 67.231.156.0/24, 67.231.155.0/24, 67.231.154.0/24, 67.231.153.0/24, 67.231.152.0/24, 67.231.148.0/24, 67.231.147.0/24, 67.231.146.0/24, 67.231.145.0/24, 67.231.144.0/24, 148.163.152.0/24, 148.163.144.0/24, 148.163.136.0/24, 148.163.128.0/24, 67.231.149.0/24 -EnableSafeList $True
+		Set-HostedContentFilterPolicy -Identity "Default" -AddXHeaderValue "Office 365 Notice: Possible Spam" -AdminDisplayName "Disabled 365 Filtering, inbound handled by Proofpoint." -BulkSpamAction "NoAction" -BulkThreshold 9 -DownloadLink $False -EnableEndUserSpamNotifications $False -EnableLanguageBlockList $False -EnableRegionBlockList $False -HighConfidencePhishAction MoveToJmf -HighConfidenceSpamAction AddXHeader -IncreaseScoreWithBizOrInfoUrls Off -IncreaseScoreWithImageLinks Off -IncreaseScoreWithNumericIps Off -IncreaseScoreWithRedirectToOtherPort Off -InlineSafetyTipsEnabled $False -MakeDefault -MarkAsSpamBulkMail Off -MarkAsSpamEmbedTagsInHtml Off -MarkAsSpamEmptyMessages Off -MarkAsSpamFormTagsInHtml Off -MarkAsSpamFramesInHtml Off -MarkAsSpamFromAddressAuthFail Off -MarkAsSpamJavaScriptInHtml Off -MarkAsSpamNdrBackscatter Off -MarkAsSpamObjectTagsInHtml Off -MarkAsSpamSensitiveWordList Off -MarkAsSpamSpfRecordHardFail Off -MarkAsSpamWebBugsInHtml Off -PhishSpamAction AddXHeader -PhishZapEnabled $False -QuarantineRetentionPeriod 30 -RedirectToRecipients $Null -RegionBlockList $Null -SpamAction AddXHeader -SpamZapEnabled $False -TestModeAction None -TestModeBccToRecipients $Null
+		$DisableMailoxJunkFilters = Get-ExoMailbox -RecipientTypeDetails UserMailbox -ResultSize Unlimited; $All | foreach {Set-MailboxJunkEmailConfiguration $_.Name -Enabled $false}
 	} Else {
 		Write-Host "You are not connected to an exchange server. Try the command 'Connect-O365'."
 	}	
@@ -459,6 +474,25 @@ Function Repair-Windows {
 	Write-Host "This process took:"
 	$EndTime | FT | Out-Host
 	Write-Host "Run this function repeately until no errors show up. If this fails after 3 tries, upgrade or reinstall windows"
+}
+
+Function Restore-LastUser {
+	$RegKey = "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI"
+	$RegKeyPS = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI"
+	$RegFile = "C:\Ambitions\LastLoggedOnUser.reg"
+	$InitUser = (Get-ItemProperty $RegKeyPS).LastLoggedOnUser
+
+	If (Test-Path -Path $RegFile){
+		$User = (Select-String -Path $RegFile -Pattern '"LastLoggedOnUser"' -SimpleMatch).Line
+		Write-Host "Restoring:`n$User"
+		REG IMPORT $RegFile
+		$NewUser = (Get-ItemProperty $RegKeyPS).LastLoggedOnUser
+		Write-Host "Last Logged On User has been restored from $InitUser to $NewUser"
+		Write-Host "Refreshing the Logon Screen."
+		Get-Process -Name LogonUI -ErrorAction SilentlyContinue | Stop-Process -Force
+	} Else {
+		Write-Host "Error: No backup exists. Try the command Backup-LastUser to create a backup."
+	}
 }
 
 Function Set-AutoLogon ([String] $SiteCode) {
