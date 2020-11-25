@@ -9,7 +9,7 @@
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-#   http://www.apache.org/licenses/LICENSE-2.0
+#	 http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -33,18 +33,18 @@ $url = ''
 
 $chocolateyVersion = $env:chocolateyVersion
 if (![string]::IsNullOrEmpty($chocolateyVersion)){
-  Write-Output "Downloading specific version of Chocolatey: $chocolateyVersion"
-  $url = "https://chocolatey.org/api/v2/package/chocolatey/$chocolateyVersion"
+	Write-Output "Downloading specific version of Chocolatey: $chocolateyVersion"
+	$url = "https://chocolatey.org/api/v2/package/chocolatey/$chocolateyVersion"
 }
 
 $chocolateyDownloadUrl = $env:chocolateyDownloadUrl
 if (![string]::IsNullOrEmpty($chocolateyDownloadUrl)){
-  Write-Output "Downloading Chocolatey from : $chocolateyDownloadUrl"
-  $url = "$chocolateyDownloadUrl"
+	Write-Output "Downloading Chocolatey from : $chocolateyDownloadUrl"
+	$url = "$chocolateyDownloadUrl"
 }
 
 if ($env:TEMP -eq $null) {
-  $env:TEMP = Join-Path $env:SystemDrive 'temp'
+	$env:TEMP = Join-Path $env:SystemDrive 'temp'
 }
 $chocTempDir = Join-Path $env:TEMP "chocolatey"
 $tempDir = Join-Path $chocTempDir "chocInstall"
@@ -57,26 +57,26 @@ $file = Join-Path $tempDir "chocolatey.zip"
 # simultaneously in one FileStream and in Win32 code or another
 # FileStream."
 function Fix-PowerShellOutputRedirectionBug {
-  $poshMajorVerion = $PSVersionTable.PSVersion.Major
+	$poshMajorVerion = $PSVersionTable.PSVersion.Major
 
-  if ($poshMajorVerion -lt 4) {
-    try{
-      # http://www.leeholmes.com/blog/2008/07/30/workaround-the-os-handles-position-is-not-what-filestream-expected/ plus comments
-      $bindingFlags = [Reflection.BindingFlags] "Instance,NonPublic,GetField"
-      $objectRef = $host.GetType().GetField("externalHostRef", $bindingFlags).GetValue($host)
-      $bindingFlags = [Reflection.BindingFlags] "Instance,NonPublic,GetProperty"
-      $consoleHost = $objectRef.GetType().GetProperty("Value", $bindingFlags).GetValue($objectRef, @())
-      [void] $consoleHost.GetType().GetProperty("IsStandardOutputRedirected", $bindingFlags).GetValue($consoleHost, @())
-      $bindingFlags = [Reflection.BindingFlags] "Instance,NonPublic,GetField"
-      $field = $consoleHost.GetType().GetField("standardOutputWriter", $bindingFlags)
-      $field.SetValue($consoleHost, [Console]::Out)
-      [void] $consoleHost.GetType().GetProperty("IsStandardErrorRedirected", $bindingFlags).GetValue($consoleHost, @())
-      $field2 = $consoleHost.GetType().GetField("standardErrorWriter", $bindingFlags)
-      $field2.SetValue($consoleHost, [Console]::Error)
-    } catch {
-      Write-Output "Unable to apply redirection fix."
-    }
-  }
+	if ($poshMajorVerion -lt 4) {
+	try{
+		# http://www.leeholmes.com/blog/2008/07/30/workaround-the-os-handles-position-is-not-what-filestream-expected/ plus comments
+		$bindingFlags = [Reflection.BindingFlags] "Instance,NonPublic,GetField"
+		$objectRef = $host.GetType().GetField("externalHostRef", $bindingFlags).GetValue($host)
+		$bindingFlags = [Reflection.BindingFlags] "Instance,NonPublic,GetProperty"
+		$consoleHost = $objectRef.GetType().GetProperty("Value", $bindingFlags).GetValue($objectRef, @())
+		[void] $consoleHost.GetType().GetProperty("IsStandardOutputRedirected", $bindingFlags).GetValue($consoleHost, @())
+		$bindingFlags = [Reflection.BindingFlags] "Instance,NonPublic,GetField"
+		$field = $consoleHost.GetType().GetField("standardOutputWriter", $bindingFlags)
+		$field.SetValue($consoleHost, [Console]::Out)
+		[void] $consoleHost.GetType().GetProperty("IsStandardErrorRedirected", $bindingFlags).GetValue($consoleHost, @())
+		$field2 = $consoleHost.GetType().GetField("standardErrorWriter", $bindingFlags)
+		$field2.SetValue($consoleHost, [Console]::Error)
+	} catch {
+		Write-Output "Unable to apply redirection fix."
+	}
+	}
 }
 
 Fix-PowerShellOutputRedirectionBug
@@ -97,82 +97,118 @@ try {
 
 function Get-Downloader {
 param (
-  [string]$url
+	[string]$url
  )
 
-  $downloader = new-object System.Net.WebClient
+	$downloader = new-object System.Net.WebClient
 
-  $defaultCreds = [System.Net.CredentialCache]::DefaultCredentials
-  if ($defaultCreds -ne $null) {
-    $downloader.Credentials = $defaultCreds
-  }
+	$defaultCreds = [System.Net.CredentialCache]::DefaultCredentials
+	if ($defaultCreds -ne $null) {
+	$downloader.Credentials = $defaultCreds
+	}
 
-  $ignoreProxy = $env:chocolateyIgnoreProxy
-  if ($ignoreProxy -ne $null -and $ignoreProxy -eq 'true') {
-    Write-Debug "Explicitly bypassing proxy due to user environment variable"
-    $downloader.Proxy = [System.Net.GlobalProxySelection]::GetEmptyWebProxy()
-  } else {
-    # check if a proxy is required
-    $explicitProxy = $env:chocolateyProxyLocation
-    $explicitProxyUser = $env:chocolateyProxyUser
-    $explicitProxyPassword = $env:chocolateyProxyPassword
-    if ($explicitProxy -ne $null -and $explicitProxy -ne '') {
-      # explicit proxy
-      $proxy = New-Object System.Net.WebProxy($explicitProxy, $true)
-      if ($explicitProxyPassword -ne $null -and $explicitProxyPassword -ne '') {
-        $passwd = ConvertTo-SecureString $explicitProxyPassword -AsPlainText -Force
-        $proxy.Credentials = New-Object System.Management.Automation.PSCredential ($explicitProxyUser, $passwd)
-      }
+	$ignoreProxy = $env:chocolateyIgnoreProxy
+	if ($ignoreProxy -ne $null -and $ignoreProxy -eq 'true') {
+	Write-Debug "Explicitly bypassing proxy due to user environment variable"
+	$downloader.Proxy = [System.Net.GlobalProxySelection]::GetEmptyWebProxy()
+	} else {
+	# check if a proxy is required
+	$explicitProxy = $env:chocolateyProxyLocation
+	$explicitProxyUser = $env:chocolateyProxyUser
+	$explicitProxyPassword = $env:chocolateyProxyPassword
+	if ($explicitProxy -ne $null -and $explicitProxy -ne '') {
+		# explicit proxy
+		$proxy = New-Object System.Net.WebProxy($explicitProxy, $true)
+		if ($explicitProxyPassword -ne $null -and $explicitProxyPassword -ne '') {
+		$passwd = ConvertTo-SecureString $explicitProxyPassword -AsPlainText -Force
+		$proxy.Credentials = New-Object System.Management.Automation.PSCredential ($explicitProxyUser, $passwd)
+		}
 
-      Write-Debug "Using explicit proxy server '$explicitProxy'."
-      $downloader.Proxy = $proxy
+		Write-Debug "Using explicit proxy server '$explicitProxy'."
+		$downloader.Proxy = $proxy
 
-    } elseif (!$downloader.Proxy.IsBypassed($url)) {
-      # system proxy (pass through)
-      $creds = $defaultCreds
-      if ($creds -eq $null) {
-        Write-Debug "Default credentials were null. Attempting backup method"
-        $cred = get-credential
-        $creds = $cred.GetNetworkCredential();
-      }
+	} elseif (!$downloader.Proxy.IsBypassed($url)) {
+		# system proxy (pass through)
+		$creds = $defaultCreds
+		if ($creds -eq $null) {
+		Write-Debug "Default credentials were null. Attempting backup method"
+		$cred = get-credential
+		$creds = $cred.GetNetworkCredential();
+		}
 
-      $proxyaddress = $downloader.Proxy.GetProxy($url).Authority
-      Write-Debug "Using system proxy server '$proxyaddress'."
-      $proxy = New-Object System.Net.WebProxy($proxyaddress)
-      $proxy.Credentials = $creds
-      $downloader.Proxy = $proxy
-    }
-  }
+		$proxyaddress = $downloader.Proxy.GetProxy($url).Authority
+		Write-Debug "Using system proxy server '$proxyaddress'."
+		$proxy = New-Object System.Net.WebProxy($proxyaddress)
+		$proxy.Credentials = $creds
+		$downloader.Proxy = $proxy
+	}
+	}
 
-  return $downloader
+	return $downloader
 }
 
 function Download-String {
 param (
-  [string]$url
+	[string]$url
  )
-  $downloader = Get-Downloader $url
+	$downloader = Get-Downloader $url
 
-  return $downloader.DownloadString($url)
+	return $downloader.DownloadString($url)
 }
 
 function Download-File {
 param (
-  [string]$url,
-  [string]$file
+	[string]$url,
+	[string]$file
  )
-  #Write-Output "Downloading $url to $file"
-  $downloader = Get-Downloader $url
+	#Write-Output "Downloading $url to $file"
+	$downloader = Get-Downloader $url
 
-  $downloader.DownloadFile($url, $file)
+	$downloader.DownloadFile($url, $file)
 }
 
-if ($url -eq $null -or $url -eq '') {
-  Write-Output "Getting latest version of the Chocolatey package for download."
-  $url = 'https://chocolatey.org/api/v2/Packages()?$filter=((Id%20eq%20%27chocolatey%27)%20and%20(not%20IsPrerelease))%20and%20IsLatestVersion'
-  [xml]$result = Download-String $url
-  $url = $result.feed.entry.content.src
-}
+#Custom
+	#Dowload config file index
+		$SiteConfigs = @()
+		$SiteConfigs = (Invoke-WebRequest -uri "http://download.ambitionsgroup.com/Sites/ITS247Agent/SiteAgentConfigs.csv" -UseBasicParsing).Content | convertfrom-csv -Delimiter ','
+
+	$DetectedIP = (Invoke-WebRequest -uri "http://ip.ambitionsgroup.com/" -UseBasicParsing).Content
+	$searchterm = '*' + $DetectedIP + '*'
+	$DetectedSite = $SiteConfigs.Where({$PSItem.ExtIPs -like $searchterm})
+	If ($DetectedSite){
+		$DetectedIni = $DetectedSite.iniLoc
+		$DetectedCode = $DetectedSite.Code
+		$DetectedTitle = $DetectedSite.Site
+		[string]$DetectedChoco = $DetectedSite.Choco
+
+		if ($DetectedChoco -eq $null -or $DetectedChoco -eq '') {
+			Write-Host "Install Ambitions Chocolatey Server"
+			$ChocoName = "ACG-Choco"
+			[string]$DetectedChoco = "http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/"
+		} else {
+			Write-Host "Install local Chocolatey Server"
+			$ChocoName = $DetectedCode + "-Choco"
+			#Remove Ambitions source if it is no longer needed.
+			If (Get-Command choco -errorAction SilentlyContinue) {
+				$Sources = (choco source) ; If ($Sources -Like "*ambitionsgroup.com*"){choco source remove -n=ACG-Choco}
+			}
+		}
+	} else {
+		Write-Host "You're not at a detected site"
+		Write-Host "Install Ambitions Chocolatey Server"
+			$ChocoName = "ACG-Choco"
+			[string]$DetectedChoco = "http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/"
+	}
+	$SourceAdd = "choco source add -n=" + $ChocoName + " -s=" + $DetectedChoco + " --priority=1"
+	
+	if ($url -eq $null -or $url -eq '') {
+		Write-Output "Getting latest version of the Chocolatey package for download."
+		$url = 'https://chocolatey.org/api/v2/Packages()?$filter=((Id%20eq%20%27chocolatey%27)%20and%20(not%20IsPrerelease))%20and%20IsLatestVersion'
+		[xml]$result = Download-String $url
+		$url = $result.feed.entry.content.src
+		$url = $url.Replace("https://chocolatey.org/api/v2/package/", $DetectedChoco)
+	}
+#EndCustom
 
 # Download the Chocolatey package
 Write-Output "Getting Chocolatey from $url."
@@ -184,54 +220,54 @@ $7zaExe = Join-Path $tempDir '7za.exe'
 $unzipMethod = '7zip'
 $useWindowsCompression = $env:chocolateyUseWindowsCompression
 if ($useWindowsCompression -ne $null -and $useWindowsCompression -eq 'true') {
-  Write-Output 'Using built-in compression to unzip'
-  $unzipMethod = 'builtin'
+	Write-Output 'Using built-in compression to unzip'
+	$unzipMethod = 'builtin'
 } elseif (-Not (Test-Path ($7zaExe))) {
-  Write-Output "Downloading 7-Zip commandline tool prior to extraction."
-  # download 7zip
-  Download-File 'https://chocolatey.org/7za.exe' "$7zaExe"
+	Write-Output "Downloading 7-Zip commandline tool prior to extraction."
+	# download 7zip
+	Download-File 'https://chocolatey.org/7za.exe' "$7zaExe"
 }
 
 # unzip the package
 Write-Output "Extracting $file to $tempDir..."
 if ($unzipMethod -eq '7zip') {
-  $params = "x -o`"$tempDir`" -bd -y `"$file`""
-  # use more robust Process as compared to Start-Process -Wait (which doesn't
-  # wait for the process to finish in PowerShell v3)
-  $process = New-Object System.Diagnostics.Process
-  $process.StartInfo = New-Object System.Diagnostics.ProcessStartInfo($7zaExe, $params)
-  $process.StartInfo.RedirectStandardOutput = $true
-  $process.StartInfo.UseShellExecute = $false
-  $process.StartInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
-  $process.Start() | Out-Null
-  $process.BeginOutputReadLine()
-  $process.WaitForExit()
-  $exitCode = $process.ExitCode
-  $process.Dispose()
+	$params = "x -o`"$tempDir`" -bd -y `"$file`""
+	# use more robust Process as compared to Start-Process -Wait (which doesn't
+	# wait for the process to finish in PowerShell v3)
+	$process = New-Object System.Diagnostics.Process
+	$process.StartInfo = New-Object System.Diagnostics.ProcessStartInfo($7zaExe, $params)
+	$process.StartInfo.RedirectStandardOutput = $true
+	$process.StartInfo.UseShellExecute = $false
+	$process.StartInfo.WindowStyle = [System.Diagnostics.ProcessWindowStyle]::Hidden
+	$process.Start() | Out-Null
+	$process.BeginOutputReadLine()
+	$process.WaitForExit()
+	$exitCode = $process.ExitCode
+	$process.Dispose()
 
-  $errorMessage = "Unable to unzip package using 7zip. Perhaps try setting `$env:chocolateyUseWindowsCompression = 'true' and call install again. Error:"
-  switch ($exitCode) {
-    0 { break }
-    1 { throw "$errorMessage Some files could not be extracted" }
-    2 { throw "$errorMessage 7-Zip encountered a fatal error while extracting the files" }
-    7 { throw "$errorMessage 7-Zip command line error" }
-    8 { throw "$errorMessage 7-Zip out of memory" }
-    255 { throw "$errorMessage Extraction cancelled by the user" }
-    default { throw "$errorMessage 7-Zip signalled an unknown error (code $exitCode)" }
-  }
+	$errorMessage = "Unable to unzip package using 7zip. Perhaps try setting `$env:chocolateyUseWindowsCompression = 'true' and call install again. Error:"
+	switch ($exitCode) {
+	0 { break }
+	1 { throw "$errorMessage Some files could not be extracted" }
+	2 { throw "$errorMessage 7-Zip encountered a fatal error while extracting the files" }
+	7 { throw "$errorMessage 7-Zip command line error" }
+	8 { throw "$errorMessage 7-Zip out of memory" }
+	255 { throw "$errorMessage Extraction cancelled by the user" }
+	default { throw "$errorMessage 7-Zip signalled an unknown error (code $exitCode)" }
+	}
 } else {
-  if ($PSVersionTable.PSVersion.Major -lt 5) {
-    try {
-      $shellApplication = new-object -com shell.application
-      $zipPackage = $shellApplication.NameSpace($file)
-      $destinationFolder = $shellApplication.NameSpace($tempDir)
-      $destinationFolder.CopyHere($zipPackage.Items(),0x10)
-    } catch {
-      throw "Unable to unzip package using built-in compression. Set `$env:chocolateyUseWindowsCompression = 'false' and call install again to use 7zip to unzip. Error: `n $_"
-    }
-  } else {
-    Expand-Archive -Path "$file" -DestinationPath "$tempDir" -Force
-  }
+	if ($PSVersionTable.PSVersion.Major -lt 5) {
+	try {
+		$shellApplication = new-object -com shell.application
+		$zipPackage = $shellApplication.NameSpace($file)
+		$destinationFolder = $shellApplication.NameSpace($tempDir)
+		$destinationFolder.CopyHere($zipPackage.Items(),0x10)
+	} catch {
+		throw "Unable to unzip package using built-in compression. Set `$env:chocolateyUseWindowsCompression = 'false' and call install again to use 7zip to unzip. Error: `n $_"
+	}
+	} else {
+	Expand-Archive -Path "$file" -DestinationPath "$tempDir" -Force
+	}
 }
 
 # Call chocolatey install
@@ -245,17 +281,17 @@ Write-Output 'Ensuring chocolatey commands are on the path'
 $chocInstallVariableName = "ChocolateyInstall"
 $chocoPath = [Environment]::GetEnvironmentVariable($chocInstallVariableName)
 if ($chocoPath -eq $null -or $chocoPath -eq '') {
-  $chocoPath = "$env:ALLUSERSPROFILE\Chocolatey"
+	$chocoPath = "$env:ALLUSERSPROFILE\Chocolatey"
 }
 
 if (!(Test-Path ($chocoPath))) {
-  $chocoPath = "$env:SYSTEMDRIVE\ProgramData\Chocolatey"
+	$chocoPath = "$env:SYSTEMDRIVE\ProgramData\Chocolatey"
 }
 
 $chocoExePath = Join-Path $chocoPath 'bin'
 
 if ($($env:Path).ToLower().Contains($($chocoExePath).ToLower()) -eq $false) {
-  $env:Path = [Environment]::GetEnvironmentVariable('Path',[System.EnvironmentVariableTarget]::Machine);
+	$env:Path = [Environment]::GetEnvironmentVariable('Path',[System.EnvironmentVariableTarget]::Machine);
 }
 
 Write-Output 'Ensuring chocolatey.nupkg is in the lib folder'
@@ -263,6 +299,10 @@ $chocoPkgDir = Join-Path $chocoPath 'lib\chocolatey'
 $nupkg = Join-Path $chocoPkgDir 'chocolatey.nupkg'
 if (![System.IO.Directory]::Exists($chocoPkgDir)) { [System.IO.Directory]::CreateDirectory($chocoPkgDir); }
 Copy-Item "$file" "$nupkg" -Force -ErrorAction SilentlyContinue
+
+#Custom
+Invoke-Expression $SourceAdd
+#EndCustom
 
 # SIG # Begin signature block
 # MIIcpwYJKoZIhvcNAQcCoIIcmDCCHJQCAQExDzANBglghkgBZQMEAgEFADB5Bgor
