@@ -15,9 +15,9 @@
 		$DetectedIni = $DetectedSite.iniLoc
 		$DetectedCode = $DetectedSite.Code
 		$DetectedTitle = $DetectedSite.Site
-		[string]$DetectedChoco = $DetectedSite.Choco
+		[string]$packageRepo = $DetectedSite.Choco
 
-		if ($DetectedChoco -eq $null -or $DetectedChoco -eq '') {
+		if ($packageRepo -eq $null -or $packageRepo -eq '') {
 			Write-Host "Install Ambitions Chocolatey Server"
 			$ChocoName = "ACG-Choco"
 			$packageRepo = 'http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/'
@@ -35,7 +35,7 @@
 			$ChocoName = "ACG-Choco"
 			$packageRepo = 'http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/'
 	}
-	$SourceAdd = "choco source add -n=" + $ChocoName + " -s=" + $DetectedChoco + " --priority=1"
+	$SourceAdd = "choco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=1"
 
 	if ($url -eq $null -or $url -eq '') {
     $packageRepo = 'http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/'
