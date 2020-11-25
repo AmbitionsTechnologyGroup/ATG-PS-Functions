@@ -2,6 +2,47 @@
 # This is where you see the top level API - with xml to Packages - should look nearly the same as https://chocolatey.org/api/v2/
 # If you are using Nexus, always add the trailing slash or it won't work
 # === EDIT HERE ===
+
+#Custom
+	#Dowload config file index
+		$SiteConfigs = @()
+		$SiteConfigs = (Invoke-WebRequest -uri "http://download.ambitionsgroup.com/Sites/ITS247Agent/SiteAgentConfigs.csv" -UseBasicParsing).Content | convertfrom-csv -Delimiter ','
+
+	$DetectedIP = (Invoke-WebRequest -uri "http://ip.ambitionsgroup.com/" -UseBasicParsing).Content
+	$searchterm = '*' + $DetectedIP + '*'
+	$DetectedSite = $SiteConfigs.Where({$PSItem.ExtIPs -like $searchterm})
+	If ($DetectedSite){
+		$DetectedIni = $DetectedSite.iniLoc
+		$DetectedCode = $DetectedSite.Code
+		$DetectedTitle = $DetectedSite.Site
+		[string]$DetectedChoco = $DetectedSite.Choco
+
+		if ($DetectedChoco -eq $null -or $DetectedChoco -eq '') {
+			Write-Host "Install Ambitions Chocolatey Server"
+			$ChocoName = "ACG-Choco"
+			$packageRepo = 'http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/'
+		} else {
+			Write-Host "Install local Chocolatey Server"
+			$ChocoName = $DetectedCode + "-Choco"
+			#Remove Ambitions source if it is no longer needed.
+			If (Get-Command choco -errorAction SilentlyContinue) {
+				$Sources = (choco source) ; If ($Sources -Like "*ambitionsgroup.com*"){choco source remove -n=ACG-Choco}
+			}
+		}
+	} else {
+		Write-Host "You're not at a detected site"
+		Write-Host "Install Ambitions Chocolatey Server"
+			$ChocoName = "ACG-Choco"
+			$packageRepo = 'http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/'
+	}
+	$SourceAdd = "choco source add -n=" + $ChocoName + " -s=" + $DetectedChoco + " --priority=1"
+
+	if ($url -eq $null -or $url -eq '') {
+    $packageRepo = 'http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/'
+	}
+#EndCustom
+
+
 $packageRepo = 'http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/'
 
 # If the above $packageRepo repository requires authentication, add the username and password here. Otherwise these leave these as empty strings.
@@ -280,3 +321,7 @@ Download-Package $searchUrl $localChocolateyPackageFilePath
 # Install Chocolatey
 Install-ChocolateyFromPackage $localChocolateyPackageFilePath
 }
+
+#Custom
+Invoke-Expression $SourceAdd
+#EndCustom
