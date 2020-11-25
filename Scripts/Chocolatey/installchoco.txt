@@ -43,7 +43,7 @@
 #EndCustom
 
 
-$packageRepo = 'http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/'
+#$packageRepo = 'http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/'
 
 # If the above $packageRepo repository requires authentication, add the username and password here. Otherwise these leave these as empty strings.
 $repoUsername = ''    # this must be empty is NOT using authentication
