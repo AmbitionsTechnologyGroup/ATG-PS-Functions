@@ -54,7 +54,7 @@ If(!(test-path C:\Ambitions))
 		#Designate which services to work with
 		$services = @("ShadowProtect Service", "StorageCraft ImageReady", "StorageCraft Raw Agent", "StorageCraft Shadow Copy Provider")
 		#Website to look at for the latest version number
-		$website = "https://kb.datto.com/hc/en-us/articles/200555585-Installing-the-ShadowSnap-Agent.html"
+		$website = "https://help.datto.com/s/article/SIRIS-ALTO-and-NAS-Getting-started-with-the-ShadowSnap-Agent"
 		$InstalledVer = (Get-ItemProperty "$RegKeyVer" -Name "DisplayVersion" -ErrorAction SilentlyContinue).DisplayVersion
 		Function DattoPattern {Set-Variable -Name OnlineDattoversion -Value ((Select-String -Path "C:\Ambitions\dattowebver.txt" -Pattern "current version")[-1]) -Scope Global}
         #Wait to continue if a backup is running
@@ -79,7 +79,7 @@ If(!(test-path C:\Ambitions))
 		#Designate which services to work with
 		$services = @("Datto Backup Agent Service", "DattoProvider")
 		#Website to look at for the latest version number
-		$website = "https://kb.datto.com/hc/en-us/articles/360024388231"
+		$website = "https://help.datto.com/s/article/Supporting-Your-Product-Datto-Windows-Agent-DWA-Version-2-1-and-above-Release-notes"
 		$InstalledVer = (Get-Item $FileVer).VersionInfo.ProductVersion
 		Function DattoPattern {Set-Variable -Name OnlineDattoversion -Value ((Select-String -Path "C:\Ambitions\dattowebver.txt" -Pattern "<strong>Agent Version")[0]) -Scope Global}
         #Wait to continue if a backup is running
