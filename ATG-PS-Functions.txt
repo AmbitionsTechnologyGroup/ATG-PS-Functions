@@ -144,6 +144,23 @@ Function Disable-FastStartup {
 		powercfg -h off
 }
 
+Function Disable-Sleep {
+	$Functions = {
+		Function Dont-Sleep {
+			Add-Type -AssemblyName System.Windows.Forms
+			While ($true) {
+			$Pos = [System.Windows.Forms.Cursor]::Position
+			[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point((($Pos.X) + 1) , $Pos.Y)
+			Start-Sleep -Milliseconds 5
+			[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point((($Pos.X) – 1) , $Pos.Y)
+			Start-Sleep -Seconds 60
+			}
+		}
+	}
+	Start-Job -Name Dont-Sleep -InitializationScript $Functions -ScriptBlock {Dont-Sleep} | Select Command,PSJobTypeName,JobStateInfo
+	Write-Host "`nComputer sleep has been temporarily disabled. Use the command 'Enable-Sleep' when done."
+}
+
 Function Disconnect-AllUsers {
 <#
 	.DESCRIPTION
@@ -174,6 +191,15 @@ Function Enable-O365AuditLog {
 		Get-OrganizationConfig | Format-List AuditDisabled
 	} Else {
 		Write-Host "You are not connected to an exchange server. Try the command 'Connect-O365'"
+	}
+}
+
+Function Enable-Sleep {
+	If (Get-Job -Name Dont-Sleep -ErrorAction SilentlyContinue) {
+		Stop-Job -Name Dont-Sleep -Verbose
+		Remove-Job -Name Dont-Sleep -Verbose
+	} Else {
+		Write-Host "Disable-Sleep wasn't running. Did you run 'Disable-Sleep'?"
 	}
 }
 
