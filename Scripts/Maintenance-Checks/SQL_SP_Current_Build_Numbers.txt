@@ -1,0 +1,10 @@
+Version | Latest SP and CU build numbers
+2019  15.0.4073.23
+2017  14.0.3356.20
+2016  13.0.5026.0 13.2.5026.0 13.0.5850.14
+2014  12.0.6024.0 12.3.6024.0 12.0.6329.1
+2012  11.0.7001.0 11.4.7001.0
+
+SQL Server versions prior to 2012 are out of support
+
+Check https://sqlserverbuilds.blogspot.com/ for details
