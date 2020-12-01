@@ -464,7 +464,7 @@ function LongMaintenance {
 			Write-Host SQL Database Instance Name: $SQLName ($SQLEd)
 			Write-Host -NoNewLine "SQL Service Pack Build Version: "
 			$SQLweb = New-Object Net.WebClient
-			$SQLstring = $SQLweb.DownloadString("http://download.ambitionsgroup.com/SQL_SP_Current_Build_Numbers.txt")
+			$SQLstring = $SQLweb.DownloadString("https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Maintenance-Checks/SQL_SP_Current_Build_Numbers.txt")
 			if ($SQLstring -match $Version) {
 				Write-Host -ForegroundColor Green $Version `(Service Pack $SQLSP`) and it is up to date!
 			}
