@@ -1,0 +1,15 @@
+{
+  "LastChecked": {
+    "value": "2020-12-01T14:18:46.28324-07:00",
+    "DisplayHint": 2,
+    "DateTime": "Tuesday, December 1, 2020 2:18:46 PM"
+  },
+  "DattoWindowsAgent": {
+    "Version": "2.7.1.0",
+    "HelpUrl": "https://help.datto.com/s/article/Supporting-Your-Product-Datto-Windows-Agent-DWA-Version-2-1-and-above-Release-notes"
+  },
+  "ShadowSnapAgent": {
+    "Version": "4.0.0",
+    "HelpUrl": "https://help.datto.com/s/article/SIRIS-ALTO-and-NAS-Getting-started-with-the-ShadowSnap-Agent"
+  }
+}
