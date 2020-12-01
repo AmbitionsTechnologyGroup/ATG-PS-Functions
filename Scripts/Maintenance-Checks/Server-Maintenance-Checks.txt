@@ -49,9 +49,9 @@ Function EnableWinModules {
 	}
  else {
 		#import Get-RemotePrograms module
-		Import-Module $modulename -Force
+		Import-Module $modulename -Force -ErrorAction SilentlyContinue
 	}
-	Add-WindowsPSModulePath
+	Add-WindowsPSModulePath -ErrorAction SilentlyContinue
 	Install-Module WindowsCompatibility
 	$modulename = "ActiveDirectory"
 	$module = Get-module -name $modulename
