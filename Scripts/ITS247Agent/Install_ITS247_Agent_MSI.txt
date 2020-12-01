@@ -92,15 +92,17 @@ function InstallAgent {
 		Start-Process "msiexec.exe" -ArgumentList "/I $msiFilePath" -Wait -NoNewWindow
 		#Start-Process -wait -Verb RunAs -FilePath 'C:\Ambitions\ITS247Agent\DPMASetup.exe' -ArgumentList 'SaazMobile.ini'
 	}
+	Write-Host "`n"
 	Do {
 		$IRStart = Get-Date
 		$IRStartHM = Get-Date -Format hh:mm
 		$Process = "irsetup"
 		If (!(Get-Process $Process -ErrorAction SilentlyContinue)) {
-			Write-Host "Wating for $Process to Start`n"
+			Write-Host -NoNewLine "`rWaiting for $Process to Start"
 			Start-Sleep -Seconds 2
 		}
 		Else {
+			Write-Host "`n"
 			Write-Host "$Process has Started"
 			$IRStart = Get-Date
 			While (Get-Process $Process -ErrorAction SilentlyContinue) {
