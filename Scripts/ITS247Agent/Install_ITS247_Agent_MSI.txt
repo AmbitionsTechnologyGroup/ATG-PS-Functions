@@ -44,7 +44,7 @@ Function Disable-Sleep {
 			$Pos = [System.Windows.Forms.Cursor]::Position
 			[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point((($Pos.X) + 1) , $Pos.Y)
 			Start-Sleep -Milliseconds 5
-			[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point((($Pos.X) – 1) , $Pos.Y)
+			[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point((($Pos.X) - 1) , $Pos.Y)
 			Start-Sleep -Seconds 60
 			}
 		}
