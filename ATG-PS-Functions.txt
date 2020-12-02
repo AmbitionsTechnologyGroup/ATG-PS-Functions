@@ -240,6 +240,30 @@ Function Get-ADUserPassExpirations {
 	}
 }
 
+Function Get-ATGPS {
+	If (Get-Module -Name ATGPS -ErrorAction SilentlyContinue){
+		# List imported functions from ATGPS
+		Write-Host ====================================================
+		Write-Host "The below functions are now loaded and ready to use:"
+		Write-Host ====================================================
+			Get-Command -Module ATGPS | Format-Wide -Column 3
+		Write-Host ====================================================
+		Write-Host "Type: 'Help <function name> -Detailed' for more info"
+		Write-Host ====================================================
+	} Else {
+	$progressPreference = 'silentlyContinue'
+	iwr tinyurl.com/get-atgps -UseBasicParsing | iex
+	# List imported functions from ATGPS
+		Write-Host ====================================================
+		Write-Host "The below functions are now loaded and ready to use:"
+		Write-Host ====================================================
+			Get-Command -Module ATGPS | Format-Wide -Column 3
+		Write-Host ====================================================
+		Write-Host "Type: 'Help <function name> -Detailed' for more info"
+		Write-Host ====================================================
+	}
+}
+
 Function Get-ThunderBolt {
 	$Thunderbolt = Get-WmiObject Win32_SystemDriver | Where-Object -Property DisplayName -Like "*Thunder*"
 	If ($Thunderbolt) {
