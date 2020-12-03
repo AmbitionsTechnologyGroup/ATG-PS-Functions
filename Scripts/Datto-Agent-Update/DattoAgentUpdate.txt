@@ -4,7 +4,8 @@
 #505-234-7777
 #20MAR2019 Updated version lookup to find last version listed on page, as datto has forked versions and now lists multiple
 #08NOV2018 Updated Datto agent regex lookup to includ any number of sub versions. Will now find 2.0.7.1 and not just 2.0.7
-
+Write-Host "Datto updates are temporarily disabled due to a bluescreen issue upon update"
+<#
 Start-transcript -path C:\Ambitions\DattoUpdate.log -force -append
 #=====================================================================================================================#
 #Script logic
@@ -198,3 +199,4 @@ if (Test-Path "$installer.old") {
 #Exit the script
 	Stop-transcript
     Exit
+#>
