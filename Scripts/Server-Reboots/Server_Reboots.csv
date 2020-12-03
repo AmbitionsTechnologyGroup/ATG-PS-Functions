@@ -1,0 +1,7 @@
+Sequence,SRVR,Action,Host,NoWait
+1,PrimaryDC01.domain.local,Reboot,,
+2,EXCHANGEVM01.domain.local,Shutdown,VM_HOST.domain.local,
+2,RandomServer.domain.local,Reboot,,NoWait
+2,AppServerVM.domain.local,Shutdown,VM_HOST.domain.local,
+3,AppDatabaseVM.domain.local,Shutdown,VM_HOST.domain.local,
+4,VM_HOST.domain.local,Reboot,,
