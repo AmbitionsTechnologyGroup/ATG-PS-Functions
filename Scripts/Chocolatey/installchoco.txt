@@ -37,9 +37,11 @@
 	}
 	$SourceAdd = "choco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=1"
 
+	<#
 	if ($url -eq $null -or $url -eq '') {
     $packageRepo = 'http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/'
 	}
+	#>
 #EndCustom
 
 
