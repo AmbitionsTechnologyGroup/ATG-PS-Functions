@@ -2,6 +2,7 @@
 	Resultant set of policy
 	Event logs Count of each, error
 #>
+$progressPreference = 'silentlyContinue'
 
 #Random Functions
 Function DattoBDRCheck {
