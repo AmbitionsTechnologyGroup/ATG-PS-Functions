@@ -60,7 +60,8 @@ Function EnableWinModules {
 		write-host Module $modulename is loaded
 	}
  else {
-		#import Get-RemotePrograms modulee
+		#import Get-RemotePrograms module
+		$progressPreference = 'silentlyContinue'
 		Import-Winmodule $modulename -Force
 	}
 	$modulename = "DnsClient"
