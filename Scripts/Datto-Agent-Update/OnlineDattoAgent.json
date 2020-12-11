@@ -6,10 +6,10 @@
   },
   "DattoWindowsAgent": {
     "Version": "2.7.1.2",
-    "HelpUrl": "https://help.datto.com/s/article/Supporting-Your-Product-Datto-Windows-Agent-DWA-Version-2-1-and-above-Release-notes"
+    "HelpUrl": "https://help.datto.com/s/article/KB360024388231"
   },
   "ShadowSnapAgent": {
     "Version": "4.0.0",
-    "HelpUrl": "https://help.datto.com/s/article/SIRIS-ALTO-and-NAS-Getting-started-with-the-ShadowSnap-Agent"
+    "HelpUrl": "https://help.datto.com/s/article/KB200555585"
   }
 }
