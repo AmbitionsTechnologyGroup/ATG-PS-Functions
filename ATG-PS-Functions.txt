@@ -402,6 +402,13 @@ Function Install-ITS247Agent {
 }
 
 Function Install-NetExtender {
+	$App = Get-WmiObject -Class Win32_Product | Where-Object -Property "Name" -Like "*NetExtender*"
+
+	If ($App) {
+		$Name = $App.Name
+		Write-Host "Uninstalling existing version of $Name"
+		($App).Uninstall()
+	}
 	Write-Host "Downloading & Installing NetExtender"
 		If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
 		choco install sonicwall-sslvpn-netextender -y
