@@ -368,6 +368,13 @@ Function Get-ATGPS {
 	}
 }
 
+Function Get-DiskUsage($path=".") {
+  Get-ChildItem $path | % { $file = $_ ;
+  Get-ChildItem -r $_.FullName | Measure-Object -property length -sum |
+    select @{Name="Name";Expression={$file}},Sum}
+}
+Set-Alias -Name du -Value Get-DiskUsage
+
 Function Get-ThunderBolt {
 	$Thunderbolt = Get-WmiObject Win32_SystemDriver | Where-Object -Property DisplayName -Like "*Thunder*"
 	If ($Thunderbolt) {
