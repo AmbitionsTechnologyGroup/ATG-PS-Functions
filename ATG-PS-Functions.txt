@@ -220,49 +220,15 @@ Function Disable-Sleep {
    Scenario: When downloading files using Robocopy from PowerShell you don't want your
    laptop to go into sleep mode.
 .EXAMPLE
-   Disable-Sleep -option Display -Verbose
+   Disable-Sleep
    Run mylongrunningscript with Display idle timeout prevented and verbose messages
-.LINK
-  http://www.microsofttranslator.com/bv.aspx?from=ru&to=en&a=http%3A%2F%2Fsocial.technet.microsoft.com%2FForums%2Fen-US%2F1f4754cb-37bf-4e1d-a59f-ec0f1aaf9d1c%2Fsetthreadexecutionstate-powershell%3FThread%3A1f4754cb-37bf-4e1d-a59f-ec0f1aaf9d1c%3DMicrosoft.Forums.Data.Models.Discussion%26ThreadViewModel%3A1f4754cb-37bf-4e1d-a59f-ec0f1aaf9d1c%3DMicrosoft.Forums.CachedViewModels.ThreadPageViewModel%26forum%3Dscrlangru
 #>
-[CmdletBinding()]
-    [Alias()]
-    [OutputType([int])]
-    Param
-    (
-        # Param1 help description
-        #[Parameter(Mandatory=$true,
-        #           Position=0)]
-        #$script,
-        [ValidateSet("Away","Display","System")]
-        [string]$option = "Display"
 
-    )
-
-    $code=@'
-[DllImport("kernel32.dll", CharSet = CharSet.Auto,SetLastError = true)]
-  public static extern void SetThreadExecutionState(uint esFlags);
-'@
-
-    $ste = Add-Type -memberDefinition $code -name System -namespace Win32 -passThru
-    $ES_CONTINUOUS = [uint32]"0x80000000" #Requests that the other EXECUTION_STATE flags set remain in effect until SetThreadExecutionState is called again with the ES_CONTINUOUS flag set and one of the other EXECUTION_STATE flags cleared.
-    $ES_AWAYMODE_REQUIRED = [uint32]"0x00000040" #Requests Away Mode to be enabled.
-    $ES_DISPLAY_REQUIRED = [uint32]"0x00000002" #Requests display availability (display idle timeout is prevented).
-    $ES_SYSTEM_REQUIRED = [uint32]"0x00000001" #Requests system availability (sleep idle timeout is prevented).
-
-    Switch ($option)
-    {
-      "Away" {$setting = $ES_AWAYMODE_REQUIRED}
-      "Display" {$setting = $ES_DISPLAY_REQUIRED}
-      "System" {$setting = $ES_SYSTEM_REQUIRED}
-      Default {$setting = $ES_SYSTEM_REQUIRED}
-
-    }
-
-    Write-Host "Power Plan suspended with option: $option"
-
-    $ste::SetThreadExecutionState($ES_CONTINUOUS -bor $setting)
-	Write-Host "`nComputer sleep has been temporarily disabled. Use the command 'Enable-Sleep' when done."
+	If (!(Test-Path "C:\ProgramData\chocolatey\lib\dontsleep.portable\tools\DontSleep_x64_p.exe")) {
+		If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
+		choco install dontsleep.portable -y
+	}
+	& C:\ProgramData\chocolatey\lib\dontsleep.portable\tools\DontSleep_x64_p.exe -bg please_sleep_mode=0 enable=1
 }
 
 Function Disconnect-AllUsers {
@@ -299,9 +265,9 @@ Function Enable-O365AuditLog {
 }
 
 Function Enable-Sleep {
-	If ($(powercfg -requests) -like "*powershell.exe*") {
-		Write-Host "Resuming power management plane"
-		$ste::SetThreadExecutionState($ES_CONTINUOUS)
+	If (Get-Process -Name "DontSleep_x64_p") {
+		Write-Host "Resuming power management plan"
+		Stop-Process -Name "DontSleep_x64_p" -Force
 	} Else {
 		Write-Host "Disable-Sleep wasn't running. Did you run 'Disable-Sleep'?"
 	}
