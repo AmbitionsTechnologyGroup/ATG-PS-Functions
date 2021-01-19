@@ -37,26 +37,29 @@ $SiteConfigs = @()
 $SiteConfigs = (Invoke-WebRequest -uri "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/ITS247Agent/SiteAgentURLs.csv" -UseBasicParsing).Content | convertfrom-csv -Delimiter ','
 
 Function Disable-Sleep {
-	$Functions = {
-		Function Dont-Sleep {
-			Add-Type -AssemblyName System.Windows.Forms
-			While ($true) {
-			$Pos = [System.Windows.Forms.Cursor]::Position
-			[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point((($Pos.X) + 1) , $Pos.Y)
-			Start-Sleep -Milliseconds 5
-			[System.Windows.Forms.Cursor]::Position = New-Object System.Drawing.Point((($Pos.X) - 1) , $Pos.Y)
-			Start-Sleep -Seconds 60
-			}
-		}
+<#
+.Synopsis
+   Function to suspend your current Power Plan settings when running a PowerShell script.
+.DESCRIPTION
+   Function to suspend your current Power Plan settings when running a PowerShell script.
+   Scenario: When downloading files using Robocopy from PowerShell you don't want your
+   laptop to go into sleep mode.
+.EXAMPLE
+   Disable-Sleep
+   Run mylongrunningscript with Display idle timeout prevented and verbose messages
+#>
+
+	If (!(Test-Path "C:\ProgramData\chocolatey\lib\dontsleep.portable\tools\DontSleep_x64_p.exe")) {
+		If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
+		choco install dontsleep.portable -y
 	}
-	Start-Job -Name Dont-Sleep -InitializationScript $Functions -ScriptBlock {Dont-Sleep} | Select Command,PSJobTypeName,JobStateInfo
-	Write-Host "`nComputer sleep has been temporarily disabled. Use the command 'Enable-Sleep' when done."
+	& C:\ProgramData\chocolatey\lib\dontsleep.portable\tools\DontSleep_x64_p.exe -bg please_sleep_mode=0 enable=1
 }
 
 Function Enable-Sleep {
-	If (Get-Job -Name Dont-Sleep -ErrorAction SilentlyContinue) {
-		Stop-Job -Name Dont-Sleep -Verbose
-		Remove-Job -Name Dont-Sleep -Verbose
+	If (Get-Process -Name "DontSleep_x64_p") {
+		Write-Host "Resuming power management plan"
+		Stop-Process -Name "DontSleep_x64_p" -Force
 	} Else {
 		Write-Host "Disable-Sleep wasn't running. Did you run 'Disable-Sleep'?"
 	}
