@@ -47,7 +47,8 @@ If ($PSVersionTable.PSVersion.Major -lt "5") {
 
 	If (((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Major -ge "2") -and ((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Minor -ge "1")) {
 		Write-Host "PSWindowsUpdate is installed! Attempting Updates"
-		Get-WUInstall -MicrosoftUpdate -AcceptAll -Install -UpdateType Software -IgnoreReboot -ErrorAction SilentlyContinue | Format-Table -Wrap -Property Result, KB, Size, Title -AutoSize -Force
+		Get-WUInstall -MicrosoftUpdate -AcceptAll -Install -UpdateType Driver -IgnoreReboot -ErrorAction SilentlyContinue -Verbose
+		Get-WUInstall -MicrosoftUpdate -AcceptAll -Install -UpdateType Software -IgnoreReboot -ErrorAction SilentlyContinue -Verbose
 	} Else {
 		Write-Host "PSWindowsUpdate is failing to install, please investigate"
 	}
