@@ -1,0 +1,11 @@
+To create a shortened URL:
+  curl -i https://git.io -F "url=https://github.com/..." -F "code=abc123"
+
+https://git.io/JJh1R ->
+https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Chocolatey/installchoco.txt
+
+https://git.io/ATGPS ->
+https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/ATG-PS-Functions.txt
+
+https://git.io/atgPS ->
+https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Get-ATGPS.txt
