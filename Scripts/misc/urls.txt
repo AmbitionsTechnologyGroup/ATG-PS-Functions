@@ -9,3 +9,6 @@ https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/mast
 
 https://git.io/atgPS ->
 https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Get-ATGPS.txt
+
+http://tinyurl.com/get-atgps ->
+http://download.ambitionsgroup.com/Scripts/Get-ATGPS.txt
