@@ -44,7 +44,7 @@ If(!(test-path C:\Ambitions))
 
 #Get available versions
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-$OnlineDattoAgent = iwr https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Datto-Agent-Update/OnlineDattoAgent.json | ConvertFrom-Json
+$OnlineDattoAgent = iwr https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Datto-Agent-Update/OnlineDattoAgent.json -UseBasicParsing | ConvertFrom-Json
 
 #Determine if Shadowsnap agent is installed
 	if (Get-Service "StorageCraft Raw Agent" -ErrorAction SilentlyContinue)
