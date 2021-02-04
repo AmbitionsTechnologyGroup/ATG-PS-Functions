@@ -396,6 +396,7 @@ Function Install-NiniteApps {
 		} ELSE {
 			& C:\Ambitions\NinitePro.exe /select 7-Zip Air Chrome 'Firefox ESR' Zoom GoToMeeting WebEx Greenshot 'Notepad++' 'Paint.NET' Reader Silverlight VLC /nocache /allusers /silent 'C:\Ambitions\NiniteReport.txt' | Wait-Process
 		}
+	Get-Content 'C:\Ambitions\NiniteReport.txt'
 	Write-Host "End of Install Ninite Apps"
 }
 
@@ -753,6 +754,7 @@ Function Update-NiniteApps {
         } ELSE {
             & C:\Ambitions\NinitePro.exe /updateonly /nocache /silent 'C:\Ambitions\NiniteReport.txt' | Wait-Process
         }
+	Get-Content 'C:\Ambitions\NiniteReport.txt'
     Write-Host "End of Install Ninite Apps"
 }
 
