@@ -733,7 +733,6 @@ Function Update-Everything {
 	Update-DellPackages
 	Update-Edge
 	Update-NiniteApps
-	Update-O365Apps
 	Update-PWSH
 	Restart-Computer -Force
 }
