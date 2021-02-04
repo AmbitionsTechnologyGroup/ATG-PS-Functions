@@ -728,7 +728,6 @@ Function Update-Everything {
 	}
 	$delay = $null
 	If (!(Get-Command choco -ErrorAction SilentlyContinue)) {choco upgrade all -y}
-	Update-DattoAgent
 	Update-Windows
 	Update-DellPackages
 	Update-Edge
