@@ -716,6 +716,28 @@ Function Update-Edge {
 	Choco upgrade microsoft-edge -y
 }
 
+Function Update-Everything {
+	Write-Warning "Update-Everything will have a visible impact to any logged in users,`nas it will update drivers and reboot the computer.`nYou have 10 seconds to press CTRL+C to cancel this function."
+	$delay = 10
+
+	while ($delay -ge 0)
+	{
+	  Write-Host "$delay seconds left to cancel"
+	  Start-Sleep 1
+	  $delay --
+	}
+	$delay = $null
+	If (!(Get-Command choco -ErrorAction SilentlyContinue)) {choco upgrade all -y}
+	Update-DattoAgent
+	Update-Windows
+	Update-DellPackages
+	Update-Edge
+	Update-NiniteApps
+	Update-O365Apps
+	Update-PWSH
+	Restart-Computer -Force
+}
+
 Function Update-ITS247Agent {
 	$DisplayVersion = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).DisplayVersion
 	$TYPE = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).TYPE
