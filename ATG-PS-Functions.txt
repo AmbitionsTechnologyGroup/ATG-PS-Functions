@@ -255,6 +255,24 @@ Function Disconnect-AllUsers {
 	}
 }
 
+Function Disconnect-NetExtender {
+
+	If (([string]::IsNullOrWhiteSpace($DC)) -or (-not (Test-Connection -comp $DC -quiet))) {
+		If (!(Test-Path -LiteralPath 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe')) {
+			Write-Host "This command only works if you have Sonicwall NetExtender installed."
+		}
+		Write-host "Initiating VPN disconnection"
+		& 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe' disconnect
+	}
+<#
+	.DESCRIPTION
+		Disconnects an existing SSLVPN connection to a site using Sonicwall NetExtender
+	.EXAMPLE
+		Disconnect-NetExtender
+		This example disconnects from the VPN session.
+#>
+}
+
 Function Enable-O365AuditLog {
 <#
 	.DESCRIPTION
