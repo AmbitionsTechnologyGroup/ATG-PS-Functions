@@ -263,6 +263,7 @@ Function Disconnect-NetExtender {
 		}
 		Write-host "Initiating VPN disconnection"
 		& 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe' disconnect
+		& 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe' disconnect
 	}
 <#
 	.DESCRIPTION
