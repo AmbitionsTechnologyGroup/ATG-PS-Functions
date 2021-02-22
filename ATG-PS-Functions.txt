@@ -621,6 +621,23 @@ Function Rename-ClientComputer {
 	Write-Host "End of Rename Computer"
 }
 
+Function Repair-O365AppIssues {
+	Write-Host "Please note this is an interactive tools, to be run from a user's session."
+	If (-not (Test-Path 'C:\Ambitions')) {New-Item -ItemType Directory -Force -Path C:\Ambitions\ | Out-Null}
+	(New-Object System.Net.WebClient).DownloadFile('https://aka.ms/SaRASetup', 'C:\Ambitions\SaraSetup.exe')
+	& C:\Ambitions\SaraSetup.exe
+	Write-Host "SaRA should now be installing, please wait a moment as it launces."
+<#
+	.DESCRIPTION
+		Downloads and runs the Microsoft Support and Recovery Assistant (SaRA) tool.
+		Please note this is an interactive tools, to be run from a user's session.
+	.LINK
+		https://www.thewindowsclub.com/microsoft-support-and-recovery-assistant
+	.LINK
+		https://www.microsoft.com/en-us/download/100607
+#>
+}
+
 Function Repair-Windows {
 	$StartTime = (Get-Date)
 	(Get-Date).DateTime | Out-Host
