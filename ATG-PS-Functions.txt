@@ -1,3 +1,28 @@
+Function Add-ChromeShortcut{
+	param
+	(
+		[string]$Label,
+		[string]$Url
+	)
+
+	If (Test-Path -Path 'C:\Program Files\Google\Chrome\Application\chrome.exe') {
+		$TargetFile = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+	} ElseIf (Test-Path -Path 'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe') {
+		$TargetFile = "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+	} Else {
+		Write-Host "Google Chrome was not found. Please install manually or with Chocolatey:"
+		Write-Host "   Install-Choco"
+		Write-Host "   choco install GoogleChrome"
+	}
+	$TargetFile = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+	$ShortcutFile = "$env:Public\Desktop\" + $Label + ".lnk"
+	$WScriptShell = New-Object -ComObject WScript.Shell
+	$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
+	$Shortcut.TargetPath = $TargetFile
+	$Shortcut.Arguments = $Url
+	$Shortcut.Save()
+}
+
 Function Add-FileFolderShortcut {
 
 	param
