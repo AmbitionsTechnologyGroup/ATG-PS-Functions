@@ -14,7 +14,6 @@ Function Add-ChromeShortcut{
 		Write-Host "   Install-Choco"
 		Write-Host "   choco install GoogleChrome"
 	}
-	$TargetFile = "C:\Program Files\Google\Chrome\Application\chrome.exe"
 	$ShortcutFile = "$env:Public\Desktop\" + $Label + ".lnk"
 	$WScriptShell = New-Object -ComObject WScript.Shell
 	$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
