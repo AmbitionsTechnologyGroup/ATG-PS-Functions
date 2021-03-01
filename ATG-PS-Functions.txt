@@ -1,7 +1,12 @@
 Function Add-ChromeShortcut{
+	#Requires -RunAsAdministrator
+
 	param
 	(
+		[Parameter(Mandatory=$true)]
 		[string]$Label,
+
+		[Parameter(Mandatory=$true)]
 		[string]$Url
 	)
 
@@ -20,15 +25,27 @@ Function Add-ChromeShortcut{
 	$Shortcut.TargetPath = $TargetFile
 	$Shortcut.Arguments = $Url
 	$Shortcut.Save()
+
+	<#
+    .DESCRIPTION
+        Creates a Google Chrome Shortcut on the "All Users" Desktop.
+		If Google Chrome is not found, prompts to install the program using ATG-PS scripts + Chocolately.
+    .PARAMETER Label
+        The file name of the shortcut; ".lnk" is automatically appended.
+    .PARAMETER Url
+        The full URL that the shortcut intends to open: "https://www.google.com/"
+    .EXAMPLE
+        Add-ChromeShortcut -Label "Github ATG-PS" -Url "https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/"
+	#>
 }
 
 Function Add-FileFolderShortcut {
 
 	param
-	( 
+	(
 		[Parameter(Mandatory=$true)]
 		[string]$SourceLnk,
-		
+
 		[Parameter(Mandatory=$true)]
 		[string]$DestinationPath
 	)
@@ -37,8 +54,8 @@ Function Add-FileFolderShortcut {
 	$Shortcut = $WshShell.CreateShortcut($SourceLnk)
 	$Shortcut.TargetPath = $DestinationPath
 	$Shortcut.Save()
-	
-<#
+
+	<#
 	.DESCRIPTION
 		Creates a shortcut to a file or folder.
 	.PARAMETER SourceLnk
@@ -48,14 +65,17 @@ Function Add-FileFolderShortcut {
 	.EXAMPLE
 		Add-FileFolderShortcut "$env:Public\Desktop\Ambitions Folder.lnk" "C:\Ambitions"
 		This example puts a shortcut on the desktop called "Ambitions Folder" and points to C:\Ambitions.
-#>	
+	#>
 
 }
 
 Function Add-IEShortcut{
 	param
 	(
+		[Parameter(Mandatory=$true)]
 		[string]$Label,
+
+		[Parameter(Mandatory=$true)]
 		[string]$Url
 	)
 
@@ -66,6 +86,18 @@ Function Add-IEShortcut{
 	$Shortcut.TargetPath = $TargetFile
 	$Shortcut.Arguments = $Url
 	$Shortcut.Save()
+
+	<#
+    .DESCRIPTION
+        Creates an Internet Explorer Shortcut on the "All Users" Desktop.
+    .PARAMETER Label
+        The file name of the shortcut; ".lnk" is automatically appended.
+    .PARAMETER Url
+        The full URL that the shortcut intends to open: "https://www.google.com/"
+    .EXAMPLE
+        Add-ChromeShortcut -Label "Github ATG-PS" -Url "https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/"
+	#>
+
 }
 
 Function Add-WebShortcut{
@@ -186,15 +218,15 @@ Function Connect-O365 {
 		Get-PSSession | Remove-PSSession
 "@
 	}
-	
+
 <#
 	.DESCRIPTION
 		Initiates an Office 365 Exchange connection that is compatible with MFA.
 		This is not compatible with Powershell Core.
-		
+
 	.LINK
 		https://docs.microsoft.com/en-us/powershell/exchange/connect-to-exchange-online-powershell?view=exchange-ps
-		
+
 	.EXAMPLE
 		Connect-O365
 		Yup, that's it!
@@ -303,7 +335,7 @@ Function Disconnect-AllUsers {
 <#
 	.DESCRIPTION
 		Logs off all users from a machine.
-#>	
+#>
 	(quser) -replace ">"," " -replace "\s+","," -replace "IDLE,TIME","IDLE TIME" -replace "LOGON,TIME","LOGON TIME" | ConvertFrom-Csv -Delimiter "," | foreach {
 		logoff ($_.ID)
 	}
@@ -332,10 +364,10 @@ Function Enable-O365AuditLog {
 <#
 	.DESCRIPTION
 		Sets auditig on all mailboxes in the organization as well as sets the default setting.
-	
+
 	.LINK
 		https://docs.microsoft.com/en-us/microsoft-365/compliance/enable-mailbox-auditing
-		
+
 	.LINK
 		https://support.microsoft.com/en-us/help/4026501/office-auditing-in-office-365-for-admins
 #>
@@ -598,37 +630,37 @@ Function Install-O365ProofPointConnectors {
 		}
 
 		If (Get-InboundConnector) {
-			$Readhost = Read-Host "Warning, an inbound connector already exists.`nAre you sure you want to install the ProofPoint connector which may conflict?`n( y / n ) " 
-			Switch ($ReadHost) 
-			{ 
-				Y { Write-Host "Installing the Proofpoint Inbound Connector.";Install-ProofPointInbound } 
-				N { break } 
+			$Readhost = Read-Host "Warning, an inbound connector already exists.`nAre you sure you want to install the ProofPoint connector which may conflict?`n( y / n ) "
+			Switch ($ReadHost)
+			{
+				Y { Write-Host "Installing the Proofpoint Inbound Connector.";Install-ProofPointInbound }
+				N { break }
 				Default { "You didn't enter the a correct response" }
-			} 
+			}
 		} else {
 			Write-Host "Installing the Proofpoint Inbound Connector."
 			Install-ProofPointInbound
 		}
-		
+
 		If (Get-OutboundConnector) {
 			$Readhost = Read-Host "Warning, an outbound connector already exists.`nAre you sure you want to install the ProofPoint connector which may conflict? ( y / n ) "
-			Switch ($ReadHost) 
-			{ 
-				Y { Write-Host "Installing the Proofpoint Outbound Connector.";Install-ProofPointOutbound } 
-				N { break } 
+			Switch ($ReadHost)
+			{
+				Y { Write-Host "Installing the Proofpoint Outbound Connector.";Install-ProofPointOutbound }
+				N { break }
 				Default { "You didn't enter the a correct response" }
-			} 
+			}
 		} Else {
 			Write-Host "Installing the Proofpoint Outbound Connector."
 			Install-ProofPointOutbound
 		}
-		
+
 		Set-HostedConnectionFilterPolicy “Default” -IPAllowList 148.163.147.0/24, 148.163.146.0/24, 148.163.145.0/24, 148.163.143.0/24, 148.163.142.0/24, 148.163.141.0/24, 148.163.140.0/24, 148.163.139.0/24, 148.163.138.0/24, 148.163.137.0/24, 148.163.135.0/24, 148.163.134.0/24, 148.163.133.0/24, 148.163.132.0/24, 148.163.131.0/24, 148.163.130.0/24, 148.163.129.0/24, 52.54.85.198, 52.55.243.18, 34.192.199.2, 67.231.156.0/24, 67.231.155.0/24, 67.231.154.0/24, 67.231.153.0/24, 67.231.152.0/24, 67.231.148.0/24, 67.231.147.0/24, 67.231.146.0/24, 67.231.145.0/24, 67.231.144.0/24, 148.163.152.0/24, 148.163.144.0/24, 148.163.136.0/24, 148.163.128.0/24, 67.231.149.0/24 -EnableSafeList $True
 		Set-HostedContentFilterPolicy -Identity "Default" -AddXHeaderValue "Office 365 Notice: Possible Spam" -AdminDisplayName "Disabled 365 Filtering, inbound handled by Proofpoint." -BulkSpamAction "NoAction" -BulkThreshold 9 -DownloadLink $False -EnableEndUserSpamNotifications $False -EnableLanguageBlockList $False -EnableRegionBlockList $False -HighConfidencePhishAction MoveToJmf -HighConfidenceSpamAction AddXHeader -IncreaseScoreWithBizOrInfoUrls Off -IncreaseScoreWithImageLinks Off -IncreaseScoreWithNumericIps Off -IncreaseScoreWithRedirectToOtherPort Off -InlineSafetyTipsEnabled $False -MakeDefault -MarkAsSpamBulkMail Off -MarkAsSpamEmbedTagsInHtml Off -MarkAsSpamEmptyMessages Off -MarkAsSpamFormTagsInHtml Off -MarkAsSpamFramesInHtml Off -MarkAsSpamFromAddressAuthFail Off -MarkAsSpamJavaScriptInHtml Off -MarkAsSpamNdrBackscatter Off -MarkAsSpamObjectTagsInHtml Off -MarkAsSpamSensitiveWordList Off -MarkAsSpamSpfRecordHardFail Off -MarkAsSpamWebBugsInHtml Off -PhishSpamAction AddXHeader -PhishZapEnabled $False -QuarantineRetentionPeriod 30 -RedirectToRecipients $Null -RegionBlockList $Null -SpamAction AddXHeader -SpamZapEnabled $False -TestModeAction None -TestModeBccToRecipients $Null
 		$DisableMailoxJunkFilters = Get-ExoMailbox -RecipientTypeDetails UserMailbox -ResultSize Unlimited; $All | foreach {Set-MailboxJunkEmailConfiguration $_.Name -Enabled $false}
 	} Else {
 		Write-Host "You are not connected to an exchange server. Try the command 'Connect-O365'."
-	}	
+	}
 }
 
 Function Invoke-Win10Decrap {
@@ -855,7 +887,7 @@ Function Update-ITS247Agent {
 		 $DisplayVersion = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).DisplayVersion
 	 WRITE-HOST "Agent is now version $DisplayVersion"
 	}
-	
+
 	If(($DisplayVersion -eq $AvailableVersion) -and ($TYPE -eq "DPMA")) {
 	 WRITE-HOST "Agent appears to be up to date at version $DisplayVersion"
 	}
