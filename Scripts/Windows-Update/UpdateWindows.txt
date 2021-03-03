@@ -1,3 +1,12 @@
+param
+	(
+		[Parameter(Mandatory=$False)]
+		$NoSofware,
+		
+		[Parameter(Mandatory=$False)]
+		$NoDrivers,
+	)
+
 Function RegMU {
 	Write-Host "Checking Microsoft Update Service"
 	If ((Get-WUServiceManager).Name -like "Microsoft Update") {
@@ -47,10 +56,14 @@ If ($PSVersionTable.PSVersion.Major -lt "5") {
 
 	If (((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Major -ge "2") -and ((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Minor -ge "1")) {
 		Write-Host "PSWindowsUpdate is installed! Attempting Updates"
-		Write-Host "Checking for DRIVER Updates..."
-		Get-WUInstall -MicrosoftUpdate -AcceptAll -Install -UpdateType Driver -IgnoreReboot -ErrorAction SilentlyContinue -Verbose
-		Write-Host "Checking for SOFTWARE Updates..."
-		Get-WUInstall -MicrosoftUpdate -AcceptAll -Install -UpdateType Software -IgnoreReboot -ErrorAction SilentlyContinue -Verbose
+		If ($NoDriver -ne $True) {
+			Write-Host "Checking for DRIVER Updates..."
+			Get-WUInstall -MicrosoftUpdate -AcceptAll -Install -UpdateType Driver -IgnoreReboot -ErrorAction SilentlyContinue -Verbose
+		}
+		If ($NoSoftware -ne $True) {
+			Write-Host "Checking for SOFTWARE Updates..."
+			Get-WUInstall -MicrosoftUpdate -AcceptAll -Install -UpdateType Software -IgnoreReboot -ErrorAction SilentlyContinue -Verbose
+		}
 	} Else {
 		Write-Host "PSWindowsUpdate is failing to install, please investigate"
 	}
