@@ -4,7 +4,7 @@ param
 		$NoSofware,
 		
 		[Parameter(Mandatory=$False)]
-		$NoDrivers,
+		$NoDrivers
 	)
 
 Function RegMU {
