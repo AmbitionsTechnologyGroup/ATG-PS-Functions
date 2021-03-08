@@ -845,6 +845,62 @@ Function Update-DellPackages {
 	Write-Host "End of Dell Updates"
 }
 
+Function Update-DellServer {
+	Write-Host "Please note, this is a draft. Report errors to Ryan."
+	Function Get-DSUInstall {
+		Write-Host "Dell System Update is not installed, attempting to install."
+			$URL = "https://dl.dell.com/FOLDER06526860M/1/Systems-Management_Application_8CTK7_WN64_1.9.0_A00.EXE"
+			$File = "C:\Ambitions\Dell System Update 1.9.0.exe"
+		Write-Host "Download the installer to $File"
+		(New-Object System.Net.WebClient).DownloadFile($URL,$File) #Download the URL to the File.
+				Write-Host "Download is complete, checking the integrity."
+		$Hash = '953bf0740cd0b61a08914281df958e2d63cca21acbb8281d6589c17210cdb16f'
+	}
+		
+	Function Test-DSUInstall {	IF ((Get-FileHash -Path $File -Algorithm SHA256).Hash -eq $Hash) {
+			Write-Host "It's a match!"
+		} Else {
+			Write-Host "Uh oh, there were issues downloading a non-corrupt file. Please attempt manually."
+			Write-Host "Download is available at https://www.dell.com/support/home/en-us/drivers/driversdetails?driverid=8ctk7"
+			Pause
+			Exit
+		}
+	}
+	
+	Function Install-DSU {
+		Write-Host "Attempting to install the program."
+		& $File /f /s /i
+	}
+	
+	Write-Host "Dell System Updates"
+	$Manufact = (Get-CimInstance -Class Win32_ComputerSystem).Manufacturer
+	$OSVersion = (get-itemproperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name ProductName).ProductName
+	If( $Manufact -like "*Dell*")
+	{
+		If ( $OSVersion -like "*Server*") {
+			Write-Host "Checkin if DSU is installed"
+			If (!(Test-Path -Path "C:\Program Files\Dell\Dell EMC System Update\DSU.exe")) {
+				Get-DSUInstall
+				Test-DSUInstall
+				Install-DSU
+			} Else {
+				Write-Host "DSU is already installed (though it may not be up to date ¯\_(ツ)_/¯"
+			}
+		
+			Write-Host Installing Dell System Updates
+			& "C:\Program Files\Dell\Dell EMC System Update\DSU.exe" /d /u /n
+		} Else {
+			Write-Host "This is not a Server."
+			Pause
+			Exit
+		}
+	} Else {
+		Write-Host "This is not a Dell Computer"
+		Pause
+		Exit
+	}
+}
+
 Function Update-Edge {
 	Write-Host "Updating Microsoft Edge"
 	If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
