@@ -875,29 +875,30 @@ Function Update-DellServer {
 	Write-Host "Dell System Updates"
 	$Manufact = (Get-CimInstance -Class Win32_ComputerSystem).Manufacturer
 	$OSVersion = (get-itemproperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name ProductName).ProductName
-	If( $Manufact -like "*Dell*")
+	If( $Manufact -NotLike "*Dell*")
 	{
-		If ( $OSVersion -like "*Server*") {
+		Write-Host "This is not a Dell Computer"
+		Pause
+		Exit
+	} Else {
+		If ( $OSVersion -NotLike "*Server*") {
+			Write-Host "This is not a Server."
+			Pause
+			Exit
+		} Else {
 			Write-Host "Checkin if DSU is installed"
-			If (!(Test-Path -Path "C:\Program Files\Dell\Dell EMC System Update\DSU.exe")) {
+			If ((Get-WmiObject win32_product | Where-Object -Property Name -Like "*Dell EMC System Update*").Version -NotLike "1.9.0") {
+				Write-Host "Dell System Update is either not installed or not version 1.9.0"
 				Get-DSUInstall
 				Test-DSUInstall
 				Install-DSU
 			} Else {
-				Write-Host "DSU is already installed (though it may not be up to date ¯\_(ツ)_/¯"
+				Write-Host "DSU is already installed."
 			}
 		
-			Write-Host Installing Dell System Updates
+			Write-Host "Installing Dell System Updates"
 			& "C:\Program Files\Dell\Dell EMC System Update\DSU.exe" /d /u /n
-		} Else {
-			Write-Host "This is not a Server."
-			Pause
-			Exit
 		}
-	} Else {
-		Write-Host "This is not a Dell Computer"
-		Pause
-		Exit
 	}
 }
 
