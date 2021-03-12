@@ -496,13 +496,11 @@ function Get-IdleTime
                     ForEach-Object {($_ -replace '\s{2,}', ',').Trim()} |
                     ConvertFrom-Csv -Header $Header |
                     ForEach-Object {
-                        if ($_.IdleTime -eq 'none')
+                        if ($_.IdleTime -eq 'none' -Or '.')
                             {
-                            $IdleTime = "Keyboard/Mouse ACTIVE"
-                            }
-                            else
-                            {
-                            $IdleTime = [timespan]$_.IdleTime
+                            	$IdleTime = "Keyboard/Mouse Currently Active"
+                            } else {
+                            	$IdleTime = [timespan]$_.IdleTime
                             }
                         [PSCustomObject]@{
                             ComputerName = $CN_Item
