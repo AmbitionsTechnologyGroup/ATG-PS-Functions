@@ -470,6 +470,85 @@ Function Get-ThunderBolt {
 	}
 }
 
+function Get-IdleTime
+    {
+    [CmdletBinding()]
+    Param (
+        [Parameter ()]
+            [string[]]
+            $ComputerName = 'localhost'
+        )
+
+    begin
+        {
+        $Header = 'UserName','SessionName','ID','State','IdleTime','LogonTime'
+        $No_Connection = '-- No Connection --'
+        }
+
+    process
+        {
+        foreach ($CN_Item in $ComputerName)
+            {
+            if (Test-Connection -ComputerName $CN_Item -Count 1 -Quiet)
+                {
+                quser /server:$CN_Item |
+                    Select-Object -Skip 1 |
+                    ForEach-Object {($_ -replace '\s{2,}', ',').Trim()} |
+                    ConvertFrom-Csv -Header $Header |
+                    ForEach-Object {
+                        if ($_.IdleTime -eq 'none')
+                            {
+                            $IdleTime = "Keyboard/Mouse ACTIVE"
+                            }
+                            else
+                            {
+                            $IdleTime = [timespan]$_.IdleTime
+                            }
+                        [PSCustomObject]@{
+                            ComputerName = $CN_Item
+                            UserName = $_.UserName
+                            SessionName = $_.SessionName
+                            ID = $_.ID
+                            State = $_.State
+                            IdleTime = $IdleTime
+                            LogonTime = [datetime]$_.LogonTime
+                            }
+                        }
+                }
+                else
+                {
+                [PSCustomObject]@{
+                    ComputerName = $CN_Item
+                    UserName = $No_Connection
+                    SessionName = $No_Connection
+                    ID = $No_Connection
+                    State = $No_Connection
+                    IdleTime = $No_Connection
+                    LogonTime = $No_Connection
+                    }
+                }
+            } # end >> foreach ($CN_Item in $ComputerName)
+        } # end >> process {}
+
+    end {}
+
+	<#
+	.DESCRIPTION
+		Checks active logon sessions to check for idle time and time of logon
+
+	.LINK
+		https://www.reddit.com/r/PowerShell/comments/8r56tr/getting_idle_time_for_logged_on_domain_users#t1_e0oja92
+
+	.PARAMETER ComputerName
+		A comma-separated list of hostnames and/or IP Addresses; must have admin access to all computers.  Default is 'localhost'.
+
+	.EXAMPLE
+		Get-IdleTime
+		Get-IdleTime -ComputerName 10.0.0.55,192.168.50.78,SERVER01
+	#>
+
+	} # end >> function Get-IdleTime
+
 Function Install-AppDefaults {
 	Write-Host "Downloading App Defaults"
 	New-Item -ItemType Directory -Force -Path C:\Ambitions\ITS247Agent
