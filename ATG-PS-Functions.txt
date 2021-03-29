@@ -869,7 +869,7 @@ Function Update-DellServer {
 
 	Function Install-DSU {
 		Write-Host "Attempting to install the program."
-		& $File /f /s /i | Wait-Process
+		& $File /f /s /i | Wait-Process -ErrorAction SilentlyContinue
 	}
 
 	Write-Host "Dell System Updates"
