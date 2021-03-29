@@ -847,6 +847,17 @@ Function Update-DellPackages {
 
 Function Update-DellServer {
 	Write-Host "Please note, this is a draft. Report errors to Ryan."
+	Write-Warning "Update-Everything will have a visible impact to any logged in users,`nas it will update drivers and reboot the computer.`nYou have 10 seconds to press CTRL+C to cancel this function."
+	$delay = 10
+
+	while ($delay -ge 0)
+	{
+	  Write-Host "$delay seconds left to cancel"
+	  Start-Sleep 1
+	  $delay --
+	}
+	$delay = $null
+	
 	$URL = "https://dl.dell.com/FOLDER06526860M/1/Systems-Management_Application_8CTK7_WN64_1.9.0_A00.EXE"
 	$File = "C:\Ambitions\Dell System Update 1.9.0.exe"
 	$Hash = '953bf0740cd0b61a08914281df958e2d63cca21acbb8281d6589c17210cdb16f'
