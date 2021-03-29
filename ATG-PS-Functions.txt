@@ -847,16 +847,16 @@ Function Update-DellPackages {
 
 Function Update-DellServer {
 	Write-Host "Please note, this is a draft. Report errors to Ryan."
+	$URL = "https://dl.dell.com/FOLDER06526860M/1/Systems-Management_Application_8CTK7_WN64_1.9.0_A00.EXE"
+	$File = "C:\Ambitions\Dell System Update 1.9.0.exe"
+	$Hash = '953bf0740cd0b61a08914281df958e2d63cca21acbb8281d6589c17210cdb16f'
 	Function Get-DSUInstall {
 		Write-Host "Dell System Update is not installed, attempting to install."
-			$URL = "https://dl.dell.com/FOLDER06526860M/1/Systems-Management_Application_8CTK7_WN64_1.9.0_A00.EXE"
-			$File = "C:\Ambitions\Dell System Update 1.9.0.exe"
 		Write-Host "Download the installer to $File"
 		(New-Object System.Net.WebClient).DownloadFile($URL,$File) #Download the URL to the File.
 				Write-Host "Download is complete, checking the integrity."
-		$Hash = '953bf0740cd0b61a08914281df958e2d63cca21acbb8281d6589c17210cdb16f'
 	}
-		
+
 	Function Test-DSUInstall {	IF ((Get-FileHash -Path $File -Algorithm SHA256).Hash -eq $Hash) {
 			Write-Host "It's a match!"
 		} Else {
@@ -866,12 +866,12 @@ Function Update-DellServer {
 			Exit
 		}
 	}
-	
+
 	Function Install-DSU {
 		Write-Host "Attempting to install the program."
-		& $File /f /s /i
+		& $File /f /s /i | Wait-Process
 	}
-	
+
 	Write-Host "Dell System Updates"
 	$Manufact = (Get-CimInstance -Class Win32_ComputerSystem).Manufacturer
 	$OSVersion = (get-itemproperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name ProductName).ProductName
@@ -895,7 +895,7 @@ Function Update-DellServer {
 			} Else {
 				Write-Host "DSU is already installed."
 			}
-		
+
 			Write-Host "Installing Dell System Updates"
 			& "C:\Program Files\Dell\Dell EMC System Update\DSU.exe" /d /u /n
 		}
