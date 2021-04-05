@@ -8,7 +8,7 @@ We are using a **function-based system**. There are 2 ways to load the functions
 **Run _either_:**
 ```powershell
 $progressPreference = 'silentlyContinue' #If running from a LogMeIn terminal
-iwr tinyurl.com/get-atgps -usebasicparsing | iex
+iwr tinyurl.com/get-atgps -useb | iex
 ```
 
 **--OR--**
@@ -16,7 +16,8 @@ iwr tinyurl.com/get-atgps -usebasicparsing | iex
 ```powershell
 IEX(new-object net.webclient).downloadstring('https://git.io/atgPS')
 
-# note that this may not work if SSL is not enabled in PowerShell; use the above tinyurl method for http
+# note that this may not work if SSL is not enabled in PowerShell.
+# Use the above tinyurl method for http
 ```
 
 ### 2) Browser method: ###
@@ -45,9 +46,10 @@ Enable-O365AuditLog
 Enable-Sleep                    
 Enable-SSL                      
 Expand-Terminal                 
-Get-ADUserPassExpirations       
-Get-ATGPS                       
-Get-DiskUsage                   
+Get-ADUserPassExpirations
+Get-ATGPS
+Get-DiskUsage
+Get-IdleTime
 Get-ThunderBolt                 
 Install-AppDefaults             
 Install-Choco                   
