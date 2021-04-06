@@ -326,4 +326,5 @@ Install-ChocolateyFromPackage $localChocolateyPackageFilePath
 
 #Custom
 Invoke-Expression $SourceAdd
+Choco Source Remove -n:chocolatey
 #EndCustom
