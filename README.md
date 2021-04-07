@@ -27,6 +27,7 @@ Select all the contents (CTRL+A), copy them (CTRL+C), and paste into a powershel
 
 List of functions (can be entered as powershell commands):
 ```powershell
+
 Name                            
 ----                            
 Add-ChromeShortcut              
@@ -46,10 +47,11 @@ Enable-O365AuditLog
 Enable-Sleep                    
 Enable-SSL                      
 Expand-Terminal                 
-Get-ADUserPassExpirations
-Get-ATGPS
-Get-DiskUsage
-Get-IdleTime
+Export-LDAPSCertificate         
+Get-ADUserPassExpirations       
+Get-ATGPS                       
+Get-DiskUsage                   
+Get-IdleTime                    
 Get-ThunderBolt                 
 Install-AppDefaults             
 Install-Choco                   
@@ -76,6 +78,7 @@ Start-PPKGLog
 Start-ServerMaintenance         
 Update-DattoAgent               
 Update-DellPackages             
+Update-DellServer               
 Update-Edge                     
 Update-Everything               
 Update-ITS247Agent              
