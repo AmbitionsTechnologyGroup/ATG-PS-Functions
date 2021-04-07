@@ -401,6 +401,23 @@ Function Expand-Terminal {
 	mode con: cols=160 lines=120
 }
 
+Function Export-LDAPSCertificate {
+    <#
+	.DESCRIPTION
+		If the server responds to requests on the LDAPS port 636, the function will attempt to isolate the Certificate in use and export it to C:\Ambitions\LDAPScerExport.cer
+	#>
+	If (Test-NetConnection -ComputerName localhost -Port 636 -InformationLevel Quiet) {
+		$Cert = (Get-ChildItem -Path Cert:\LocalMachine -Recurse | Where-Object {$_.NotAfter -Gt (Get-Date) -and $_.Subject -like "*$env:computername.$env:userdnsdomain*" -and $_.NotAfter -eq ($_.NotBefore).AddYears(1)})
+		$Cert | Select Subject, NotBefore, NotAfter | FL
+		$Path = "C:\Ambitions\LDAPScerExport.cer"
+		Write-Host "Exporting current likely LDAPS Certificate to $Path"
+		$Cert | Export-Certificate -Type cer -FilePath C:\Ambitions\LDAPScerExport.cer -Force | Out-Null
+	} Else {
+		Write-Warning "This computer does not appear to be serving LDAPS requests."
+		Break
+	}
+}
+
 Function Get-ADUserPassExpirations {
     <#
 	.DESCRIPTION
