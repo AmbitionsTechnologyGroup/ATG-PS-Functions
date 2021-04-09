@@ -784,9 +784,8 @@ Function Join-Domain {
 
 Function Remove-ITS247InstallFolder {
 	Write-Host "Cleaning up and Restarting Computer"
-	PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "If (Test-Path C:\Ambitions\ITS247Agent){Remove-Item -LiteralPath 'C:\Ambitions\ITS247Agent' -Force -Recurse};Restart-Computer -Force"
+	PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command "If (Test-Path C:\Ambitions\ITS247Agent){Remove-Item -LiteralPath 'C:\Ambitions\ITS247Agent' -Force -Recurse}"
 	Stop-transcript
-	Restart-Computer -Force
 }
 
 Function Rename-ClientComputer {
