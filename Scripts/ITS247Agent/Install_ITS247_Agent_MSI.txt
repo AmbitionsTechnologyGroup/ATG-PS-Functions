@@ -81,23 +81,23 @@ function InstallAgent {
 	$msiFilePath = $msiFolder + $msiFileName
 	
 	
-	$null = (New-Item -ItemType Directory -Force -Path 'C:\Ambitions\ITS247Agent')
-	If (Test-Path 'C:\Ambitions\ITS247Agent\SaazMobile.ini') { Remove-Item 'C:\Ambitions\ITS247Agent\SaazMobile.ini' }
-	If (Test-Path 'C:\Ambitions\ITS247Agent\DPMASetup.exe') { Remove-Item 'C:\Ambitions\ITS247Agent\DPMASetup.exe' }
+	$null = (New-Item -ItemType Directory -Force -Path 'C:\Ambitions\AgentInstaller')
+	If (Test-Path 'C:\Ambitions\AgentInstaller\SaazMobile.ini') { Remove-Item 'C:\Ambitions\AgentInstaller\SaazMobile.ini' }
+	If (Test-Path 'C:\Ambitions\AgentInstaller\DPMASetup.exe') { Remove-Item 'C:\Ambitions\AgentInstaller\DPMASetup.exe' }
 	(New-Object System.Net.WebClient).DownloadFile($msiURL, $msiFilePath)
-	Get-ChildItem 'C:\Ambitions\ITS247Agent' | Unblock-File
+	Get-ChildItem 'C:\Ambitions\AgentInstaller' | Unblock-File
 	Write-Host Disabling Windows Defender Real Time Scanning
 	Set-MpPreference -DisableRealtimeMonitoring $true
 	Disable-Sleep
 	If ($Silent) {
 		Write-Host Installing the agent for $SelectedSite.Site silently. No errors will be shown.
 		Start-Process "msiexec.exe" -ArgumentList "/I $msiFilePath /q" -Wait -NoNewWindow
-		#Start-Process -wait -Verb RunAs -FilePath 'C:\Ambitions\ITS247Agent\DPMASetup.exe' -ArgumentList '/S SaazMobile.ini'
+		#Start-Process -wait -Verb RunAs -FilePath 'C:\Ambitions\AgentInstaller\DPMASetup.exe' -ArgumentList '/S SaazMobile.ini'
 	}
  else {
 		Write-Host Installing the agent for $SelectedSite.Site interactively
 		Start-Process "msiexec.exe" -ArgumentList "/I $msiFilePath" -Wait -NoNewWindow
-		#Start-Process -wait -Verb RunAs -FilePath 'C:\Ambitions\ITS247Agent\DPMASetup.exe' -ArgumentList 'SaazMobile.ini'
+		#Start-Process -wait -Verb RunAs -FilePath 'C:\Ambitions\AgentInstaller\DPMASetup.exe' -ArgumentList 'SaazMobile.ini'
 	}
 	Write-Host "`nRemember: If powershell seems frozen you might have clicked in the window. Try clicking in the window again and press the ESC key to unfreeze.`n"
 	Do {
