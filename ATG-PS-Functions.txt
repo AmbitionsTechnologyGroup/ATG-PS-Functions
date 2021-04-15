@@ -589,10 +589,23 @@ Function Install-Choco {
 }
 
 Function Install-ITS247Agent {
-	$progressPreference = 'silentlyContinue'
-	Set-ExecutionPolicy Bypass -Scope Process -Force
-	Enable-SSL
-	Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/ITS247Agent/Install_ITS247_Agent_MSI.txt -UseBasicParsing | Invoke-Expression
+	If ($SiteCode -and !$IAmJOB) {
+		Start-Job -Name "InstallAgent" -InitializationScript {
+			Write-Host "I'm running as a job!"
+			$progressPreference = 'silentlyContinue'
+			iwr tinyurl.com/get-atgps -UseBasicParsing | iex
+		} -ScriptBlock {
+			$global:SiteCode = $using:SiteCode
+			$global:IAmJOB = $True
+			Install-ITS247Agent
+		} | Receive-Job -Wait #-AutoRemoveJob
+	} ElseIf (($SiteCode -and $IAmJOB) -or (!$SiteCode -and !$IAmJOB)) {
+		$progressPreference = 'silentlyContinue'
+		Set-ExecutionPolicy Bypass -Scope Process -Force
+		Enable-SSL
+		Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/ITS247Agent/Install_ITS247_Agent_MSI.txt -UseBasicParsing | Invoke-Expression
+	} ElseIf (!$SiteCode -and $IAmJOB) {Write-Warning "You can't run the installer as job without specifying the SiteCode Variable. You can't interact with a job."}
+
 }
 
 Function Install-NetExtender {
