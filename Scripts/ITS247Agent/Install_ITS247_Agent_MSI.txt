@@ -24,12 +24,9 @@
 
 [cmdletbinding()]
 param(
-	#Shortcode of the site you want to install, list available at https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/blob/master/Scripts/ITS247Agent/SiteAgentURLs.csv
-	[string]$Code,
-	#Installs the agent silently
-	[switch]$Silent,
-	#Uses ip detection to silently install the script
-	[switch]$Auto
+	[string]$Code, #Shortcode of the site you want to install, list available at https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/blob/master/Scripts/ITS247Agent/SiteAgentURLs.csv
+	[switch]$Silent, #Installs the agent silently
+	[switch]$Auto #Uses ip detection to silently install the script
 )
 Write-Host Ambitions Desktop Agent Installer
 #Dowload config file index
@@ -70,17 +67,17 @@ function InstallAgent {
 	Write-Host ================ Agent Installation ================
 	Write-Host Downloading the agent for $SelectedSite.Site
 	$msiURL = $SelectedSite.msiURL
-	
+
 	#$msiURL = "https://prod.setup.itsupport247.net/windows/DPMA/32/atg_ACG_DPMA_ITSPlatform_TKN3882d625-3bbf-4ad5-9ca0-d226ec86ad7d/MSI/setup"
 	$pos = $msiURL.IndexOf("/atg_")
 	$rightPart = $msiURL.Substring($pos + 1)
 	$pos = $rightPart.IndexOf("/setup")
 	$leftPart = $rightPart.Substring(0, $pos)
 	$msiFileName = $leftPart -replace "/MSI", ".msi"
-	$msiFolder = $ENV:SystemDrive + '\Ambitions\ITS247Agent\'
+	$msiFolder = $ENV:SystemDrive + '\Ambitions\AgentInstaller\'
 	$msiFilePath = $msiFolder + $msiFileName
-	
-	
+
+
 	$null = (New-Item -ItemType Directory -Force -Path 'C:\Ambitions\AgentInstaller')
 	If (Test-Path 'C:\Ambitions\AgentInstaller\SaazMobile.ini') { Remove-Item 'C:\Ambitions\AgentInstaller\SaazMobile.ini' }
 	If (Test-Path 'C:\Ambitions\AgentInstaller\DPMASetup.exe') { Remove-Item 'C:\Ambitions\AgentInstaller\DPMASetup.exe' }
