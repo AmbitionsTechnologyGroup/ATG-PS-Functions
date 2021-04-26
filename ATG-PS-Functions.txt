@@ -582,11 +582,11 @@ Function Get-InternetHealth {
 
 	#Replace the Download URL to where you've uploaded the ZIP file yourself. We will only download this file once.
 	#Latest version can be found at: https://www.speedtest.net/nl/apps/cli
-	$DownloadURL = "https://bintray.com/ookla/download/download_file?file_path=ookla-speedtest-1.0.0-win64.zip"
+	$DownloadURL = "https://install.speedtest.net/app/cli/ookla-speedtest-1.0.0-win64.zip"
 	$DownloadLocation = "$($Env:ProgramData)\SpeedtestCLI"
+	$SpeedTestExe = Join-Path -Path $DownloadLocation -ChildPath "\speedtest.exe"
 	Try {
-		$TestDownloadLocation = Test-Path $DownloadLocation
-		If (!$TestDownloadLocation) {
+		If (!$(Test-Path $SpeedTestExe)) {
 			Write-Host "Preparing Internet Health Test."
 			New-Item $DownloadLocation -ItemType Directory -force
 			Invoke-WebRequest -Uri $DownloadURL -OutFile "$($DownloadLocation)\speedtest.zip"
@@ -594,11 +594,12 @@ Function Get-InternetHealth {
 		}
 	} Catch {
 		Write-Host "The download and extraction of SpeedtestCLI failed. Error: $($_.Exception.Message)"
-		exit 1
+		#exit 1
+		Return
 	}
 	$PreviousResults = If (test-path "$($DownloadLocation)\LastResults.txt") { get-content "$($DownloadLocation)\LastResults.txt" | ConvertFrom-Json }
 	Write-Host "Running Internet Health Test."
-	$SpeedtestResults = & "$($DownloadLocation)\speedtest.exe" --format=json --accept-license --accept-gdpr
+	$SpeedtestResults = & $SpeedTestExe --format=json --accept-license --accept-gdpr
 	$SpeedtestResults | Out-File "$($DownloadLocation)\LastResults.txt" -Force
 	$SpeedtestResults = $SpeedtestResults | ConvertFrom-Json
 
@@ -635,7 +636,6 @@ Function Get-InternetHealth {
 	Write-Host "Internet Health Summary:"
 	If ($HealthIssue) {Write-Host -ForegroundColor Yellow -BackgroundColor Black "There appears to be issues!" } Else { Write-Host -ForegroundColor Green -BackgroundColor Black "All tests results are optimal!"}
 	$SpeedtestHealth
-
 }
 
 Function Install-AppDefaults {
