@@ -291,13 +291,19 @@ Function Connect-Wifi {
 	$WifiNetworks = (netsh wlan show network)
 	$NetworkSSIDSearch = '*' + $NetworkSSID + '*'
 	If ($WifiNetworks -like $NetworkSSIDSearch) {
-		Write-Host "Found SSID: $NetworkSSID `nAttempting to connect"
-		Start-Process netsh ('wlan connect name="{0}"' -f $NetworkSSID)
-		Start-Sleep 5
-		netsh interface show interface
+		Try {
+			Write-Host "Found SSID: $NetworkSSID `nAttempting to connect"
+			Start-Process netsh ('wlan connect name="{0}"' -f $NetworkSSID)
+			Start-Sleep 5
+			netsh interface show interface
+		}
+		Catch {
+			Remove-Item -Force $tempProfileXML
+		}
 	} Else {
 		Write-Host "Did not find SSID: $NetworkSSID `nConnection profile stored for later use."
 	}
+	Remove-Item -Force $tempProfileXML
 }
 
 Function Disable-ATGLocalExpiration {
