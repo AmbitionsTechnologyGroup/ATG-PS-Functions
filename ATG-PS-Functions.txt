@@ -1121,7 +1121,7 @@ Function Update-DellPackages {
 				$IPMIService = (Get-Service -Name IPMIDRV -ErrorAction SilentlyContinue).Status
 				If ($IPMIService -and $IPMIService -ne "Running") {Start-Service -Name IPMIDRV}
 				#Install the latest
-				Get-Process -Name DellCommandUpdate -ErrorAction SilentlyContinue | Stop-Process -Force
+				Stop-Process -Name DellCommandUpdate -Force -ErrorAction SilentlyContinue
 				Choco upgrade dellcommandupdate -y --force --ignorechecksums
 			}
 
@@ -1164,7 +1164,7 @@ Function Update-DellPackages {
 			}
 
 			#Configure and run Dell Command Update
-			Get-Process -Name DellCommandUpdate -ErrorAction SilentlyContinue | Stop-Process -Force
+			Stop-Process -Name DellCommandUpdate -Force -ErrorAction SilentlyContinue
 			$DCUx86 = Join-Path -Path ${env:ProgramFiles(x86)} -ChildPath "Dell\CommandUpdate\dcu-cli.exe"
 			$DCUx64 = Join-Path -Path $Env:ProgramFiles -ChildPath "Dell\CommandUpdate\dcu-cli.exe"
 			If (Test-Path $DCUx86) {
