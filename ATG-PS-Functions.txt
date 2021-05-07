@@ -4,7 +4,75 @@ Function Add-ChromeShortcut{
 	param
 	(
 		[Parameter(Mandatory=$true)]
-		[string]$Label,
+		[string]$Label,Function Update-DellPackages {
+	<#
+    .DESCRIPTION
+        Uses the CLI version of Dell Command | Update to install any missing drivers/firmwares/Bios and update existing ones.
+		There are no parameters to use.
+    .LINK
+		https://www.dell.com/support/kbdoc/en-us/000177325/dell-command-update
+    .EXAMPLE
+        Update-DellPackages
+	#>
+
+	Write-Host "Dell Updates"
+		$Manufact = (Get-CimInstance -Class Win32_ComputerSystem).Manufacturer
+		If ( $Manufact -like "*Dell*") {
+			#Install and update Chocolatey if Needed
+			If (Get-Command choco -errorAction SilentlyContinue) {
+				choco upgrade chocolatey
+			} Else { Install-Choco }
+
+			Function Install-DCU {
+				#Starts the IPMI Service if needed
+				$IPMIService = (Get-Service -Name IPMIDRV -ErrorAction SilentlyContinue).Status
+				If ($IPMIService -and $IPMIService -ne "Running") {Start-Service -Name IPMIDRV}
+				#Install the latest
+				Choco upgrade dellcommandupdate -y --force --ignorechecksums
+			}
+
+			Write-Host "Checking if 'Dell Command Update' is current."
+				$DCUInstalledVersion = (Get-Package -Provider Programs -IncludeWindowsInstaller -Name "Dell Command | Update" -ErrorAction SilentlyContinue).Version
+				$DCUAvailableVersion = choco list dellcommandupdate #Gets all results
+				$DCUAvailableVersion = ($DCUAvailableVersion | Select-String -Pattern "DellCommandUpdate " -SimpleMatch).Line #Isolates the desired result
+				$DCUAvailableVersion = $DCUAvailableVersion.split(" ",[System.StringSplitOptions]::RemoveEmptyEntries)[1] #Isolates the version number
+
+			If (-not $DCUInstalledVersion) {
+				Write-Host "'Dell Command Update' is not installed, installing now."
+				Install-DCU
+
+			}  ElseIf ($DCUInstalledVersion -ne $DCUAvailableVersion) {
+				Write-Host "'Dell Command Update' is not current. Updating from version $DCUInstalledVersion to $DCUAvailableVersion."
+
+				#Remove any programs listed through "Add and remove programs"
+				$DCUInstalled = Get-WmiObject -Class Win32_Product | Where-Object {$_.Name -like "*Dell*Update*"}
+				If ($DCUInstalled) {
+					$DCUInstalled.Uninstall()
+				}
+
+				#Remove any Windows 10 "Apps"
+				Get-AppxPackage *Dell*Update* | Remove-AppxPackage
+
+				Install-DCU
+
+			} ElseIf ($DCUInstalledVersion -eq $DCUAvailableVersion) {
+				Write-Host "'Dell Command Update' is current."
+			}
+
+			#Configure and run Dell Command Update
+			$DCUx86 = Join-Path -Path ${env:ProgramFiles(x86)} -ChildPath "Dell\CommandUpdate\dcu-cli.exe"
+			$DCUx64 = Join-Path -Path $Env:ProgramFiles -ChildPath "Dell\CommandUpdate\dcu-cli.exe"
+			If (Test-Path $DCUx86) {
+				& $DCUx86 /configure -autoSuspendBitLocker=enable
+				& $DCUx86 /applyUpdates -reboot=disable
+			} ElseIf (Test-Path $DCUx64) {
+				& $DCUx64 /configure -autoSuspendBitLocker=enable
+				& $DCUx64 /applyUpdates -reboot=disable
+			} Else { Write-Error "Dell Command Update CLI not found."}
+
+		} Else { Write-Host "This is not a Dell Computer" }
+	Write-Host "`nEnd of Dell Updates"
+}update-dee
 
 		[Parameter(Mandatory=$true)]
 		[string]$Url
@@ -1098,14 +1166,73 @@ Function Update-DattoAgent {
 }
 
 Function Update-DellPackages {
+	<#
+    .DESCRIPTION
+        Uses the CLI version of Dell Command | Update to install any missing drivers/firmwares/Bios and update existing ones.
+		There are no parameters to use.
+    .LINK
+		https://www.dell.com/support/kbdoc/en-us/000177325/dell-command-update
+    .EXAMPLE
+        Update-DellPackages
+	#>
+
 	Write-Host "Dell Updates"
 		$Manufact = (Get-CimInstance -Class Win32_ComputerSystem).Manufacturer
-		if( $Manufact -like "*Dell*")
-		{
-			Enable-SSL
-			Set-ExecutionPolicy Bypass -Scope Process -Force; Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Dell-Command-Update/DCU_AUTO.txt -UseBasicParsing | Invoke-Expression
-		} else { Write-Host This is not a Dell Computer}
-	Write-Host "End of Dell Updates"
+		If ( $Manufact -like "*Dell*") {
+			#Install and update Chocolatey if Needed
+			If (Get-Command choco -errorAction SilentlyContinue) {
+				choco upgrade chocolatey
+			} Else { Install-Choco }
+
+			Function Install-DCU {
+				#Starts the IPMI Service if needed
+				$IPMIService = (Get-Service -Name IPMIDRV -ErrorAction SilentlyContinue).Status
+				If ($IPMIService -and $IPMIService -ne "Running") {Start-Service -Name IPMIDRV}
+				#Install the latest
+				Choco upgrade dellcommandupdate -y --force --ignorechecksums
+			}
+
+			Write-Host "Checking if 'Dell Command Update' is current."
+				$DCUInstalledVersion = (Get-Package -Provider Programs -IncludeWindowsInstaller -Name "Dell Command | Update" -ErrorAction SilentlyContinue).Version
+				$DCUAvailableVersion = choco list dellcommandupdate #Gets all results
+				$DCUAvailableVersion = ($DCUAvailableVersion | Select-String -Pattern "DellCommandUpdate " -SimpleMatch).Line #Isolates the desired result
+				$DCUAvailableVersion = $DCUAvailableVersion.split(" ",[System.StringSplitOptions]::RemoveEmptyEntries)[1] #Isolates the version number
+
+			If (-not $DCUInstalledVersion) {
+				Write-Host "'Dell Command Update' is not installed, installing now."
+				Install-DCU
+
+			}  ElseIf ($DCUInstalledVersion -ne $DCUAvailableVersion) {
+				Write-Host "'Dell Command Update' is not current. Updating from version $DCUInstalledVersion to $DCUAvailableVersion."
+
+				#Remove any programs listed through "Add and remove programs"
+				$DCUInstalled = Get-WmiObject -Class Win32_Product | Where-Object {$_.Name -like "*Dell*Update*"}
+				If ($DCUInstalled) {
+					$DCUInstalled.Uninstall()
+				}
+
+				#Remove any Windows 10 "Apps"
+				Get-AppxPackage *Dell*Update* | Remove-AppxPackage
+
+				Install-DCU
+
+			} ElseIf ($DCUInstalledVersion -eq $DCUAvailableVersion) {
+				Write-Host "'Dell Command Update' is current."
+			}
+
+			#Configure and run Dell Command Update
+			$DCUx86 = Join-Path -Path ${env:ProgramFiles(x86)} -ChildPath "Dell\CommandUpdate\dcu-cli.exe"
+			$DCUx64 = Join-Path -Path $Env:ProgramFiles -ChildPath "Dell\CommandUpdate\dcu-cli.exe"
+			If (Test-Path $DCUx86) {
+				& $DCUx86 /configure -autoSuspendBitLocker=enable
+				& $DCUx86 /applyUpdates -reboot=disable
+			} ElseIf (Test-Path $DCUx64) {
+				& $DCUx64 /configure -autoSuspendBitLocker=enable
+				& $DCUx64 /applyUpdates -reboot=disable
+			} Else { Write-Error "Dell Command Update CLI not found."}
+
+		} Else { Write-Host "This is not a Dell Computer" }
+	Write-Host "`nEnd of Dell Updates"
 }
 
 Function Update-DellServer {
