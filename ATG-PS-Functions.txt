@@ -1127,6 +1127,18 @@ Function Update-DellPackages {
 			Write-Host "Checking if 'Dell Command Update' is current."
 				#Remove any Windows 10 "Apps"
 				Get-AppxPackage *Dell*Update* | Remove-AppxPackage
+				If (Get-AppxPackage *Dell*Update*){
+					$apps = Get-ChildItem -Path HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall,HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall | Get-ItemProperty | Where-Object {$_.DisplayName -like "*Dell*Update*" } | Select-Object -Property DisplayName, UninstallString
+					ForEach ($ver in $apps) {
+						If ($ver.UninstallString) {
+							$uninst = $ver.UninstallString
+							Write-Host Uninstalling: $ver.DisplayName
+							Start-Process cmd -ArgumentList "/c $uninst /quiet /norestart" -NoNewWindow -Wait -PassThru
+						}
+					}
+				}
+
+				#Compare version numbers of any remaining installed version.
 				$DCUInstalledVersion = (Get-Package -Provider Programs -IncludeWindowsInstaller -Name "Dell Command | Update" -ErrorAction SilentlyContinue).Version
 				$DCUAvailableVersion = choco list dellcommandupdate #Gets all results
 				$DCUAvailableVersion = ($DCUAvailableVersion | Select-String -Pattern "DellCommandUpdate " -SimpleMatch).Line #Isolates the desired result
