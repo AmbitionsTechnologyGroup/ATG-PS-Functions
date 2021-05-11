@@ -19,13 +19,15 @@ Function Add-ChromeShortcut{
 		Write-Host "   Install-Choco"
 		Write-Host "   choco install GoogleChrome"
 	}
-	$ShortcutFile = "$env:Public\Desktop\" + $Label + ".lnk"
-	$WScriptShell = New-Object -ComObject WScript.Shell
-	$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
-	$Shortcut.TargetPath = $TargetFile
-	$Shortcut.Arguments = $Url
-	$Shortcut.Save()
 
+	If ($TargetFile) {
+		$ShortcutFile = "$env:Public\Desktop\" + $Label + ".lnk"
+		$WScriptShell = New-Object -ComObject WScript.Shell
+		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
+		$Shortcut.TargetPath = $TargetFile
+		$Shortcut.Arguments = $Url
+		$Shortcut.Save()
+	}
 	<#
     .DESCRIPTION
         Creates a Google Chrome Shortcut on the "All Users" Desktop.
