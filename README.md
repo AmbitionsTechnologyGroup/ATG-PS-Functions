@@ -52,6 +52,7 @@ Get-ADUserPassExpirations
 Get-ATGPS                       
 Get-DiskUsage                   
 Get-IdleTime                    
+Get-InternetHealth              
 Get-ThunderBolt                 
 Install-AppDefaults             
 Install-Choco                   
@@ -65,6 +66,7 @@ Install-O365ProofPointConnectors
 Invoke-Win10Decrap              
 Join-Domain                     
 Remove-ITS247InstallFolder      
+Remove-PathForcefully           
 Rename-ClientComputer           
 Repair-O365AppIssues            
 Repair-Windows                  
