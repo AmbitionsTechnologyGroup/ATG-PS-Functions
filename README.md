@@ -25,7 +25,7 @@ Open a browser to [https://git.io/ATGPS](https://git.io/ATGPS)
 Select all the contents (CTRL+A), copy them (CTRL+C), and paste into a powershell window (Admin)
 
 
-List of functions (can be entered as powershell commands):
+### List of functions (can be entered as powershell commands): ###
 ```powershell
 
 Name                            
