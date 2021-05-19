@@ -19,13 +19,15 @@ Function Add-ChromeShortcut{
 		Write-Host "   Install-Choco"
 		Write-Host "   choco install GoogleChrome"
 	}
-	$ShortcutFile = "$env:Public\Desktop\" + $Label + ".lnk"
-	$WScriptShell = New-Object -ComObject WScript.Shell
-	$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
-	$Shortcut.TargetPath = $TargetFile
-	$Shortcut.Arguments = $Url
-	$Shortcut.Save()
 
+	If ($TargetFile) {
+		$ShortcutFile = "$env:Public\Desktop\" + $Label + ".lnk"
+		$WScriptShell = New-Object -ComObject WScript.Shell
+		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
+		$Shortcut.TargetPath = $TargetFile
+		$Shortcut.Arguments = $Url
+		$Shortcut.Save()
+	}
 	<#
     .DESCRIPTION
         Creates a Google Chrome Shortcut on the "All Users" Desktop.
@@ -121,8 +123,7 @@ Function Backup-LastUser {
 	Write-Host "Backuping up last logged on user"
 	reg export $RegKey $RegFile /y
 	Write-Host "Trimming export"
-		(Get-Content $RegFile)[0..10] | Out-File -FilePath $RegFile -Force
-	$NewReg = $RegFile[0..8]
+	(Get-Content $RegFile)[0..10] | Out-File -FilePath $RegFile -Force
 	$User = (Select-String -Path $RegFile -Pattern '"LastLoggedOnUser"' -SimpleMatch).Line
 	Write-Host "$User has been backed up to $RegFile"
 	Write-Host "`nTry the command Restore-LastUser"
@@ -379,7 +380,7 @@ Function Enable-O365AuditLog {
 #>
 	If (Get-Command Get-Mailbox -ErrorAction SilentlyContinue){
 		Write-Host "Enabling Auditing for all existing mailboxes"
-		Get-Mailbox -ResultSize Unlimited -Filter{RecipientTypeDetails -eq "UserMailbox"} | Set-Mailbox -AuditEnabled $true -Verbose
+		Get-Mailbox -ResultSize Unlimited -Filter {RecipientTypeDetails -eq "UserMailbox"} | Set-Mailbox -AuditEnabled $true -Verbose
 		Write-Host "Enabling Auditing for the organization as a whole"
 		Set-OrganizationConfig -AuditDisabled $False
 		Write-Host "Checking the orginazation config. If auditing is enabled, this setting should show as 'False'"
@@ -422,7 +423,7 @@ Function Export-LDAPSCertificate {
 	#>
 	If (Test-NetConnection -ComputerName localhost -Port 636 -InformationLevel Quiet) {
 		$Cert = (Get-ChildItem -Path Cert:\LocalMachine -Recurse | Where-Object {$_.NotAfter -Gt (Get-Date) -and $_.Subject -like "*$env:computername.$env:userdnsdomain*" -and $_.NotAfter -eq ($_.NotBefore).AddYears(1)})
-		$Cert | Select Subject, NotBefore, NotAfter | FL
+		$Cert | Select-Object Subject, NotBefore, NotAfter | Format-List
 		$Path = "C:\Ambitions\LDAPScerExport.cer"
 		Write-Host "Exporting current likely LDAPS Certificate to $Path"
 		$Cert | Export-Certificate -Type cer -FilePath C:\Ambitions\LDAPScerExport.cer -Force | Out-Null
@@ -485,9 +486,9 @@ Function Get-ATGPS {
 }
 
 Function Get-DiskUsage($path=".") {
-  Get-ChildItem $path | % { $file = $_ ;
+  Get-ChildItem $path | ForEach-Object { $file = $_ ;
   Get-ChildItem -r $_.FullName | Measure-Object -property length -sum |
-    select @{Name="Name";Expression={$file}},Sum}
+    Select-Object @{Name="Name";Expression={$file}},Sum}
 }
 Set-Alias -Name du -Value Get-DiskUsage
 
