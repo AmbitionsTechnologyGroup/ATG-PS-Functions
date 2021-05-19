@@ -51,7 +51,6 @@ Export-LDAPSCertificate
 Get-ADUserPassExpirations       
 Get-ATGPS                       
 Get-DiskUsage                   
-Get-IdleTime                    
 Get-InternetHealth              
 Get-ThunderBolt                 
 Install-AppDefaults             
