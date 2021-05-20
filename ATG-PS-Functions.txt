@@ -592,7 +592,7 @@ Function Get-RdpConnectionLogs {
 
 	 .EXAMPLE
 
-		.\RDPConnectionParser.ps1 -ServersToQuery Server1, Server2 -StartTime "November 1"
+		Get-RdpConnectionLogs -ServersToQuery Server1, Server2 -StartTime "November 1"
 
 	.LINK
 		https://MikeCrowley.us/tag/powershell
