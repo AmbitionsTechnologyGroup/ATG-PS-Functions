@@ -568,6 +568,77 @@ Function Get-InternetHealth {
 	$SpeedtestHealth
 }
 
+Function Get-RdpConnectionLogs {
+	<#
+
+	.SYNOPSIS
+		This script reads the event log "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational" from
+		multiple servers and outputs the human-readable results to a CSV/Table. This data is not filterable in the
+		native Windows Event Viewer.
+
+		Version: November 9, 2016
+
+
+	.DESCRIPTION
+		This script reads the event log "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational" from
+		multiple servers and outputs the human-readable results to a CSV.  This data is not filterable in the native
+		Windows Event Viewer.
+
+		NOTE: Despite this log's name, it includes both RDP logins as well as regular console logins too.
+
+		Author:
+		Mike Crowley
+		https://BaselineTechnologies.com
+
+	 .EXAMPLE
+
+		.\RDPConnectionParser.ps1 -ServersToQuery Server1, Server2 -StartTime "November 1"
+
+	.LINK
+		https://MikeCrowley.us/tag/powershell
+
+	#>
+
+	Param(
+		[array]$ServersToQuery = (hostname),
+		[datetime]$StartTime = "January 1, 1970"
+	)
+
+		foreach ($Server in $ServersToQuery) {
+
+			$LogFilter = @{
+				LogName = 'Microsoft-Windows-TerminalServices-LocalSessionManager/Operational'
+				ID = 21, 23, 24, 25
+				StartTime = $StartTime
+				}
+
+			$AllEntries = Get-WinEvent -FilterHashtable $LogFilter -ComputerName $Server
+
+			$AllEntries | ForEach-Object {
+				$entry = [xml]$_.ToXml()
+				[array]$Output += New-Object PSObject -Property @{
+					TimeCreated = $_.TimeCreated
+					User = $entry.Event.UserData.EventXML.User
+					IPAddress = $entry.Event.UserData.EventXML.Address
+					EventID = $entry.Event.System.EventID
+					ServerName = $Server
+					}
+				}
+			}
+
+		$FilteredOutput += $Output | Select-Object TimeCreated, User, ServerName, IPAddress, @{Name='Action';Expression={
+					if ($_.EventID -eq '21'){"Logon"}
+					if ($_.EventID -eq '22'){"Shell Start"}
+					if ($_.EventID -eq '23'){"Logoff"}
+					if ($_.EventID -eq '24'){"Disconnected"}
+					if ($_.EventID -eq '25'){"Reconnection"}
+					}
+				}
+
+		$FilteredOutput | Sort-Object -Property TimeCreated | Format-Table -AutoSize
+
+	}
+
 Function Install-AppDefaults {
 	Write-Host "Downloading App Defaults"
 	New-Item -ItemType Directory -Force -Path C:\Ambitions\ITS247Agent

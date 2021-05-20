@@ -52,6 +52,7 @@ Get-ADUserPassExpirations
 Get-ATGPS                       
 Get-DiskUsage                   
 Get-InternetHealth              
+Get-RdpConnectionLogs
 Get-ThunderBolt                 
 Install-AppDefaults             
 Install-Choco                   
