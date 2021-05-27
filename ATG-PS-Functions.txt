@@ -568,7 +568,7 @@ Function Get-InternetHealth {
 	$SpeedtestHealth
 }
 
-Function Get-RdpConnectionLogs {
+Function Get-LoginHistory {
 	<#
 
 	.SYNOPSIS
@@ -581,10 +581,10 @@ Function Get-RdpConnectionLogs {
 
 	.DESCRIPTION
 		This script reads the event log "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational" from
-		multiple servers and outputs the human-readable results to a CSV.  This data is not filterable in the native
-		Windows Event Viewer.
+		multiple servers and outputs the human-readable results to a CSV/Table.  This data is not filterable in
+		the native Windows Event Viewer.
 
-		NOTE: Despite this log's name, it includes both RDP logins as well as regular console logins too.
+		NOTE: Despite this log's name, it includes both RDP logins as well as regular console logins1.
 
 		Author:
 		Mike Crowley
@@ -592,7 +592,7 @@ Function Get-RdpConnectionLogs {
 
 	 .EXAMPLE
 
-		Get-RdpConnectionLogs -ServersToQuery Server1, Server2 -StartTime "November 1"
+		Get-LoginHistory -ServersToQuery Server1, Server2 -StartTime "November 1"
 
 	.LINK
 		https://MikeCrowley.us/tag/powershell
