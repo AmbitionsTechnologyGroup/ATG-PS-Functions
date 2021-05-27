@@ -774,6 +774,43 @@ Function Install-O365ProofPointConnectors {
 	}
 }
 
+Function Install-WinGet {
+<#
+	.DESCRIPTION
+		Installs or updates winget, Microsoft's answer to apt-get and choco.
+	.LINK
+		https://github.com/microsoft/winget-cli
+	.LINK
+		https://docs.microsoft.com/en-us/windows/package-manager/winget/
+#>
+	$WGLatestWeb = iwr https://github.com/microsoft/winget-cli/releases/latest -UseBasicParsing
+	$WGLatestLink = "https://github.com" + ($WGLatestWeb.Links | Where-Object {$_.href -like "*appxbundle*"}).href
+	Function Get-WinGet{
+		$DownloadURL = $WGLatestLink
+		$DownloadLocation = "$env:TEMP\"
+		$LocalFilePath = Join-Path -Path $DownloadLocation -ChildPath "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.appxbundle"
+		If (Test-Path $LocalFilePath) {Remove-PathForcefully -Path $LocalFilePath}
+		If (!$(Test-Path $DownloadLocation)) {New-Item $DownloadLocation -ItemType Directory -Force}
+		Write-Host "Downloading Desktop App Installer"
+		$progressPreference = 'silentlyContinue'
+		Invoke-WebRequest -Uri $DownloadURL -OutFile $LocalFilePath
+		Add-AppxPackage -Path $LocalFilePath
+		Remove-Item -Path $LocalFilePath -Force -ErrorAction SilentlyContinue
+	}
+	If (Get-Command winget -ErrorAction SilentlyContinue) {
+		Write-Host "WinGet is already installed."
+		$WGVersion = winget -v
+		If ($WGLatestLink -match $WGVersion) {
+			Write-Host "The installed version $WGVersion is up to date."
+		} Else {
+			Write-Host "The installed version $WGVersion is out of date."
+		}
+	} Else {
+		Write-Host "WinGet is not installed. Installing the lasted from:`n $WGLatestLink"
+		Get-WinGet
+	}
+}
+
 Function Invoke-Win10Decrap {
 	Write-Host "Windows 10 Decrapifier"
 	$progressPreference = 'silentlyContinue'
