@@ -848,7 +848,7 @@ Function Install-WinGet {
 			Write-Host "The installed version $WGVersion is out of date."
 			If ($PSVersionTable.PSEdition -eq "Core") {Powershell.exe -NonInteractive -Command $GetWinGet} Else {$GetWinGet | IEX}
 			$WGVersion2 = winget -v
-			If (WGVersion -ne $WGVersion2) {
+			If ($WGVersion -ne $WGVersion2) {
 				Write-Host "Winget $WGVersion2 installed successfully"
 			} Else {
 			Write-Error "Winget did not install successfully"
