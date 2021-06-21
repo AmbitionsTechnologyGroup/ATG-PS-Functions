@@ -188,7 +188,7 @@ Function Connect-NetExtender {
 #>
 }
 
-Function Connect-O365 {
+Function Connect-O365Exchange {
 	If ($PSVersionTable.PSEdition -like "Desktop") {
 		Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
 		Install-Module -Name ExchangeOnlineManagement -AllowClobber -Force
