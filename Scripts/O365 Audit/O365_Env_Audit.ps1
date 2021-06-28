@@ -63,6 +63,9 @@ If (!(Get-Module MSOnline)) {
 	Write-Host "MSOnline Module Loaded"
 }
 
+#Modern Auth and Unattended Scripts in Exchange Online PowerShell V2
+#https://techcommunity.microsoft.com/t5/exchange-team-blog/modern-auth-and-unattended-scripts-in-exchange-online-powershell/ba-p/1497387
+
 <#Write-Host "Checking Module Status: AdminToolbox.Office365"
 If (!(Get-Module AdminToolbox.Office365)) {
 	# Check if the Azure AD PowerShell module is installed.
@@ -92,6 +95,7 @@ Function Connect-MsolServiceIfNeeded {
 	If(-Not (Get-MsolDomain -ErrorAction SilentlyContinue))
 	{
 		Connect-MsolService
+		Get-MsolDomain
 	}
 }
 Function O365Audit {
@@ -192,6 +196,9 @@ If ($ShortAuditAgeMailboxes) {
 }
 
 Function O365-MFA {
+	If ((Get-MsolDomain).Authentication -Match "Federated")) {
+		Write-Host [Info] A domain is Federated, which may mean that it is protected by DUO MFA.
+	}
 	#https://lazyadmin.nl/powershell/list-office365-mfa-status-powershell/
 	If ((Get-OrganizationConfig).OAuth2ClientProfileEnabled -eq $True) {
 		Write-Host "[GOOD] MFA is enabled for the Organization."
@@ -213,7 +220,12 @@ Function O365-MFA {
 	Write-Host "Checking MFA status of licensed users."
 	$MFAUsersList = Get-MFAStatus -IsLicensed
 	$MFAUsersListDisabled = $MFAUsersList | Where-Object -Property MFAEnabled -eq $False
-
 }
 
-
+#https://www.itpromentor.com/block-basic-auth/
+Function O365-BasicAuth {
+	#Connect-O365Exchange if needed.
+	If (!(Get-AuthenticationPolicy)) {
+		Write-Host "An org wide Auth policy is not in place
+	}
+}

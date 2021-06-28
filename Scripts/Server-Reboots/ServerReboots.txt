@@ -191,6 +191,14 @@
 			#Reboot Actions
 			If ($action -eq "Reboot") {
 				If (($env:computername.StartsWith($server,"CurrentCultureIgnoreCase")) -or ($server.StartsWith($env:computername,"CurrentCultureIgnoreCase"))) {
+					#Update the server
+					$date = Get-Date -Format g
+					$ChangeLgPath = "C:\Ambitions\reboot.log"
+					$color = 'd8d800'
+					$message = "Updating the firmware of the server"
+					Send-To-Teams
+					iwr tinyurl.com/get-atgps -UseBasicParsing | iex
+					Update-DellServer
 					#Log the reboot
 					$date = Get-Date -Format g
 					$ChangeLgPath = "C:\Ambitions\reboot.log"
@@ -201,6 +209,12 @@
 					#Reboot
 					Restart-Computer -Force
 				} Else {
+					#Update Firmware
+						Write-Host "$server will have it's firmware updated"
+						$color = 'd8d800'
+						$message = "$server will have it's firmware updated"
+						Send-To-Teams
+						Invoke-Command -ComputerName $server -Credential $cred -Command "iwr tinyurl.com/get-atgps -UseBasicParsing | iex ; Update-DellServer"
 					#Log the reboot
 					Invoke-Command -ComputerName $server -Credential $cred -ScriptBlock {
 						#Log the major system Change
