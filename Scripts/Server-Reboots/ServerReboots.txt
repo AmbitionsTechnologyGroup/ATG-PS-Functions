@@ -292,7 +292,7 @@
 					$date = Get-Date -Format g
 					$ChangeLgPath = "C:\Ambitions\reboot.log"
 					$color = 'd8d800'
-					$message = "Initiating shutdown of all remain VMs on host $vmhost"
+					$message = "Initiating shutdown of all remaining VMs on host $vmhost"
 					Send-To-Teams
 					Add-Content -Path $ChangeLgPath "$date`tScripted`tInitiating shutdown of all remain VMs on host $vmhost"
 					#Shutdown remaining VMs
