@@ -855,15 +855,15 @@ Function Install-WinGet {
 		https://docs.microsoft.com/en-us/windows/package-manager/winget/
 #>
 	$WGLatestWeb = iwr https://github.com/microsoft/winget-cli/releases/latest -UseBasicParsing
-	$WGLatestLink = "https://github.com" + ($WGLatestWeb.Links | Where-Object {$_.href -like "*appxbundle*"}).href
+	$WGLatestLink = "https://github.com" + ($WGLatestWeb.Links | Where-Object {$_.href -like "*msixbundle*"}).href
 
 	$GetWinGet = {
 		$WGLatestWeb = iwr https://github.com/microsoft/winget-cli/releases/latest -UseBasicParsing
-		$WGLatestLink = "https://github.com" + ($WGLatestWeb.Links | Where-Object {$_.href -like "*appxbundle*"}).href
+		$WGLatestLink = "https://github.com" + ($WGLatestWeb.Links | Where-Object {$_.href -like "*msixbundle*"}).href
 		Write-Host "Installing the latest version of winget from:`n $WGLatestLink"
 		$DownloadURL = $WGLatestLink
 		$DownloadLocation = "$env:TEMP\"
-		$LocalFilePath = Join-Path -Path $DownloadLocation -ChildPath "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.appxbundle"
+		$LocalFilePath = Join-Path -Path $DownloadLocation -ChildPath "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle"
 		If (Test-Path $LocalFilePath) {Remove-Item -Path $LocalFilePath -Force -ErrorAction SilentlyContinue}
 		Write-Host "Downloading Desktop App Installer"
 		$progressPreference = 'silentlyContinue'
