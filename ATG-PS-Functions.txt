@@ -534,7 +534,7 @@ Function Get-InternetHealth {
 	$SpeedtestResults = $SpeedtestResults | ConvertFrom-Json
 
 	#creating object
-	[PSCustomObject]$SpeedtestObj = @{
+	[PSCustomObject]$Global:SpeedtestObj = @{
 		downloadspeed = [math]::Round($SpeedtestResults.download.bandwidth / 1000000 * 8, 2)
 		uploadspeed   = [math]::Round($SpeedtestResults.upload.bandwidth / 1000000 * 8, 2)
 		packetloss    = [math]::Round($SpeedtestResults.packetLoss)
