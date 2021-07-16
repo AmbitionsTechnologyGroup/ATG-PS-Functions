@@ -413,7 +413,7 @@ Function Enable-SSL {
 }
 
 Function Expand-Terminal {
-	mode con: cols=160 lines=120
+	mode con: cols=100 lines=240
 }
 
 Function Export-LDAPSCertificate {
