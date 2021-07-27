@@ -258,7 +258,7 @@ Function Connect-O365Exchange {
 		https://docs.microsoft.com/en-us/powershell/exchange/connect-to-exchange-online-powershell?view=exchange-ps
 
 	.EXAMPLE
-		Connect-O365
+		Connect-O365Exchange
 		Yup, that's it!
 #>
 }
