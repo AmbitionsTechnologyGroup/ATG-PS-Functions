@@ -190,8 +190,37 @@ Function Connect-NetExtender {
 
 Function Connect-O365Exchange {
 	If ($PSVersionTable.PSEdition -like "Desktop") {
-		Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-		Install-Module -Name ExchangeOnlineManagement -AllowClobber -Force
+		If (-not (Get-Command Connect-ExchangeOnline -ErrorAction SilentlyContinue)) {
+			Write-Host "Installing the Exchange Online Management module"
+			Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+			Install-Module -Name ExchangeOnlineManagement -AllowClobber -Force
+			$ModVer = (Get-Command Connect-ExchangeOnline).Version
+			If ($ModVer) {
+				Write-Host "Exchange Online Management module version $ModVer has been installed."
+			} Else {
+				Write-Host "Exchange Online Management module failed to install."
+				Break
+			}
+		} Else {
+			$Readhost = 'N'
+			$Readhost = Read-Host "Do you want to check for module updates? This should be done periodically. `n(y/N)"
+			Switch ($ReadHost)
+			{
+				Y {
+					$ModVer = (Get-Command Connect-ExchangeOnline).Version
+					$AvailableModVer = (Find-Module ExchangeOnlineManagement -Repository PSGallery).Version
+					If ($ModVer -ne $AvailableModVer) {
+						Write-host "ExchangeOnlineManagement has an update from $ModVer to $AvailableModVer.`nInstalling the update."
+						Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+						Install-Module -Name ExchangeOnlineManagement -AllowClobber -Force
+					} Else {
+						Write-host "ExchangeOnlineManagement is already up to date at version $AvailableModVer."
+					}
+				}
+				N { Write-Host "Skipping update check." }
+				Default { Write-Host "Skipping update check." }
+			}
+		}
 		Connect-ExchangeOnline -ShowProgress $true
 
 		Write-Host -ForegroundColor Green -BackgroundColor DarkRed @"
@@ -208,7 +237,7 @@ Function Connect-O365Exchange {
 		$UserCredential = Get-Credential
 		$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://outlook.office365.com/powershell-liveid/ -Credential $UserCredential -Authentication Basic -AllowRedirection
 		Import-PSSession $Session
-		
+
 		Write-Host -ForegroundColor Green -BackgroundColor DarkRed @"
 		Be sure to disconnect the remote PowerShell session when you're finished.
 		If you close the Windows PowerShell window without disconnecting the session,
@@ -386,7 +415,7 @@ Function Enable-O365AuditLog {
 		Write-Host "Checking the orginazation config. If auditing is enabled, this setting should show as 'False'"
 		Get-OrganizationConfig | Format-List AuditDisabled
 	} Else {
-		Write-Host "You are not connected to an exchange server. Try the command 'Connect-O365'"
+		Write-Host "You are not connected to an exchange server. Try the command 'Connect-O365Exchange'"
 	}
 }
 
@@ -413,7 +442,7 @@ Function Enable-SSL {
 }
 
 Function Expand-Terminal {
-	mode con: cols=100 lines=240
+	mode con: cols=160 lines=120
 }
 
 Function Export-LDAPSCertificate {
@@ -534,7 +563,7 @@ Function Get-InternetHealth {
 	$SpeedtestResults = $SpeedtestResults | ConvertFrom-Json
 
 	#creating object
-	[PSCustomObject]$Global:SpeedtestObj = @{
+	[PSCustomObject]$SpeedtestObj = @{
 		downloadspeed = [math]::Round($SpeedtestResults.download.bandwidth / 1000000 * 8, 2)
 		uploadspeed   = [math]::Round($SpeedtestResults.upload.bandwidth / 1000000 * 8, 2)
 		packetloss    = [math]::Round($SpeedtestResults.packetLoss)
@@ -841,7 +870,7 @@ Function Install-O365ProofPointConnectors {
 		Set-HostedContentFilterPolicy -Identity "Default" -AddXHeaderValue "Office 365 Notice: Possible Spam" -AdminDisplayName "Disabled 365 Filtering, inbound handled by Proofpoint." -BulkSpamAction "NoAction" -BulkThreshold 9 -DownloadLink $False -EnableEndUserSpamNotifications $False -EnableLanguageBlockList $False -EnableRegionBlockList $False -HighConfidencePhishAction MoveToJmf -HighConfidenceSpamAction AddXHeader -IncreaseScoreWithBizOrInfoUrls Off -IncreaseScoreWithImageLinks Off -IncreaseScoreWithNumericIps Off -IncreaseScoreWithRedirectToOtherPort Off -InlineSafetyTipsEnabled $False -MakeDefault -MarkAsSpamBulkMail Off -MarkAsSpamEmbedTagsInHtml Off -MarkAsSpamEmptyMessages Off -MarkAsSpamFormTagsInHtml Off -MarkAsSpamFramesInHtml Off -MarkAsSpamFromAddressAuthFail Off -MarkAsSpamJavaScriptInHtml Off -MarkAsSpamNdrBackscatter Off -MarkAsSpamObjectTagsInHtml Off -MarkAsSpamSensitiveWordList Off -MarkAsSpamSpfRecordHardFail Off -MarkAsSpamWebBugsInHtml Off -PhishSpamAction AddXHeader -PhishZapEnabled $False -QuarantineRetentionPeriod 30 -RedirectToRecipients $Null -RegionBlockList $Null -SpamAction AddXHeader -SpamZapEnabled $False -TestModeAction None -TestModeBccToRecipients $Null
 		$DisableMailoxJunkFilters = Get-ExoMailbox -RecipientTypeDetails UserMailbox -ResultSize Unlimited; $All | foreach {Set-MailboxJunkEmailConfiguration $_.Name -Enabled $false}
 	} Else {
-		Write-Host "You are not connected to an exchange server. Try the command 'Connect-O365'."
+		Write-Host "You are not connected to an exchange server. Try the command 'Connect-O365Exchange'."
 	}
 }
 
@@ -855,15 +884,15 @@ Function Install-WinGet {
 		https://docs.microsoft.com/en-us/windows/package-manager/winget/
 #>
 	$WGLatestWeb = iwr https://github.com/microsoft/winget-cli/releases/latest -UseBasicParsing
-	$WGLatestLink = "https://github.com" + ($WGLatestWeb.Links | Where-Object {$_.href -like "*msixbundle*"}).href
+	$WGLatestLink = "https://github.com" + ($WGLatestWeb.Links | Where-Object {$_.href -like "*appxbundle*"}).href
 
 	$GetWinGet = {
 		$WGLatestWeb = iwr https://github.com/microsoft/winget-cli/releases/latest -UseBasicParsing
-		$WGLatestLink = "https://github.com" + ($WGLatestWeb.Links | Where-Object {$_.href -like "*msixbundle*"}).href
+		$WGLatestLink = "https://github.com" + ($WGLatestWeb.Links | Where-Object {$_.href -like "*appxbundle*"}).href
 		Write-Host "Installing the latest version of winget from:`n $WGLatestLink"
 		$DownloadURL = $WGLatestLink
 		$DownloadLocation = "$env:TEMP\"
-		$LocalFilePath = Join-Path -Path $DownloadLocation -ChildPath "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle"
+		$LocalFilePath = Join-Path -Path $DownloadLocation -ChildPath "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.appxbundle"
 		If (Test-Path $LocalFilePath) {Remove-Item -Path $LocalFilePath -Force -ErrorAction SilentlyContinue}
 		Write-Host "Downloading Desktop App Installer"
 		$progressPreference = 'silentlyContinue'
@@ -1355,9 +1384,9 @@ Function Update-Everything {
 
 	while ($delay -ge 0)
 	{
-	  Write-Host "$delay seconds left to cancel"
-	  Start-Sleep 1
-	  $delay --
+		Write-Host "$delay seconds left to cancel"
+		Start-Sleep 1
+		$delay --
 	}
 	$delay = $null
 	If (!(Get-Command choco -ErrorAction SilentlyContinue)) {choco upgrade all -y}
