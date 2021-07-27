@@ -221,7 +221,7 @@ Function Connect-O365Exchange {
 				Default { Write-Host "Skipping update check." }
 			}
 		}
-		Connect-ExchangeOnline -ShowProgress $true
+		Connect-ExchangeOnline -ShowBanner:$false
 
 		Write-Host -ForegroundColor Green -BackgroundColor DarkRed @"
 		Be sure to disconnect the remote PowerShell session when you're finished.
