@@ -223,9 +223,23 @@ Function O365-MFA {
 }
 
 #https://www.itpromentor.com/block-basic-auth/
+#https://docs.microsoft.com/en-us/exchange/clients-and-mobile-in-exchange-online/disable-basic-authentication-in-exchange-online#modify-authentication-policies
+#https://docs.microsoft.com/en-us/powershell/module/exchange/set-authenticationpolicy?view=exchange-ps
 Function O365-BasicAuth {
 	#Connect-O365Exchange if needed.
 	If (!(Get-AuthenticationPolicy)) {
-		Write-Host "An org wide Auth policy is not in place
+		Write-Host "[BAD] An org wide Authentication policy does not exist."
+		Do {
+			$Answer = Read-Host -Prompt 'Do you want to create an org wide Authentication policy? (y/n)'
+			If (!($Answer -match 'y' -or $Answer -match 'n')) {Write-Host 'Please answer "y" for Yes or "n" for No.'}
+		}
+		Until ($Answer -match 'y' -or $Answer -match 'n')
+		If ($Answer -match 'y') {
+			Write-Host "[GOOD] Creating an org wide Authentication policy."
+			New-AuthenticationPolicy -Name "Block Basic Auth"
+			Set-AuthenticationPolicy -Identity "Block Basic Auth" -AllowBasicAuthPop:$false -AllowBasicAuthImap:$false -AllowBasicAuthMapi:$false -AllowBasicAuthOfflineAddressBook:$false -AllowBasicAuthOutlookService:$false -AllowBasicAuthPowershell:$false -AllowBasicAuthReportingWebServices:$false -AllowBasicAuthRpc:$false -AllowBasicAuthSmtp:$false -AllowBasicAuthWebServices:$false
+		} Else {
+			Write-Host "[INFORM] If you wish to Extend the audit age limit to 365 days on any of these accounts with the command:`n`tSet-Mailbox –Identity <Identity> –AuditLogAgeLimit 365"
+		}
 	}
 }
