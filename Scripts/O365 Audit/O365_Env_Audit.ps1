@@ -134,66 +134,66 @@ Function O365Audit {
 $OrgConfig = Get-OrganizationConfig
 $OrgName = $OrgConfig.DisplayName
 
+Function O365-AuditSettings {
+	Write-Host "Enable Audit Logs – set 365 days"
+	Write-Host "Checking Mailbox Audit Settings"
+	$OrgAuditDisabled = $OrgConfig.AuditDisabled
+	$MailboxesAuditBypassed = Get-MailboxAuditBypassAssociation -ResultSize Unlimited | Select Identity,WhenCreated,AuditBypassEnabled | Where {$_.AuditBypassEnabled -eq $True}
+	$PerMailboxAuditSettings = Get-MailBox * | Select Identity,AuditEnabled,AuditLogAgeLimit
 
-Write-Host "Enable Audit Logs – set 365 days"
-Write-Host "Checking Mailbox Audit Settings"
-$OrgAuditDisabled = $OrgConfig.AuditDisabled
-$MailboxesAuditBypassed = Get-MailboxAuditBypassAssociation -ResultSize Unlimited | Select Identity,WhenCreated,AuditBypassEnabled | Where {$_.AuditBypassEnabled -eq $True}
-$PerMailboxAuditSettings = Get-MailBox * | Select Identity,AuditEnabled,AuditLogAgeLimit
-
-If ($OrgAuditDisabled) {
-	Write-Host "[BAD] $OrgName does not have organization wide auditing enabled."
-	Do {
-		$Answer = Read-Host -Prompt 'Do you want to enable organization wide auditing? (y/n)'
-		If (!($Answer -match 'y' -or $Answer -match 'n')) {Write-Host 'Please answer "y" for Yes or "n" for No.'}
-	}
-	Until ($Answer -match 'y' -or $Answer -match 'n')
-	If ($Answer -match 'y') {
-		Write-Host "Enabling organization wide auditing with the command: Set-OrganizationConfig -AuditDisabled $False -Verbose"
-		Set-OrganizationConfig -AuditDisabled $False -Verbose
-		Get-OrganizationConfig | Select AuditDisabled
-	}
-} Else {
-	Write-Host "[GOOD] $OrgName does have organization wide auditing enabled."
-	If ($MailboxesAuditBypassed) {
-		Write-Host "[BAD] However, the following user(s) have a bypass on the audit:`n $MailboxesAuditBypassed"
+	If ($OrgAuditDisabled) {
+		Write-Host "[BAD] $OrgName does not have organization wide auditing enabled."
 		Do {
-			$Answer = Read-Host -Prompt 'Do you want to enable auditing on all of these accounts? (y/n)'
+			$Answer = Read-Host -Prompt 'Do you want to enable organization wide auditing? (y/n)'
 			If (!($Answer -match 'y' -or $Answer -match 'n')) {Write-Host 'Please answer "y" for Yes or "n" for No.'}
 		}
 		Until ($Answer -match 'y' -or $Answer -match 'n')
 		If ($Answer -match 'y') {
-			Write-Host "[GOOD] Enabling auditing on all of these accounts with the command: Set-MailboxAuditBypassAssociation –Identity <Identity> -AuditBypassEnabled $false"
-			$MailboxesAuditBypassed | ForEach-Object {Set-MailboxAuditBypassAssociation –Identity $_.Identity -AuditBypassEnabled $false}
-		} Else {
-			Write-Host "[INFORM] If you wish to enable auditing on any of these accounts, use the command:`n`tSet-MailboxAuditBypassAssociation –Identity <Identity> -AuditBypassEnabled $false"
+			Write-Host "Enabling organization wide auditing with the command: Set-OrganizationConfig -AuditDisabled $False -Verbose"
+			Set-OrganizationConfig -AuditDisabled $False -Verbose
+			Get-OrganizationConfig | Select AuditDisabled
 		}
 	} Else {
-		Write-Host "[GOOD] No users have a bypass enabled."
+		Write-Host "[GOOD] $OrgName does have organization wide auditing enabled."
+		If ($MailboxesAuditBypassed) {
+			Write-Host "[BAD] However, the following user(s) have a bypass on the audit:`n $MailboxesAuditBypassed"
+			Do {
+				$Answer = Read-Host -Prompt 'Do you want to enable auditing on all of these accounts? (y/n)'
+				If (!($Answer -match 'y' -or $Answer -match 'n')) {Write-Host 'Please answer "y" for Yes or "n" for No.'}
+			}
+			Until ($Answer -match 'y' -or $Answer -match 'n')
+			If ($Answer -match 'y') {
+				Write-Host "[GOOD] Enabling auditing on all of these accounts with the command: Set-MailboxAuditBypassAssociation –Identity <Identity> -AuditBypassEnabled $false"
+				$MailboxesAuditBypassed | ForEach-Object {Set-MailboxAuditBypassAssociation –Identity $_.Identity -AuditBypassEnabled $false}
+			} Else {
+				Write-Host "[INFORM] If you wish to enable auditing on any of these accounts, use the command:`n`tSet-MailboxAuditBypassAssociation –Identity <Identity> -AuditBypassEnabled $false"
+			}
+		} Else {
+			Write-Host "[GOOD] No users have a bypass enabled."
+		}
+	}
+
+	$EnabledAuditMailBoxes = $PerMailboxAuditSettings | Where-Object {$_.AuditEnabled -eq $True}
+	$ShortAuditAgeMailboxes = $EnabledAuditMailBoxes | Where-Object {[int]($_.AuditLogAgeLimit).Split(".")[0] -lt 365}
+	Write-Host "There are $(($EnabledAuditMailBoxes).Count) mailboxes with Audit enabled"
+	If ($ShortAuditAgeMailboxes) {
+		Write-Host "[BAD] There are $(($ShortAuditAgeMailboxes).Count) mailboxes with an audit age limit less then 1 year"
+		Do {
+			$Answer = Read-Host -Prompt 'Do you want to extend the audit age limit on all of these accounts? (y/n)'
+			If (!($Answer -match 'y' -or $Answer -match 'n')) {Write-Host 'Please answer "y" for Yes or "n" for No.'}
+		}
+		Until ($Answer -match 'y' -or $Answer -match 'n')
+		If ($Answer -match 'y') {
+			Write-Host "[GOOD] Extending the audit age limit to 365 days on all of these accounts with the command:`n`tSet-Mailbox –Identity <Identity> –AuditLogAgeLimit 365"
+			$ShortAuditAgeMailboxes | ForEach-Object {Set-Mailbox –Identity $_.Identity –AuditLogAgeLimit 365}#;$newMailbox = Get-Mailbox -Identity "$_.Identity" | Select Identity,AuditEnabled,AuditLogAgeLimit; Write-Host "$($newMailbox.Identity) has now been set to an age limit of $(($newMailbox.AuditLogAgeLimit).Split(".")[0]) days"; $newMailbox = $Null}
+		} Else {
+			Write-Host "[INFORM] If you wish to Extend the audit age limit to 365 days on any of these accounts with the command:`n`tSet-Mailbox –Identity <Identity> –AuditLogAgeLimit 365"
+		}
+	} ELSE {
+		Write-Host "[GOOD] There are no mailboxes with an audit age limit less then 1 year"
 	}
 }
 
-$EnabledAuditMailBoxes = $PerMailboxAuditSettings | Where-Object {$_.AuditEnabled -eq $True}
-$ShortAuditAgeMailboxes = $EnabledAuditMailBoxes | Where-Object {[int]($_.AuditLogAgeLimit).Split(".")[0] -lt 365}
-Write-Host "There are $(($EnabledAuditMailBoxes).Count) mailboxes with Audit enabled"
-If ($ShortAuditAgeMailboxes) {
-	Write-Host "[BAD] There are $(($ShortAuditAgeMailboxes).Count) mailboxes with an audit age limit less then 1 year"
-	Do {
-		$Answer = Read-Host -Prompt 'Do you want to extend the audit age limit on all of these accounts? (y/n)'
-		If (!($Answer -match 'y' -or $Answer -match 'n')) {Write-Host 'Please answer "y" for Yes or "n" for No.'}
-	}
-	Until ($Answer -match 'y' -or $Answer -match 'n')
-	If ($Answer -match 'y') {
-		Write-Host "[GOOD] Extending the audit age limit to 365 days on all of these accounts with the command:`n`tSet-Mailbox –Identity <Identity> –AuditLogAgeLimit 365"
-		$ShortAuditAgeMailboxes | ForEach-Object {Set-Mailbox –Identity $_.Identity –AuditLogAgeLimit 365}#;$newMailbox = Get-Mailbox -Identity "$_.Identity" | Select Identity,AuditEnabled,AuditLogAgeLimit; Write-Host "$($newMailbox.Identity) has now been set to an age limit of $(($newMailbox.AuditLogAgeLimit).Split(".")[0]) days"; $newMailbox = $Null}
-	} Else {
-		Write-Host "[INFORM] If you wish to Extend the audit age limit to 365 days on any of these accounts with the command:`n`tSet-Mailbox –Identity <Identity> –AuditLogAgeLimit 365"
-	}
-} ELSE {
-	Write-Host "[GOOD] There are no mailboxes with an audit age limit less then 1 year"
-}
-
-}
 
 Function O365-MFA {
 	If ((Get-MsolDomain).Authentication -Match "Federated")) {
@@ -238,8 +238,61 @@ Function O365-BasicAuth {
 			Write-Host "[GOOD] Creating an org wide Authentication policy."
 			New-AuthenticationPolicy -Name "Block Basic Auth"
 			Set-AuthenticationPolicy -Identity "Block Basic Auth" -AllowBasicAuthPop:$false -AllowBasicAuthImap:$false -AllowBasicAuthMapi:$false -AllowBasicAuthOfflineAddressBook:$false -AllowBasicAuthOutlookService:$false -AllowBasicAuthPowershell:$false -AllowBasicAuthReportingWebServices:$false -AllowBasicAuthRpc:$false -AllowBasicAuthSmtp:$false -AllowBasicAuthWebServices:$false
+			Set-OrganizationConfig -DefaultAuthenticationPolicy “Block Basic Auth”
+			Write-Host "[INFORM] If you need to create an exception policy for some accounts: https://www.itpromentor.com/block-basic-auth/"
 		} Else {
-			Write-Host "[INFORM] If you wish to Extend the audit age limit to 365 days on any of these accounts with the command:`n`tSet-Mailbox –Identity <Identity> –AuditLogAgeLimit 365"
+			Write-Host "[INFORM] If you wish to set up an org wide Authentication policy manually, check out these links:"
+			Write-Host '          https://www.itpromentor.com/block-basic-auth/'
+			Write-Host '          https://docs.microsoft.com/en-us/exchange/clients-and-mobile-in-exchange-online/disable-basic-authentication-in-exchange-online#modify-authentication-policies'
+			Write-Host '          https://docs.microsoft.com/en-us/powershell/module/exchange/set-authenticationpolicy?view=exchange-ps'
 		}
+	}
+}
+
+#Deleted Items Retention to max (30 day)
+Function O365-ItemRetention {
+	Write-Host "[INFO] Checking retention settings for each mailbox."
+	$Retention = Get-Mailbox -ResultSize unlimited | Select-Object Name,Alias,RetainDeletedItemsFor | Where {$_.Alias -notlike "*DiscoverySearchMailbox*"}
+	$RetentionNotMax = $Retention | Where-Object -Property "RetainDeletedItemsFor" -lt 30
+	If ($RetentionNotMax){
+		Write-Host "[BAD] $($RetentionNotMax.Count) mailboxes were found with less then 30 days retention."
+		Do {
+			$Answer = Read-Host -Prompt 'Do you want to expand the retention on these mailboxes? (y/n)'
+			If (!($Answer -match 'y' -or $Answer -match 'n')) {Write-Host 'Please answer "y" for Yes or "n" for No.'}
+		}
+		Until ($Answer -match 'y' -or $Answer -match 'n')
+		If ($Answer -match 'y') {
+			Write-Host "[GOOD] Extending the mailbox retention time to 30 days for all mailboxes."
+			$RetentionNotMax.Alias | Set-Mailbox -RetainDeletedItemsFor 30
+		} Else {
+			Write-Host "[INFORM] If you wish to manually adjust the retention time, check out this link:"
+			Write-Host '          https://docs.microsoft.com/en-us/exchange/recipients-in-exchange-online/manage-user-mailboxes/change-deleted-item-retention'
+		}
+	} Else {
+		Write-Host "[GOOD] All mailboxes are set to 30 days (the max)."
+	}
+}
+
+#Disables all shared mailbox sign-in?
+Function O365-DisableSharedMailboxSignin {
+	#Needs ExchangeOnline and MSOLService
+	$SharedMailboxes = Get-EXOMailbox -Filter {recipienttypedetails -eq "SharedMailbox"} | get-MsolUser | Select-Object UserPrincipalName,blockcredential
+	$SignInEnabledSharedMailboxes = $SharedMailboxes | Where {$_.BlockCredential -eq $False}
+	If ($SignInEnabledSharedMailboxes) {
+		Write-Host "[BAD] $($SignInEnabledSharedMailboxes.Count) shared mailboxes were found with signin enabled."
+		Do {
+			$Answer = Read-Host -Prompt 'Do you want to disable signin for all shared mailboxes? (y/n)'
+			If (!($Answer -match 'y' -or $Answer -match 'n')) {Write-Host 'Please answer "y" for Yes or "n" for No.'}
+		}
+		Until ($Answer -match 'y' -or $Answer -match 'n')
+		If ($Answer -match 'y') {
+			Write-Host "[GOOD] Disabling signin for all shared mailboxes."
+			$SignInEnabledSharedMailboxes.UserPrincipalName | ForEach-Object { Set-MsolUser -UserPrincipalName $_ -BlockCredential $true}
+		} Else {
+			Write-Host "[INFORM] If you wish to manually disable signin for shared mailboxes, check out this link:"
+			Write-Host '          https://techcommunity.microsoft.com/t5/exchange/list-shared-mailboxes-with-signin-enabled-and-then-block-signin/m-p/1405264'
+		}
+	} Else {
+		Write-Host "[GOOD] No shared mailboxes were found with signin enabled."
 	}
 }
