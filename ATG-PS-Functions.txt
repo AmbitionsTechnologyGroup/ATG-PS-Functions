@@ -990,6 +990,18 @@ Function Install-WinGet {
 	}
 }
 
+Function Install-WinGetApps {
+	Install-WinGet
+	Winget install -e --id 7zip.7zip -h
+	Winget install -e --id Google.Chrome -h
+	Winget install -e --id Mozilla.FirefoxESR -h
+	Winget install -e --id Zoom.Zoom -h
+	Winget install -e --id Notepad++.Notepad++ -h
+	Winget install -e --id Adobe.AdobeAcrobatReaderDC -h
+	Winget install -e --id VideoLAN.VLC -h
+	Winget install -e --id Microsoft.PowerShell -h
+}
+
 Function Invoke-Win10Decrap {
 	Write-Host "Windows 10 Decrapifier"
 	$progressPreference = 'silentlyContinue'
