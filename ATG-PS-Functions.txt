@@ -1378,9 +1378,9 @@ Function Update-DellServer {
 	}
 	$delay = $null
 	
-	$URL = "https://dl.dell.com/FOLDER06526860M/1/Systems-Management_Application_8CTK7_WN64_1.9.0_A00.EXE"
-	$File = "C:\Ambitions\Dell System Update 1.9.0.exe"
-	$Hash = '953bf0740cd0b61a08914281df958e2d63cca21acbb8281d6589c17210cdb16f'
+	$URL = "https://dl.dell.com/FOLDER07525263M/1/Systems-Management_Application_5C2CW_WN64_1.9.2.0_A00.EXE"
+	$File = "C:\Ambitions\Dell System Update 1.9.2.exe"
+	$Hash = '2905a5c8717a9806f76fa88af340fd4747a45c5bd846849ec0bd336ece7f6cbe'
 	Function Get-DSUInstall {
 		Write-Host "Dell System Update is not installed, attempting to install."
 		Write-Host "Download the installer to $File"
@@ -1418,8 +1418,8 @@ Function Update-DellServer {
 			Exit
 		} Else {
 			Write-Host "Checkin if DSU is installed"
-			If ((Get-WmiObject win32_product | Where-Object -Property Name -Like "*Dell EMC System Update*").Version -NotLike "1.9.0") {
-				Write-Host "Dell System Update is either not installed or not version 1.9.0"
+			If ((Get-WmiObject win32_product | Where-Object -Property Name -Like "*Dell EMC System Update*").Version -NotLike "1.9.2*") {
+				Write-Host "Dell System Update is either not installed or not version 1.9.2"
 				Get-DSUInstall
 				Test-DSUInstall
 				Install-DSU
