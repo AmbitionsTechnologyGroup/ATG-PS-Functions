@@ -738,9 +738,9 @@ Function Install-NiniteApps {
 	Write-Host "Install Ninite Apps, waiting for install to complete and logging the results."
 		$NiniteCache = "\\adsaltoxl\data\Software\Ninite\NiniteDownloads"
 		If(test-path $NiniteCache){
-			& C:\Ambitions\NinitePro.exe /select 7-Zip Air Chrome 'Firefox ESR' Zoom GoToMeeting WebEx Greenshot 'Notepad++' 'Paint.NET' Reader Silverlight VLC /cachepath $NiniteCache /allusers /silent 'C:\Ambitions\NiniteReport.txt' | Wait-Process
+			& C:\Ambitions\NinitePro.exe /select 7-Zip Air Chrome 'Firefox ESR' Zoom Greenshot 'Notepad++' 'Paint.NET' Reader VLC /cachepath $NiniteCache /allusers /silent 'C:\Ambitions\NiniteReport.txt' | Wait-Process
 		} ELSE {
-			& C:\Ambitions\NinitePro.exe /select 7-Zip Air Chrome 'Firefox ESR' Zoom GoToMeeting WebEx Greenshot 'Notepad++' 'Paint.NET' Reader Silverlight VLC /nocache /allusers /silent 'C:\Ambitions\NiniteReport.txt' | Wait-Process
+			& C:\Ambitions\NinitePro.exe /select 7-Zip Air Chrome 'Firefox ESR' Zoom Greenshot 'Notepad++' 'Paint.NET' Reader VLC /nocache /allusers /silent 'C:\Ambitions\NiniteReport.txt' | Wait-Process
 		}
 	Get-Content 'C:\Ambitions\NiniteReport.txt'
 	Write-Host "End of Install Ninite Apps"
