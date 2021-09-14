@@ -5,8 +5,8 @@
     "DateTime": "Tuesday, December 1, 2020 2:18:46 PM"
   },
   "DattoWindowsAgent": {
-    "Version": "2.7.1.2",
-    "HelpUrl": "https://help.datto.com/s/article/KB360024388231"
+    "Version": "3.0.3.0",
+    "HelpUrl": "https://help.datto.com/s/article/KB213994246"
   },
   "ShadowSnapAgent": {
     "Version": "4.0.0",
