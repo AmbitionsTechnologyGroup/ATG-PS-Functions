@@ -96,14 +96,14 @@ $OnlineDattoAgent = iwr https://raw.githubusercontent.com/AmbitionsTechnologyGro
 
 #If neither agent is installed, EXIT!
 	If (!$agent) {
-	Write-Host "No agent is installed, EXITING!"
-	#Exit the script
-	Stop-transcript
+		Write-Host "No agent is installed, EXITING!"
+		#Exit the script
+		#Stop-transcript
 	} Else {
 		If ($InstalledVer -match $OnlineDattoVersion) {
 			Write-Host -ForegroundColor Green 'The'$agent' version '$InstalledVer' is currently installed and it is up to date'
 			#Exit the script
-			Stop-transcript
+			#Stop-transcript
 			} Else {
 				Write-Host -ForegroundColor Red 'The'$agent' Version '$InstalledVer' is currently installed and it is NOT up to date. The latest version available is '$OnlineDattoVersion
 		}
@@ -118,7 +118,7 @@ $OnlineDattoAgent = iwr https://raw.githubusercontent.com/AmbitionsTechnologyGro
 				Write-Host "This update has already been downloaded, canceling update."
 				Remove-Item -path "$installer.old"
 				#Exit the script
-				Stop-transcript
+				#Stop-transcript
 			} Else {
 				Write-Host "The download is newer, proceeding with update."
 				Remove-Item -path "$installer.old"
@@ -128,12 +128,12 @@ $OnlineDattoAgent = iwr https://raw.githubusercontent.com/AmbitionsTechnologyGro
 		#Stop Services
 			foreach ($service in $services) {
 				Write-Host "Stopping service $service"
-				Stop-Service -displayname "$service"
+				Stop-Service -displayname "$service" -Force
 			}
 		#Let services have time to fully stop
 			Start-Sleep -s 5
 		#Kill any hung services
-			Stop-Process -processname raw_agent_svc, ShadowProtect, ShadowProtectSvc, vsnapvss, DattoBackupAgent -ErrorAction SilentlyContinue
+			Stop-Process -processname raw_agent_svc, ShadowProtect, ShadowProtectSvc, vsnapvss, DattoBackupAgent -Force -ErrorAction SilentlyContinue
 		#Install agent silently (wait till finished)
 			Write-Host Installing the new update
 			& "$installer" /S /norestart
