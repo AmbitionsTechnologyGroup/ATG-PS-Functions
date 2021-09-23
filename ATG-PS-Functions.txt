@@ -1299,7 +1299,7 @@ Function Update-DellPackages {
 		If ( $Manufact -like "*Dell*") {
 			#Install and update Chocolatey if Needed
 			If (Get-Command choco -errorAction SilentlyContinue) {
-				choco upgrade chocolatey
+				choco upgrade chocolatey -y
 			} Else { Install-Choco }
 
 			Function Install-DCU {

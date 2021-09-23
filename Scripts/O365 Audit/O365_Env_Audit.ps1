@@ -88,7 +88,9 @@ If (!(Get-Module AdminToolbox.Office365)) {
 }#>
 
 Write-Host "Importing Function Get-MFAStatus"
-	iwr https://raw.githubusercontent.com/ruudmens/LazyAdmin/master/Office365/MFAStatus.ps1 -useb | iex
+	#iwr https://raw.githubusercontent.com/ruudmens/LazyAdmin/master/Office365/MFAStatus.ps1 -useb | iex
+	#Current version as of SEP2021 gives error, below link calls previous version.
+	iwr https://raw.githubusercontent.com/ruudmens/LazyAdmin/feb452cdccf575f6e129c0a162591f29f57dc4b5/Office365/MFAStatus.ps1 -useb | iex
 
 
 Function Connect-MsolServiceIfNeeded {
