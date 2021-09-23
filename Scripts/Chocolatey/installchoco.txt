@@ -327,4 +327,8 @@ Install-ChocolateyFromPackage $localChocolateyPackageFilePath
 #Custom
 Invoke-Expression $SourceAdd
 Choco Source Remove -n:chocolatey
+#Update Chocolatey if Needed
+If (Get-Command choco -errorAction SilentlyContinue) {
+	choco upgrade chocolatey -y
+}
 #EndCustom
