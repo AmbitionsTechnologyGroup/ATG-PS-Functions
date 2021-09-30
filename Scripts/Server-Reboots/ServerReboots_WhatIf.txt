@@ -23,7 +23,7 @@
 	#Function to send messages to Teams. Set $date, $server, and $message variables
 	function Send-To-Teams{
 		$date = Get-Date -Format g
-		$uri = "https://ambitionsgroup.webhook.office.com/webhookb2/550873db-002f-458d-bc34-4e1b2f85f255@cf4bdd06-b03d-4baf-8565-1265469a874f/IncomingWebhook/3f64ac0b0cd44e7cbce1f2d261910db5/04d33247-ee72-41af-a5ae-1c4281262441"
+		$uri = "https://ambitionsgroup.webhook.office.com/webhookb2/550873db-002f-458d-bc34-4e1b2f85f255@cf4bdd06-b03d-4baf-8565-1265469a874f/IncomingWebhook/f5492acfda244dd8a344c14770df1351/04d33247-ee72-41af-a5ae-1c4281262441"
 		
 		$body = ConvertTo-Json -Depth 4 @{
 			themeColor = $color
@@ -297,7 +297,7 @@
 						function Send-To-Teams{
 							$server = $env:computername
 							$date = Get-Date -Format g
-							$uri = "https://outlook.office.com/webhook/897d2b4c-50c6-49cb-a694-50e3c7265bdc@cf4bdd06-b03d-4baf-8565-1265469a874f/IncomingWebhook/4f0870f310184294b56c6da27f521787/04d33247-ee72-41af-a5ae-1c4281262441"
+							$uri = "https://ambitionsgroup.webhook.office.com/webhookb2/550873db-002f-458d-bc34-4e1b2f85f255@cf4bdd06-b03d-4baf-8565-1265469a874f/IncomingWebhook/f5492acfda244dd8a344c14770df1351/04d33247-ee72-41af-a5ae-1c4281262441"
 							
 							$body = ConvertTo-Json -Depth 4 @{
 								themeColor = $color
