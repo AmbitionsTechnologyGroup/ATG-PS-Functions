@@ -891,6 +891,132 @@ Function Install-O365ProofPointConnectors {
 	}
 }
 
+Function Install-UmbrellaDNS {
+	#Requires -RunAsAdministrator
+[cmdletbinding()]
+param(
+	[string]$Code #Shortcode of the site you want to install, list available at https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/blob/master/Scripts/ITS247Agent/SiteAgentURLs.csv
+)
+	$IsInstalled = Get-Service -Name Umbrella_RC -ErrorAction SilentlyContinue
+	If ($IsInstalled) {
+		Write-Host "Umbrella DNS client is already installed. Exiting."
+	} Else {
+
+
+		Write-Host "Umbrella DNS Installer"
+		#Dowload config file index
+		$SiteConfigs = @()
+		$SiteConfigs = (Invoke-WebRequest -uri "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Umbrella/UDNS-Client-Mapping.csv" -UseBasicParsing).Content | convertfrom-csv -Delimiter ','
+		$MSIUrl = "https://cisco-umbrella-client-downloads.s3.amazonaws.com/win/production/Setup.msi"
+
+		Function InstallAgent {
+			Write-Host
+			Write-Host ================ Agent Installation ================
+			Write-Host Downloading the agent for $SelectedSite.Site
+			$msiFolder = $ENV:SystemDrive + '\Ambitions\UmbrellaClient\'
+			$msiFilePath = $msiFolder + 'Setup.msi'
+			$Command = $SelectedSite.Command
+
+			$null = (New-Item -ItemType Directory -Force -Path $msiFolder)
+			If (Test-Path $msiFilePath) { Remove-Item $msiFilePath}
+			(New-Object System.Net.WebClient).DownloadFile($MSIUrl, $msiFilePath)
+			Get-Item $msiFilePath | Unblock-File
+			Write-Host Disabling Windows Defender Real Time Scanning
+			Set-MpPreference -DisableRealtimeMonitoring $True -ErrorAction SilentlyContinue
+			Write-Host Installing the agent for $SelectedSite.Site
+			Set-Location -Path $msiFolder
+			$Command | Invoke-Expression | Wait-Process
+			BREAK
+		} #End of InstallAgent
+
+		Function Show-Menu {
+			param (
+				[string]$Title = 'Site Selection'
+			)
+			Clear-Host
+			Write-Host "Umbrella DNS Agent Installer"
+			Write-Host
+			Write-Host "================ $Title ================"
+			Foreach ($Site in $SiteConfigs) {
+				Write-Host "Enter "$Site.Code"`t for "$Site.Site
+			}
+			Write-Host "Enter 'Q' to quit"
+			Write-Host
+		} #End of Show-Menu
+
+		Function Create-Menu {
+			$selection = $null
+			Do {
+				Show-Menu -Title 'Site Selection'
+				If (!($selection)) { $selection = Read-Host "Please make a selection" }
+				$SelectedSite = $SiteConfigs.Where( { $PSItem.Code -like $selection })
+				If ($selection -eq 'q') { Break }
+				If ($SelectedSite) {
+					Write-Host
+					Write-Host Selection Confirmed: $SelectedSite.Site
+					InstallAgent
+				} Else {
+					$selection = Read-Host "Invalid code. Please make a valid selection"
+				}
+			}
+			Until ($selection -eq 'q')
+		} #End of Create-Menu
+
+		# Check for preassigned site code, offer choices If not
+		If (Get-Variable -Name SiteCode -ErrorAction SilentlyContinue) { $Code = $SiteCode ; $Silent = $True }
+		If ($Code) {
+			$SelectedSite = $SiteConfigs.Where( { $PSItem.Code -like $code })
+			If ($SelectedSite) {
+				InstallAgent
+			} Else {
+				Do {
+					Show-Menu -Title 'Site Selection'
+					$selection = Read-Host "Invalid code. Please make a valid selection"
+				}
+				Until ($selection -eq 'q')
+			}
+		} Else {
+			Write-Host "Attempting to determine location"
+			$DetectedIP = (Invoke-WebRequest -uri "http://ip.ambitionsgroup.com/" -UseBasicParsing).Content
+			$searchterm = '*' + $DetectedIP + '*'
+			$DetectedSite = $SiteConfigs.Where( { $PSItem.ExtIPs -like $searchterm })
+			If ($DetectedSite) {
+				$DetectedCode = $DetectedSite.Code
+				$DetectedTitle = $DetectedSite.Site
+
+				If ($Auto) {
+					#Silently install automatically
+					Write-Host Automatic mode, hold on!
+					$SelectedSite = $DetectedSite
+					$Silent = $True
+					InstallAgent
+				} Else {
+					#Prompt for auto install
+					$message = "Based on your external IP address of $DetectedIP, you are at $DetectedTitle"
+					$question = 'Do you want to proceed installing the agent for this site?'
+					$choices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
+					$choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
+					$choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
+					$decision = $Host.UI.PromptForChoice($message, $question, $choices, 0)
+					If ($decision -eq 0) {
+						Write-Host "Selection Confirmed: $DetectedTitle"
+						$SelectedSite = $DetectedSite
+						InstallAgent
+						BREAK
+					} Else {
+						Write-Host Generating a site selection menu
+						Create-Menu
+					}
+					#Pause
+				}
+			} Else {
+				Write-Host No site detected based on your external IP address
+				Create-Menu
+			}
+		}
+	}
+}
+
 Function Install-WinGet {
 <#
 	.SYNOPSIS
