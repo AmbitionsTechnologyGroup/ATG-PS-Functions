@@ -904,6 +904,8 @@ param(
 
 
 		Write-Host "Umbrella DNS Installer"
+		$PreDNS = (Get-NetIPConfiguration | Where {$_.Netprofile.Ipv4Connectivity -Like "*Internet*"}).DnsServer.ServerAddresses
+		Write-Host "DNS Servers: $PreDNS"
 		#Dowload config file index
 		$SiteConfigs = @()
 		$SiteConfigs = (Invoke-WebRequest -uri "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Umbrella/UDNS-Client-Mapping.csv" -UseBasicParsing).Content | convertfrom-csv -Delimiter ','
@@ -926,6 +928,9 @@ param(
 			Write-Host Installing the agent for $SelectedSite.Site
 			Set-Location -Path $msiFolder
 			$Command | Invoke-Expression | Wait-Process
+			Start-Sleep -Seconds 30
+			$PostDNS = (Get-NetIPConfiguration | Where {$_.Netprofile.Ipv4Connectivity -Like "*Internet*"}).DnsServer.ServerAddresses
+			Write-Host "DNS Servers: $PostDNS"
 			BREAK
 		} #End of InstallAgent
 
