@@ -1,4 +1,4 @@
-Client,Site,Command
+Code,Site,Command
 AAIHB,Albuquerque Area Indian Health Board,msiexec /i Setup.msi /qn ORG_ID=655961 ORG_FINGERPRINT=83a71277d674de2b49597d0c2d84d9ee USER_ID=8462485 HIDE_UI=1 HIDE_ARP=1
 ACG,Ambitions Consulting Group,msiexec /i Setup.msi /qn ORG_ID=41929 ORG_FINGERPRINT=b294533222515b073e4f4cb97561fc04 USER_ID=8462485 HIDE_UI=1 HIDE_ARP=1
 ALF,Archibeque Law Firm,msiexec /i Setup.msi /qn ORG_ID=1306163 ORG_FINGERPRINT=ca385c829ff87330a1428ed76d045021 USER_ID=8462485 HIDE_UI=1 HIDE_ARP=1
