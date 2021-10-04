@@ -3,7 +3,7 @@ AAIHB,Albuquerque Area Indian Health Board,https://prod.setup.itsupport247.net/w
 ACG,Ambitions Consulting Group,https://prod.setup.itsupport247.net/windows/DPMA/32/atg_ACG_DPMA_ITSPlatform_TKN3882d625-3bbf-4ad5-9ca0-d226ec86ad7d/MSI/setup,216.31.88.98,
 ALF,Archibeque Law Firm,https://prod.setup.itsupport247.net/windows/DPMA/32/atg_ALF_DPMA_ITSPlatform_TKN78f11b0c-8c7f-4ed5-99c8-dbce48b1378b/MSI/setup,"65.153.84.154       ",
 BFL,Batley Family Law,https://prod.setup.itsupport247.net/windows/DPMA/32/atg_LGTB_DPMA_ITSPlatform_TKN07ed6b32-6885-483c-951f-f30883a4c330/MSI/setup,"96.92.77.61 100.97.97.176      ",
-BH,Beyond Health,https://prod.setup.itsupport247.net/windows/DPMA/32/atg_DCHC_DPMA_ITSPlatform_TKN7fe1bdb1-e6a8-4140-9e8a-4bc0198fd89a/MSI/setup,"73.242.203.229",
+BH,Beyond Health,https://prod.setup.itsupport247.net/windows/DPMA/32/atg_DCHC_DPMA_ITSPlatform_TKN7fe1bdb1-e6a8-4140-9e8a-4bc0198fd89a/MSI/setup,73.242.203.229,
 CASC,Century Automotive Service Corporation,https://prod.setup.itsupport247.net/windows/DPMA/32/atg_CASC_DPMA_ITSPlatform_TKNfbb61ae6-37e8-4fd1-9cdf-fd7233bb07de/MSI/setup,65.124.83.210 96.88.1.161,http://sus002003-104.int.mapfre.net:8081/repository/chocolatey-group/
 EES,Enterprise Electrical Services,https://prod.setup.itsupport247.net/windows/DPMA/32/atg_EES_DPMA_ITSPlatform_TKN4ce95a9a-7561-42bd-8676-e32d2fb7b0f0/MSI/setup,"23.31.118.53       ",
 HW,HopeWorks,https://prod.setup.itsupport247.net/windows/DPMA/32/atg_SMHC_DPMA_ITSPlatform_TKN152bc0c1-9a4a-414c-b2eb-f211d7740d9f/MSI/setup,66.162.154.130 209.12.160.110 50.213.129.33,
@@ -21,7 +21,7 @@ PHM,Peifer Hanson Mullins & Baker P.A.,https://prod.setup.itsupport247.net/windo
 PE,Perikin Enterprises LLC,https://prod.setup.itsupport247.net/windows/DPMA/32/atg_PE_DPMA_ITSPlatform_TKN404d4cc9-8b67-4a4e-bb99-6dec305f0027/MSI/setup,73.26.5.188 174.197.73.106 72.173.66.15 199.59.173.107 72.183.242.157 174.244.18.33 4.53.107.58,
 QLHC,Questa Lumber & Hardware Co.,https://prod.setup.itsupport247.net/windows/DPMA/32/atg_QL_DPMA_ITSPlatform_TKNaa4a325d-588a-4cd0-974e-d8f4d56c5125/MSI/setup,0.0.0.0,
 RRA,Robles Rael and Anaya P.C.,https://prod.setup.itsupport247.net/windows/DPMA/32/atg_RRA_DPMA_ITSPlatform_TKNc1bbe745-d3c0-4df8-a744-7ae298fe76ae/MSI/setup,"216.31.88.46 96.92.65.217 70.88.163.21     ",
-SFSW," Santa Fe Solid Waste",https://prod.setup.itsupport247.net/windows/DPMA/32/atg_SFSWMA_DPMA_ITSPlatform_TKN44223a69-5515-495e-a2a1-053958987920/MSI/setup,67.129.157.66,
+SFSW,Santa Fe Solid Waste,https://prod.setup.itsupport247.net/windows/DPMA/32/atg_SFSWMA_DPMA_ITSPlatform_TKN44223a69-5515-495e-a2a1-053958987920/MSI/setup,67.129.157.66,
 SSJ,Salazar Sullivan & Jasionowski,https://prod.setup.itsupport247.net/windows/DPMA/32/atg_ssj_DPMA_ITSPlatform_TKNfefcf7c1-9149-4266-a623-f4c8b9aad19b/MSI/setup,"70.88.160.73 216.31.116.42      ",
 TCNM,Torrance County,https://prod.setup.itsupport247.net/windows/DPMA/32/atg_TCNTY_DPMA_ITSPlatform_TKNba0a90ac-b021-4c2d-b2b4-0aed709776cf/MSI/setup,"216.243.102.251 74.50.145.250      ",
 TLF,The Turner Law Firm,https://prod.setup.itsupport247.net/windows/DPMA/32/atg_TTLF_DPMA_ITSPlatform_TKNbe1254a8-7f01-4903-8499-5222236dfe07/MSI/setup,"216.31.88.182       ",
