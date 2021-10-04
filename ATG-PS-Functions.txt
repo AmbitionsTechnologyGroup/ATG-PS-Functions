@@ -750,7 +750,7 @@ Function Install-NiniteApps {
 Function Install-NinitePro {
 	Write-Host "Downloading Ninite Installer"
 	New-Item -ItemType Directory -Force -Path C:\Ambitions
-	(New-Object System.Net.WebClient).DownloadFile('https://download.ambitionsgroup.com/NinitePro.exe', 'C:\Ambitions\NinitePro.exe')
+	(New-Object System.Net.WebClient).DownloadFile('https://download.ambitionsgroup.com/Software/NinitePro.exe', 'C:\Ambitions\NinitePro.exe')
 	Write-Host "Schedule Ninite Updates"
 	$Trigger = New-ScheduledTaskTrigger -AtStartup
 	$User = "NT AUTHORITY\SYSTEM"
