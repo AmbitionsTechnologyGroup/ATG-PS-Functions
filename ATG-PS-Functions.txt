@@ -29,15 +29,15 @@ Function Add-ChromeShortcut{
 		$Shortcut.Save()
 	}
 	<#
-    .SYNOPSIS
-        Creates a Google Chrome Shortcut on the "All Users" Desktop.
+	.SYNOPSIS
+		Creates a Google Chrome Shortcut on the "All Users" Desktop.
 		If Google Chrome is not found, prompts to install the program using ATG-PS scripts + Chocolately.
-    .PARAMETER Label
-        The file name of the shortcut; ".lnk" is automatically appended.
-    .PARAMETER Url
-        The full URL that the shortcut intends to open: "https://www.google.com/"
-    .EXAMPLE
-        Add-ChromeShortcut -Label "Github ATG-PS" -Url "https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/"
+	.PARAMETER Label
+		The file name of the shortcut; ".lnk" is automatically appended.
+	.PARAMETER Url
+		The full URL that the shortcut intends to open: "https://www.google.com/"
+	.EXAMPLE
+		Add-ChromeShortcut -Label "Github ATG-PS" -Url "https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/"
 	#>
 }
 
@@ -90,14 +90,14 @@ Function Add-IEShortcut {
 	$Shortcut.Save()
 
 	<#
-    .SYNOPSIS
-        Creates an Internet Explorer Shortcut on the "All Users" Desktop.
-    .PARAMETER Label
-        The file name of the shortcut; ".lnk" is automatically appended.
-    .PARAMETER Url
-        The full URL that the shortcut intends to open: "https://www.google.com/"
-    .EXAMPLE
-        Add-ChromeShortcut -Label "Github ATG-PS" -Url "https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/"
+	.SYNOPSIS
+		Creates an Internet Explorer Shortcut on the "All Users" Desktop.
+	.PARAMETER Label
+		The file name of the shortcut; ".lnk" is automatically appended.
+	.PARAMETER Url
+		The full URL that the shortcut intends to open: "https://www.google.com/"
+	.EXAMPLE
+		Add-ChromeShortcut -Label "Github ATG-PS" -Url "https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/"
 	#>
 
 }
@@ -463,7 +463,7 @@ Function Expand-Terminal {
 }
 
 Function Export-LDAPSCertificate {
-    <#
+	<#
 	.SYNOPSIS
 		If the server responds to requests on the LDAPS port 636, the function will attempt to isolate the Certificate in use and export it to C:\Ambitions\LDAPScerExport.cer
 	#>
@@ -480,7 +480,7 @@ Function Export-LDAPSCertificate {
 }
 
 Function Get-ADUserPassExpirations {
-    <#
+	<#
 	.SYNOPSIS
 		Retrieves a list of (enabled) Active Directory Users and shows their password expiration times.
 	#>
@@ -534,7 +534,7 @@ Function Get-ATGPS {
 Function Get-DiskUsage($path=".") {
   Get-ChildItem $path | ForEach-Object { $file = $_ ;
   Get-ChildItem -r $_.FullName | Measure-Object -property length -sum |
-    Select-Object @{Name="Name";Expression={$file}},Sum}
+	Select-Object @{Name="Name";Expression={$file}},Sum}
 }
 Set-Alias -Name du -Value Get-DiskUsage
 
@@ -898,20 +898,38 @@ param(
 	[string]$Code #Shortcode of the site you want to install, list available at https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/blob/master/Scripts/ITS247Agent/SiteAgentURLs.csv
 )
 
+	Write-Host "Checking Status Indicator"
 	$IndicKey = Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator | Select-Object -ExpandProperty UseGlobalDNS
 	If ($IndicKey -ne 1) {
 		Write-Host "Setting Connectivity Indicator Reg Key"
 		New-Item "HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator" -force -ea SilentlyContinue
 		New-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' -Name 'UseGlobalDNS' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue;
+	} Else {
+		Write-Host "The Status Indicator is already set."
 	}
 
+	Write-Host "Checking Root Certificate"
+	If (!(Test-Path $RootCertPath)) {
+		Write-Host "Downloading the Umbrella Root Cert"
+		$url = 'https://d36u8deuxga9bo.cloudfront.net/certificates/Cisco_Umbrella_Root_CA.cer'
+		$certFolder = $ENV:SystemDrive + '\Ambitions\UmbrellaClient\'
+		$certFilePath = $certFolder + 'Cisco_Umbrella_Root_CA.cer'
+		$null = (New-Item -ItemType Directory -Force -Path $certFilePath)
+		(New-Object System.Net.WebClient).DownloadFile($url, $certFilePath)
+		Write-Host "Installing the Umbrella Root Cert"
+		#& certutil -addstore -enterprise -f "Root" $certFilePath
+		Import-Certificate -FilePath $certFilePath -CertStoreLocation Cert:\LocalMachine\Root\
+		If(Test-Path "C:\Program Files\Mozilla Firefox\defaults\pref\") {Write-Host "Configuring Firefox to use the Cert";Set-Content "C:\Program Files\Mozilla Firefox\defaults\pref\firefox-windows-truststore.js" "pref('security.enterprise_roots.enabled', true);"}
+	} Else {
+		Write-Host "The Umbrella Root Cert is already installed."
+	}
+
+	Write-Host "Checking Umbrella DNS client."
 	$IsInstalled = Get-Service -Name Umbrella_RC -ErrorAction SilentlyContinue
 	If ($IsInstalled) {
 		Write-Host "Umbrella DNS client is already installed. Exiting."
 	} Else {
-
-
-		Write-Host "Umbrella DNS Installer"
+		Write-Host "Installing Umbrella DNS client."
 		$PreDNS = (Get-NetIPConfiguration | Where {$_.Netprofile.Ipv4Connectivity -Like "*Internet*"}).DnsServer.ServerAddresses
 		Write-Host "DNS Servers: $PreDNS"
 		#Dowload config file index
@@ -931,8 +949,8 @@ param(
 			If (Test-Path $msiFilePath) { Remove-Item $msiFilePath}
 			(New-Object System.Net.WebClient).DownloadFile($MSIUrl, $msiFilePath)
 			Get-Item $msiFilePath | Unblock-File
-			Write-Host Disabling Windows Defender Real Time Scanning
-			Set-MpPreference -DisableRealtimeMonitoring $True -ErrorAction SilentlyContinue
+			#Write-Host Disabling Windows Defender Real Time Scanning
+			#Set-MpPreference -DisableRealtimeMonitoring $True -ErrorAction SilentlyContinue
 			Write-Host Installing the agent for $SelectedSite.Site
 			Set-Location -Path $msiFolder
 			$Command | Invoke-Expression | Wait-Process
@@ -1287,14 +1305,14 @@ Function Remove-PathForcefully {
 		Write-Warning "$Path was not found."
 	}
 	<#
-    .SYNOPSIS
+	.SYNOPSIS
 		Deletes all files and folders given immediately if they are not locked.
 		If locked files are found, queues them up to be deleted upon next reboot.
 		Recurse is assumed.
-    .PARAMETER Path
-        The file system path of the folder or file to be deleted.
-    .EXAMPLE
-        Remove-PathForcefully -Path "C:\Temp" # Deletes the folder C:\Temp and all files or folders within, queuing up any locked files for deletion on next reboot.
+	.PARAMETER Path
+		The file system path of the folder or file to be deleted.
+	.EXAMPLE
+		Remove-PathForcefully -Path "C:\Temp" # Deletes the folder C:\Temp and all files or folders within, queuing up any locked files for deletion on next reboot.
 	#>
 }
 
@@ -1473,13 +1491,13 @@ Function Update-DattoAgent {
 
 Function Update-DellPackages {
 	<#
-    .SYNOPSIS
-        Uses the CLI version of Dell Command | Update to install any missing drivers/firmwares/Bios and update existing ones.
+	.SYNOPSIS
+		Uses the CLI version of Dell Command | Update to install any missing drivers/firmwares/Bios and update existing ones.
 		There are no parameters to use.
-    .LINK
+	.LINK
 		https://www.dell.com/support/kbdoc/en-us/000177325/dell-command-update
-    .EXAMPLE
-        Update-DellPackages
+	.EXAMPLE
+		Update-DellPackages
 	#>
 
 	Write-Host "Dell Updates"
@@ -1679,16 +1697,16 @@ Function Update-NiniteApps {
 	.SYNOPSIS
 		Uses NinitePro to immediately update all applications it is cabable of updating. The log will be at C:\Ambitions\NiniteReport.txt
 	#>
-    If (-not (Test-Path 'C:\Ambitions\NinitePro.exe')) {Install-NinitePro}
-    Write-Host "Install Ninite Apps, waiting for install to complete and logging the results."
-        $NiniteCache = "\\adsaltoxl\data\Software\Ninite\NiniteDownloads"
-        If(test-path $NiniteCache){
-            & C:\Ambitions\NinitePro.exe /updateonly /cachepath $NiniteCache /silent 'C:\Ambitions\NiniteReport.txt' | Wait-Process
-        } ELSE {
-            & C:\Ambitions\NinitePro.exe /updateonly /nocache /silent 'C:\Ambitions\NiniteReport.txt' | Wait-Process
-        }
+	If (-not (Test-Path 'C:\Ambitions\NinitePro.exe')) {Install-NinitePro}
+	Write-Host "Install Ninite Apps, waiting for install to complete and logging the results."
+		$NiniteCache = "\\adsaltoxl\data\Software\Ninite\NiniteDownloads"
+		If(test-path $NiniteCache){
+			& C:\Ambitions\NinitePro.exe /updateonly /cachepath $NiniteCache /silent 'C:\Ambitions\NiniteReport.txt' | Wait-Process
+		} ELSE {
+			& C:\Ambitions\NinitePro.exe /updateonly /nocache /silent 'C:\Ambitions\NiniteReport.txt' | Wait-Process
+		}
 	Get-Content 'C:\Ambitions\NiniteReport.txt'
-    Write-Host "End of Install Ninite Apps"
+	Write-Host "End of Install Ninite Apps"
 }
 
 Function Update-O365Apps {
