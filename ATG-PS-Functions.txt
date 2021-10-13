@@ -899,7 +899,7 @@ param(
 )
 
 	Write-Host "Checking Status Indicator"
-	$IndicKey = Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator | Select-Object -ExpandProperty UseGlobalDNS
+	$IndicKey = Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator | Select-Object -ExpandProperty UseGlobalDNS -ea SilentlyContinue
 	If ($IndicKey -ne 1) {
 		Write-Host "Setting Connectivity Indicator Reg Key"
 		New-Item "HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator" -force -ea SilentlyContinue
@@ -909,7 +909,7 @@ param(
 	}
 
 	Write-Host "Checking Root Certificate"
-	If (!(Test-Path $RootCertPath)) {
+	If (!(Test-Path $RootCertPath -ea SilentlyContinue)) {
 		Write-Host "Downloading the Umbrella Root Cert"
 		$url = 'https://d36u8deuxga9bo.cloudfront.net/certificates/Cisco_Umbrella_Root_CA.cer'
 		$certFolder = $ENV:SystemDrive + '\Ambitions\UmbrellaClient\'
