@@ -905,7 +905,7 @@ param(
 		New-Item "HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator" -force -ea SilentlyContinue
 		New-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' -Name 'UseGlobalDNS' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue;
 	} Else {
-		Write-Host "The Status Indicator is already set."
+		Write-Host -ForegroundColor Green "The Status Indicator is already set."
 	}
 
 	Write-Host "Checking Root Certificate"
@@ -915,20 +915,21 @@ param(
 		$url = 'https://download.ambitionsgroup.com/Software/Cisco_Umbrella_Root_CA.cer'
 		$certFolder = $ENV:SystemDrive + '\Ambitions\UmbrellaClient\'
 		$certFilePath = $certFolder + 'Cisco_Umbrella_Root_CA.cer'
-		$null = (New-Item -ItemType Directory -Force -Path $certFilePath)
+		Remove-Item $certFilePath -ea SilentlyContinue
+		$null = (New-Item -ItemType Directory -Force -Path $certFolder)
 		(New-Object System.Net.WebClient).DownloadFile($url, $certFilePath)
 		Write-Host "Installing the Umbrella Root Cert"
 		#& certutil -addstore -enterprise -f "Root" $certFilePath
 		Import-Certificate -FilePath $certFilePath -CertStoreLocation Cert:\LocalMachine\Root\
 		If(Test-Path "C:\Program Files\Mozilla Firefox\defaults\pref\") {Write-Host "Configuring Firefox to use the Cert";Set-Content "C:\Program Files\Mozilla Firefox\defaults\pref\firefox-windows-truststore.js" "pref('security.enterprise_roots.enabled', true);"}
 	} Else {
-		Write-Host "The Umbrella Root Cert is already installed."
+		Write-Host -ForegroundColor Green "The Umbrella Root Cert is already installed."
 	}
 
 	Write-Host "Checking Umbrella DNS client."
 	$IsInstalled = Get-Service -Name Umbrella_RC -ErrorAction SilentlyContinue
 	If ($IsInstalled) {
-		Write-Host "Umbrella DNS client is already installed. Exiting."
+		Write-Host -ForegroundColor Green "Umbrella DNS client is already installed. Exiting."
 	} Else {
 		Write-Host "Installing Umbrella DNS client."
 		$PreDNS = (Get-NetIPConfiguration | Where {$_.Netprofile.Ipv4Connectivity -Like "*Internet*"}).DnsServer.ServerAddresses
