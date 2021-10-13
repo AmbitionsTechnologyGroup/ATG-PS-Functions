@@ -912,7 +912,7 @@ param(
 	$RootCertPath = "Cert:\LocalMachine\Root\C5091132E9ADF8AD3E33932AE60A5C8FA939E824" #Thumbprint of the Cert set to expire in 2036
 	If (!(Test-Path $RootCertPath -ea SilentlyContinue)) {
 		Write-Host "Downloading the Umbrella Root Cert"
-		$url = 'https://d36u8deuxga9bo.cloudfront.net/certificates/Cisco_Umbrella_Root_CA.cer'
+		$url = 'https://download.ambitionsgroup.com/Software/Cisco_Umbrella_Root_CA.cer'
 		$certFolder = $ENV:SystemDrive + '\Ambitions\UmbrellaClient\'
 		$certFilePath = $certFolder + 'Cisco_Umbrella_Root_CA.cer'
 		$null = (New-Item -ItemType Directory -Force -Path $certFilePath)
