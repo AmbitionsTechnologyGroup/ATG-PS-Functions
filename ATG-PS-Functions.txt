@@ -403,33 +403,33 @@ Function Convert-ToSharedMailbox {
 		If(-not $NoAccess) {
 			Do {
 				If ($GiveAccessPermission) {
-						$Permission = $GiveAccessPermission
-					} Else {
-						$Response = Read-Host -Prompt "Do you want to add any permissions to the shared mailbox? (Y/n)"
-						If (-not $Response) {$Response = "y"}
-						If ($Response -like 'y*') {
-						$Rights = "FullAccess","ReadPermission","QUIT"
-						$Rights | Select-Object @{N='Index'; E={$Rights.IndexOf($_)}}, @{N='Permission'; E={$_}} | Out-Host -Paging -ErrorAction SilentlyContinue
-						$Permission = Read-Host "Please enter the number of the permission you wish to assign."
-						$Permission = $Rights[$Permission]
+					$Permission = $GiveAccessPermission
+				} Else {
+					$Response = Read-Host -Prompt "Do you want to add any permissions to the shared mailbox? (Y/n)"
+					If (-not $Response) {$Response = "y"}
+					If ($Response -like 'y*') {
+					$Rights = "FullAccess","ReadPermission","QUIT"
+					$Rights | Select-Object @{N='Index'; E={$Rights.IndexOf($_)}}, @{N='Permission'; E={$_}} | Out-Host -Paging -ErrorAction SilentlyContinue
+					$Permission = Read-Host "Please enter the number of the permission you wish to assign."
+					$Permission = $Rights[$Permission]
 					}
-					If ($Permission -ne "QUIT") {
-						If ($GiveAccessTo) {
-							$AddUser = $GiveAccessTo
-						} Else {
-							$AddUser = Read-Host "Alias of the user to grant access"
-						}
-						If (-not $(Get-EXOMailbox -Identity $AddUser)) {
-							Do {
-								$AddUser = Read-Host "That alias didn't work. Enter another one or type QUIT to stop:`n"
-								If ($AddUser -match "QUIT") {Break}
-							} While (-not $(Get-EXOMailbox -Identity $AddUser))
-						}
-						Write-Host "Giving $AddUser $Permission to the mailbox."
-						$NewSharedMailbox | Add-MailboxPermission -User $AddUser -AccessRights $Permission -InheritanceType All -Verbose
-						$NewSharedMailbox | Get-MailboxPermission | FT
-					} Else { Break }
 				}
+				If ($Permission -ne "QUIT") {
+					If ($GiveAccessTo) {
+						$AddUser = $GiveAccessTo
+					} Else {
+						$AddUser = Read-Host "Alias of the user to grant access"
+					}
+					If (-not $(Get-EXOMailbox -Identity $AddUser)) {
+						Do {
+							$AddUser = Read-Host "That alias didn't work. Enter another one or type QUIT to stop:`n"
+							If ($AddUser -match "QUIT") {Break}
+						} While (-not $(Get-EXOMailbox -Identity $AddUser))
+					}
+					Write-Host "Giving $AddUser $Permission to the mailbox."
+					$NewSharedMailbox | Add-MailboxPermission -User $AddUser -AccessRights $Permission -InheritanceType All -Verbose
+					$NewSharedMailbox | Get-MailboxPermission | FT
+				} Else { Break }
 			} While ($Response -notlike 'n*')
 		}
 
@@ -452,11 +452,11 @@ Function Convert-ToSharedMailbox {
 				}
 			}
 			$ReplyTo = Get-EXOMailbox -Identity $ReplyTo
-					$ReplyToName = $ReplyTo.DisplayName
-					$ReplyToEmail = $ReplyTo.PrimarySmtpAddress
-					$NewSharedMailbox | Set-MailboxAutoReplyConfiguration –InternalMessage "$Name is no longer with the organization. Please direct communications to $ReplyToName at $ReplyToEmail" –ExternalMessage "$Name is no longer with the organization. Please direct communications to $ReplyToName at $ReplyToEmail" -Verbose
-					$NewSharedMailbox | Set-MailboxAutoReplyConfiguration -AutoReplyState enabled
-					$NewSharedMailbox | Get-MailboxAutoReplyConfiguration | Select Identity, AutoReplyState, ExternalMessage | FL
+			$ReplyToName = $ReplyTo.DisplayName
+			$ReplyToEmail = $ReplyTo.PrimarySmtpAddress
+			$NewSharedMailbox | Set-MailboxAutoReplyConfiguration –InternalMessage "$Name is no longer with the organization. Please direct communications to $ReplyToName at $ReplyToEmail" –ExternalMessage "$Name is no longer with the organization. Please direct communications to $ReplyToName at $ReplyToEmail" -Verbose
+			$NewSharedMailbox | Set-MailboxAutoReplyConfiguration -AutoReplyState enabled
+			$NewSharedMailbox | Get-MailboxAutoReplyConfiguration | Select Identity, AutoReplyState, ExternalMessage | FL
 		}
 	}
 <#
