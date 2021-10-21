@@ -671,6 +671,79 @@ Function Get-ATGPS {
 	}
 }
 
+Function Get-BitLockerKey {
+	param
+		(
+			[Parameter(Mandatory=$false)]
+			[string]$Computer
+		)
+	#$Computer = "OPTIPLEX7040-20"
+	$Computers = Get-ADComputer -Filter 'ObjectClass -eq "computer"'
+	$AllComputers = @()
+	#$strToReport = new-object psobject
+	$Computers | Foreach-object {
+		#$Computer = $_.name
+		#Check if the Computer Object exists
+		$Computer_Object = Get-ADComputer -Filter {cn -eq $_.name} -Property msTPM-OwnerInformation, msTPM-TpmInformationForComputer
+		If ($Computer_Object -eq $null){
+			Write-Host "Error..."
+		}
+		#Check if the computer object has had a BitLocker Recovery Password
+		$Bitlocker_Object = Get-ADObject -Filter {objectclass -eq 'msFVE-RecoveryInformation'} -SearchBase $Computer_Object.DistinguishedName -Properties 'msFVE-RecoveryPassword' | Select-Object -Last 1
+		If ($Bitlocker_Object.'msFVE-RecoveryPassword'){
+			$BitLocker_Key = $BitLocker_Object.'msFVE-RecoveryPassword'
+
+			#$strToReport = $_.name,$BitLocker_Key
+			$strToReport = [PSCustomObject]@{
+				Computer = $_.name
+				BitLockerKey = $BitLocker_Key
+			}
+			$AllComputers += $strToReport
+			#Display Output
+			#Write-Host $strToReport
+
+			#Save to Report
+			#$strToReport | Out-File C:\temp\Report.txt -append
+		} Else {
+			$BitLocker_Key = "None"
+			#$strToReport = $_.name,$BitLocker_Key
+			$strToReport = [PSCustomObject]@{
+				Computer = $_.name
+				BitLockerKey = $BitLocker_Key
+			}
+			$AllComputers += $strToReport
+			#Write-Host $strToReport
+		}
+	}
+	If ($Computer) {
+		If ($AllComputers.Computer -NotContains $Computer) {
+			Write-Host "The computer specified was not found."
+		} Else {
+			$ComputerInfo = new-object psobject
+			$ComputerInfo = $AllComputers | Where-Object -Property Computer -eq -Value $Computer
+			$ComputerInfo | Format-List
+			If ($ComputerInfo.BitlockerKey -eq "None") {
+				Write-Host "There is no bitlocker key for this compuer."
+			} Else {
+
+				Write-Host "The bitlocker key has been copied to the clipboard.`n"
+				$ComputerInfo.BitlockerKey | Clip
+			}
+		}
+	} Else {
+		$AllComputers
+	}
+
+<#
+	.SYNOPSIS
+		Takes a deleted user, and converts their email to a shared mailbox. Can add permissions and an autoreply.
+	.PARAMETER Computer
+		[Optional] Specify the name of the computer to retrieve the BitLockerKey for. Will copy the key to the clipboard if specified.
+	.EXAMPLE
+		Get-BitLockerKey -Computer "ACG-Desktop23"
+	#>
+}
+
 Function Get-DiskUsage($path=".") {
   Get-ChildItem $path | ForEach-Object { $file = $_ ;
   Get-ChildItem -r $_.FullName | Measure-Object -property length -sum |
