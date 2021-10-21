@@ -2046,10 +2046,14 @@ Function Update-PowershellModules {
 	$Modules = Get-Module
 	$ModulesToInstall = "PSReadline","PowerShellGet"
 	$ModulesToInstall | ForEach-Object {
+		Remove-Module $_ -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+		Uninstall-Module $_ -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 		If ($Modules.Name -NotContains $_) {
 			Write-Host "$_ not found, installing."
 			Install-Module -Name $_ -Scope AllUsers -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+			Import-Module -Name $_ -Scope AllUsers -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 		}
+
 	}
 	Try {
 		Update-Module -Scope AllUsers -Force -WarningAction SilentlyContinue
