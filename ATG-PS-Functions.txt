@@ -1422,7 +1422,7 @@ Function Optimize-Powershell {
 	$Null = New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable09' -Value 16711680 -PropertyType DWord -Force -ea SilentlyContinue;
 	$Null = New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable10' -Value 65280 -PropertyType DWord -Force -ea SilentlyContinue;
 	$Null = New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable11' -Value 16776960 -PropertyType DWord -Force -ea SilentlyContinue;
-	$Null = New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable12' -Value 255 -PropertyType DWord -Force -ea SilentlyContinue;
+	$Null = New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable12' -Value 25 -PropertyType DWord -Force -ea SilentlyContinue;
 	$Null = New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable13' -Value 16711935 -PropertyType DWord -Force -ea SilentlyContinue;
 	$Null = New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable14' -Value 65535 -PropertyType DWord -Force -ea SilentlyContinue;
 	$Null = New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable15' -Value 16777215 -PropertyType DWord -Force -ea SilentlyContinue;
@@ -1449,8 +1449,25 @@ Function Optimize-Powershell {
 	$Null = New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'InterceptCopyPaste' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue;
 	$Null = New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'TerminalScrolling' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue;
 	$Null = New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'DefaultForeground' -Value -1 -PropertyType DWord -Force -ea SilentlyContinue;
-	$Null = New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'DefaultBackground' -Value -1 -PropertyType DWord -Force -ea SilentlyContinue;
-	Start-Process C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -ArgumentList "-NoExit -Mta -WindowStyle Maximized -Command iwr tinyurl.com/get-atgps -useb  | iex;cls;Write-Host '`nWelcome Ambitions TechGod, I await your command...`n`n'"
+	$Commands = @()
+	$Commands = {
+		function prompt {
+			$date = Get-Date
+			$time = $date.GetDateTimeFormats()[88]
+			$curdir = $ExecutionContext.SessionState.Path.CurrentLocation #.Path.Split('\')[-1]
+
+			if($curdir.Length -eq 0) {$curdir = $ExecutionContext.SessionState.Drive.Current.Name+':\'}
+
+			Write-Host ''$env:USERNAME'@'$env:COMPUTERNAME' |' -BackgroundColor Magenta -ForegroundColor White
+			Write-Host ' DIR:'$curdir' |' -BackgroundColor Magenta -ForegroundColor White
+			Write-Host ''$time' ' -BackgroundColor Magenta -ForegroundColor White
+			'[Command]: '
+		}
+		iwr tinyurl.com/get-atgps -useb  | iex
+		cls
+		Write-Host "`n`nWelcome Ambitions TechGod, I await your command...`n`n"
+	}
+	Start-Process C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -ArgumentList "-NoExit -Mta -WindowStyle Maximized -Command $Commands"
 }
 
 Function Remove-PathForcefully {
