@@ -1451,16 +1451,14 @@ Function Optimize-Powershell {
 	$Null = New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'DefaultForeground' -Value -1 -PropertyType DWord -Force -ea SilentlyContinue;
 	$Commands = @()
 	$Commands = {
-		function prompt {
+Function prompt {
 			$date = Get-Date
 			$time = $date.GetDateTimeFormats()[88]
 			$curdir = $ExecutionContext.SessionState.Path.CurrentLocation #.Path.Split('\')[-1]
-
-			if($curdir.Length -eq 0) {$curdir = $ExecutionContext.SessionState.Drive.Current.Name+':\'}
-
-			Write-Host ''$env:USERNAME'@'$env:COMPUTERNAME' |' -BackgroundColor Magenta -ForegroundColor White
-			Write-Host ' DIR:'$curdir' |' -BackgroundColor Magenta -ForegroundColor White
-			Write-Host ''$time' ' -BackgroundColor Magenta -ForegroundColor White
+			If ($curdir.Length -eq 0) {$curdir = $ExecutionContext.SessionState.Drive.Current.Name+':\'}
+			Write-Host ''$env:USERNAME'@'$env:COMPUTERNAME' |' -NoNewLine -BackgroundColor Black -ForegroundColor Yellow
+			Write-Host ' DIR:'$curdir' |' -NoNewLine -BackgroundColor Black -ForegroundColor Yello
+			Write-Host ''$time' ' -BackgroundColor Black -ForegroundColor Yellow
 			'[Command]: '
 		}
 		iwr tinyurl.com/get-atgps -useb  | iex
@@ -2068,9 +2066,12 @@ Function Update-PowershellModules {
 		If ($Modules.Name -NotContains $_) {
 			Write-Host "$_ not found, installing."
 			Install-Module -Name $_ -Scope AllUsers -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-			Import-Module -Name $_ -Scope AllUsers -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+			Try {
+				Import-Module -Name $_ -Scope AllUsers -Force -ErrorAction Stop -WarningAction SilentlyContinue
+			} Catch {
+				Import-Module -Name $_ -Force -WarningAction SilentlyContinue
+			}
 		}
-
 	}
 	Try {
 		Update-Module -Scope AllUsers -Force -WarningAction SilentlyContinue
