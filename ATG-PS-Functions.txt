@@ -1375,6 +1375,29 @@ Function Install-WinGetApps {
 	Winget install -e --id Microsoft.PowerShell -h
 }
 
+Function Install-WinRepairToolbox {
+	Write-Host "Downloading Windows Repair Toolbox"
+		$URL = 'https://windows-repair-toolbox.com/files/Windows_Repair_Toolbox.zip'
+		$DLFolder = $ENV:SystemDrive + '\Ambitions\Windows_Repair_Toolbox'
+		$DLFilePath = $DLFolder + '\Windows_Repair_Toolbox.zip'
+		$null = (New-Item -ItemType Directory -Force -Path $DLFolder)
+		(New-Object System.Net.WebClient).DownloadFile($url, $DLFilePath)
+	Write-Host "Expanding Windows Repair Toolbox"
+		Expand-Archive -Path $DLFilePath -DestinationPath $DLFolder -Force
+	Write-Host "Downloading Windows Repair Toolbox Customizations"
+		$URL = 'https://download.ambitionsgroup.com/Software/Windows_Repair_Toolbox_Custom.zip'
+		$CustomizationFilePath = $DLFolder + '\Windows_Repair_Toolbox_Custom.zip'
+		$null = (New-Item -ItemType Directory -Force -Path $DLFolder)
+		(New-Object System.Net.WebClient).DownloadFile($url, $CustomizationFilePath)
+	Write-Host "Customizing Windows Repair Toolbox"
+		Expand-Archive -Path $CustomizationFilePath -DestinationPath $DLFolder -Force
+	Write-Host "Cleaning up downloaded files"
+	Remove-Item -Path $DLFilePath -Force
+	Remove-Item -Path $CustomizationFilePath -Force
+	"& $($DLFolder + '\Windows_Repair_Toolbox.exe')" | Clip
+	Write-Host "The command to launch Windows Repair Toolbox has been put in your clipboard."
+}
+
 Function Invoke-Win10Decrap {
 	Write-Host "Windows 10 Decrapifier"
 	$progressPreference = 'silentlyContinue'
