@@ -230,24 +230,26 @@ Function Connect-O365Exchange {
 		and you'll need to wait for the sessions to expire.
 		To disconnect the remote PowerShell session, run the following command.
 
-		Disconnect-ExchangeOnline
+		Disconnect-O365Exchange
 "@
-	} Else {
-		Write-Host -ForegroundColor Green -BackgroundColor DarkRed "Warning! You are using a CORE edition of Powershell. MFA will be unavailable."
-		$UserCredential = Get-Credential
-		$Session = New-PSSession -ConfigurationName Microsoft.Exchange -ConnectionUri https://outlook.office365.com/powershell-liveid/ -Credential $UserCredential -Authentication Basic -AllowRedirection
-		Import-PSSession $Session
 
-		Write-Host -ForegroundColor Green -BackgroundColor DarkRed @"
+	If ($PSVersionTable.PSEdition -like "Desktop") {
+		Connect-ExchangeOnline -ShowBanner:$false
+
+	} Else {
+		Write-Host -ForegroundColor Green -BackgroundColor DarkRed "Warning! You are using a CORE edition of Powershell. You will need to authenticate via a browser window."
+		Connect-ExchangeOnline -ShowBanner:$false -Device
+	}
+
+	Write-Host -ForegroundColor White -BackgroundColor DarkRed @"
 		Be sure to disconnect the remote PowerShell session when you're finished.
 		If you close the Windows PowerShell window without disconnecting the session,
 		you could use up all the remote PowerShell sessions available to you,
 		and you'll need to wait for the sessions to expire.
 		To disconnect the remote PowerShell session, run the following command.
 
-		Get-PSSession | Remove-PSSession
+		Disconnect-O365Exchange
 "@
-	}
 
 <#
 	.SYNOPSIS
@@ -334,6 +336,53 @@ Function Connect-Wifi {
 		Write-Host "Did not find SSID: $NetworkSSID `nConnection profile stored for later use."
 	}
 	Remove-Item -Force $tempProfileXML
+}
+
+Function Debug-UmbrellaDNS {
+	$X64exe = ${Env:ProgramFiles(x86)} + "\OpenDNS\Umbrella Roaming Client\UmbrellaDiagnostic.exe"
+	$X86exe = $ENV:ProgramFiles + "\OpenDNS\Umbrella Roaming Client\UmbrellaDiagnostic.exe"
+	If (Test-Path $X64exe -ea SilentlyContinue) {
+		$UDexe = $X64exe
+	} ElseIf (Test-Path $X86exe -ea SilentlyContinue) {
+		$UDexe = $X86exe
+	} Else {
+		Write-Host "Umbrella Diagnostics do not appear to be installed."
+		Break
+	}
+	Write-Host "Here is the help file for UmbrellaDiagnostic.exe:"
+Write-Host @"
+
+  -d, --domain=VALUE         A specific URL to target with tests (e.g.
+                               opendns.com)
+  -s, --silent               Automatically run tests in silent mode (will not
+                               show the UI or new windows; defaults to -i
+                               output)
+  -i, --internet             Output all results to diagnostic.opendns.com;
+                               destination URL will print to console as
+                               'url=URL'
+  -o, --output=VALUE         Output to a file, which will print to console as
+                               'outputFile=FILE'; can be a full path, make sure
+                               to use "quotes" if needed
+  -c, --console              Output all results to console as text
+      --erc                  Force the Roaming Client tests to be performed
+      --noerc                Skip the Roaming Client tests even if it's
+                               installed
+  -h, -?, --help             Display this usage statement
+
+If run without -o or -c arguments, -i is the default output; if run with -o or -c, then -i must be explicitly set if desired as additional output.
+
+"@
+	Write-Host "Recommend running with arguments '--silent --internet --console'.`nAdd --domain=<domain> to test internal or external targets.`n"
+	$Args = Read-Host "What arguments would you like to add? Just press enter if you wish to launch the window.`n"
+	If ($Args) {
+		Start-Process $UDexe -ArgumentList $Args
+	} Else {
+		Start-Process $UDexe
+	}
+}
+
+Function Disconnect-O365Exchange {
+	Disconnect-ExchangeOnline -Confirm:$false
 }
 
 Function Disable-ATGLocalExpiration {
@@ -1715,6 +1764,43 @@ Function Start-ServerMaintenance {
 		pwsh -Command {(Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Maintenance-Checks/Server-Maintenance-Checks.txt -UseBasicParsing).Content | Invoke-Expression}
 	} Else {
 		(Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Maintenance-Checks/Server-Maintenance-Checks.txt -UseBasicParsing).Content | Invoke-Expression
+	}
+}
+
+Function Uninstall-UmbrellaDNS {
+	$IsInstalled = Get-Service -Name Umbrella_RC -ErrorAction SilentlyContinue
+	$PreDNS = (Get-NetIPConfiguration | Where {$_.Netprofile.Ipv4Connectivity -Like "*Internet*"}).DnsServer.ServerAddresses
+	If ($IsInstalled) {
+		Write-Host "DNS Servers: $PreDNS"
+		Write-Host "Umbrella DNS Client found. Initiating uninstall..."
+		wmic.exe Product where "name='Umbrella Roaming Client'" call uninstall
+		$PostDNS = (Get-NetIPConfiguration | Where {$_.Netprofile.Ipv4Connectivity -Like "*Internet*"}).DnsServer.ServerAddresses
+		Write-Host "DNS Servers: $PostDNS"
+
+		Write-Host "Checking Root Certificate"
+		$CAHASH = "C5091132E9ADF8AD3E33932AE60A5C8FA939E824" #Thumbprint of the Cert set to expire in 2036
+		$RootCertPath = "Cert:\LocalMachine\Root\$CAHASH"
+		$CertInstalled = Get-Item -Path $RootCertPath
+		If ((Test-Path $RootCertPath -ea SilentlyContinue)) {
+			Write-Host "Uninstalling the Umbrella Root Cert"
+
+			$CertInstalled | Remove-Item -Force
+			If(Test-Path "C:\Program Files\Mozilla Firefox\defaults\pref\") {Write-Host "Configuring Firefox settings.";Set-Content "C:\Program Files\Mozilla Firefox\defaults\pref\firefox-windows-truststore.js" "pref('security.enterprise_roots.enabled', false);"}
+		} Else {
+			Write-Host -ForegroundColor Green "The Umbrella Root Cert is not installed."
+		}
+
+		Write-Host "Checking Status Indicator"
+		$IndicKey = Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator | Select-Object -ExpandProperty UseGlobalDNS -ea SilentlyContinue
+		If ($IndicKey -eq 1) {
+			Write-Host "Removing Connectivity Indicator Reg Key"
+			Remove-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' -Name 'UseGlobalDNS' -Force -ea SilentlyContinue
+		} Else {
+			Write-Host -ForegroundColor Green "The Status Indicator not present."
+		}
+	} Else {
+		Write-Host "DNS Servers: $PreDNS"
+		Write-Host "Umbrella DNS Client not found."
 	}
 }
 
