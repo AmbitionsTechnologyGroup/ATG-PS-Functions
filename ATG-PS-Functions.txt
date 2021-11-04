@@ -189,7 +189,6 @@ Function Connect-NetExtender {
 }
 
 Function Connect-O365Exchange {
-	If ($PSVersionTable.PSEdition -like "Desktop") {
 		If (-not (Get-Command Connect-ExchangeOnline -ErrorAction SilentlyContinue)) {
 			Write-Host "Installing the Exchange Online Management module"
 			Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
