@@ -2140,23 +2140,26 @@ Function Update-PowershellModules {
 	$Modules = Get-Module
 	$ModulesToInstall = "PSReadline","PowerShellGet"
 	$ModulesToInstall | ForEach-Object {
-		Remove-Module $_ -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-		Uninstall-Module $_ -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-		If ($Modules.Name -NotContains $_) {
-			Write-Host "$_ not found, installing."
-			Install-Module -Name $_ -Scope AllUsers -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+		$Mod = $_
+		Remove-Module $Mod -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+		Uninstall-Module $Mod -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+		If ($Modules.Name -NotContains $Mod) {
+			Write-Host "$Mod not found, installing."
+			Install-Module -Name $Mod -Scope AllUsers -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 			Try {
-				Import-Module -Name $_ -Scope AllUsers -Force -ErrorAction Stop -WarningAction SilentlyContinue
+				Import-Module -Name $Mod -Scope AllUsers -Force -ErrorAction Stop -WarningAction SilentlyContinue
 			} Catch {
-				Import-Module -Name $_ -Force -WarningAction SilentlyContinue
+				Import-Module -Name $Mod -Force -WarningAction SilentlyContinue
 			}
 		}
+		Clear-Variable -Name Mod -Force
 	}
 	Try {
 		Update-Module -Scope AllUsers -Force -WarningAction SilentlyContinue
 	} Catch {
 		Update-Module -Force -WarningAction SilentlyContinue
 	}
+	Set-PSReadLineOption -PredictionSource History
 	Get-Module | Select Name, Version, Description
 }
 
