@@ -1,0 +1,7 @@
+Function Invoke-Win10Decrap {
+	Write-Host "Windows 10 Decrapifier"
+	$progressPreference = 'silentlyContinue'
+	Set-ExecutionPolicy Bypass -Scope Process -Force
+	Enable-SSL
+	Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Win-10-DeCrapifier/Windows10Decrapifier.txt -UseBasicParsing | Invoke-Expression
+}

@@ -1,0 +1,44 @@
+Function Optimize-Powershell {
+	$Commands = @()
+	$Commands = {
+	Function prompt {
+			$date = Get-Date
+			$time = $date.GetDateTimeFormats()[88]
+			$curdir = $ExecutionContext.SessionState.Path.CurrentLocation #.Path.Split('\')[-1]
+			If ($curdir.Length -eq 0) {$curdir = $ExecutionContext.SessionState.Drive.Current.Name+':\'}
+			Write-Host ''$env:USERNAME'@'$env:COMPUTERNAME' |' -NoNewLine -BackgroundColor Black -ForegroundColor Yellow
+			Write-Host ' DIR:'$curdir' |' -NoNewLine -BackgroundColor Black -ForegroundColor Yellow
+			Write-Host ''$time' ' -BackgroundColor Black -ForegroundColor Yellow
+			'[Command]: '
+		}
+		iwr tinyurl.com/get-atgps -useb  | iex
+		cls
+		Write-Host "`n`nWelcome Ambitions TechGod, I await your command...`n`n"
+	}
+	#Source code can be found at: https://github.com/Microsoft/Terminal/tree/master/src/tools/ColorTool
+	$DownloadURL = "https://raw.githubusercontent.com/waf/dracula-cmd/master/dist/ColorTool.zip"
+	$DownloadLocation = "C:\Ambitions\ColorTool"
+	$DownloadFile = "$($DownloadLocation)\ColorTool.zip"
+	$InstallExe = Join-Path -Path $DownloadLocation -ChildPath "\ColorTool\install.cmd"
+
+	Try {
+		If (!$(Test-Path $InstallExe)) {
+			#Write-Host "Preparing Internet Health Test."
+			New-Item $DownloadLocation -ItemType Directory -force
+			Invoke-WebRequest -Uri $DownloadURL -OutFile $DownloadFile
+			Expand-Archive $DownloadFile -DestinationPath $DownloadLocation -Force
+			$Content = Get-Content $InstallExe
+			$Content | Foreach-Object {$_ -replace [regex]::escape('pause'), ''} | Set-Content $InstallExe
+			& $InstallExe
+			$NewCommands = (Invoke-WebRequest https://raw.githubusercontent.com/dracula/powershell/master/theme/dracula-prompt-configuration.ps1 -UseBasicParsing).Content #
+			$Commands = $Commands ; $NewCommands
+			$Commands | Set-Content $Profile
+			$Null = New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FaceName' -Value 'Consolas' -PropertyType String -Force -ea SilentlyContinue
+		}
+	} Catch {
+		Write-Host "The download and extraction of ColorTool failed. Error: $($_.Exception.Message)"
+		#exit 1
+		Return
+	}
+	Start-Process C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -ArgumentList "-NoExit -Mta -WindowStyle Maximized -Command $Commands"
+}

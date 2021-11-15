@@ -1,0 +1,277 @@
+Function Get-ADUserPassExpirations {
+	<#
+	.SYNOPSIS
+		Retrieves a list of (enabled) Active Directory Users and shows their password expiration times.
+	#>
+
+	# check the name of the parent process.  If it's LogMeIn, we can't use the Out-GridView UI
+	$parentProcessName = (Get-Process -Id ((Get-WmiObject Win32_Process -Filter "processid='$PID'").ParentProcessId)).Name
+
+	# check to see whether Get-AdUser is available
+	if (Get-Command ActiveDirectory\Get-AdUser -ErrorAction SilentlyContinue) {
+
+		$adUserInfo = Get-ADUser -Filter {Enabled -eq $True -and PasswordNeverExpires -eq $False} `
+		–Properties "DisplayName", "userPrincipalName", "msDS-UserPasswordExpiryTimeComputed" | `
+		Select-Object -Property "Displayname","userPrincipalName",@{Name="ExpiryDate";Expression={[datetime]::FromFileTime($_."msDS-UserPasswordExpiryTimeComputed")}}
+
+		# if the parent process of this powershell instance is not explorer.exe, output to PowerShell table.
+		If ($parentProcessName -ne "explorer") {
+			$adUserInfo | Format-Table -AutoSize
+		} else { # otherwise, grid view UI
+			$adUserInfo | Out-GridView -Title "ATG Powershell --> User Password Expirations"
+		}
+
+	} else { # cannot continue, Get-AdUser is not available
+		Write-Host "`n [!] This command must be run on a system with Active Directory Powershell Modules (i.e. a domain controller)`n"
+	}
+}
+
+Function Get-ATGPS {
+	If (Get-Module -Name "ATGPS*" -ErrorAction SilentlyContinue){
+		# List imported functions from ATGPS
+		Write-Host ====================================================
+		Write-Host "The below functions are now loaded and ready to use:"
+		Write-Host ====================================================
+			Get-Command -Module "ATGPS*" | Format-Wide -Column 3
+		Write-Host ====================================================
+		Write-Host "Type: 'Help <function name> -Detailed' for more info"
+		Write-Host ====================================================
+	} Else {
+	$progressPreference = 'silentlyContinue'
+	iwr tinyurl.com/get-atgps -UseBasicParsing | iex
+	# List imported functions from ATGPS
+		Write-Host ====================================================
+		Write-Host "The below functions are now loaded and ready to use:"
+		Write-Host ====================================================
+			Get-Command -Module "ATGPS*" | Format-Wide -Column 3
+		Write-Host ====================================================
+		Write-Host "Type: 'Help <function name> -Detailed' for more info"
+		Write-Host ====================================================
+	}
+}
+
+Function Get-BitLockerKey {
+	param
+		(
+			[Parameter(Mandatory=$false)]
+			[string]$Computer
+		)
+	#$Computer = "OPTIPLEX7040-20"
+	$Computers = Get-ADComputer -Filter 'ObjectClass -eq "computer"'
+	$AllComputers = @()
+	#$strToReport = new-object psobject
+	$Computers | Foreach-object {
+		#$Computer = $_.name
+		#Check if the Computer Object exists
+		$Computer_Object = Get-ADComputer -Filter {cn -eq $_.name} -Property msTPM-OwnerInformation, msTPM-TpmInformationForComputer
+		If ($Computer_Object -eq $null){
+			Write-Host "Error..."
+		}
+		#Check if the computer object has had a BitLocker Recovery Password
+		$Bitlocker_Object = Get-ADObject -Filter {objectclass -eq 'msFVE-RecoveryInformation'} -SearchBase $Computer_Object.DistinguishedName -Properties 'msFVE-RecoveryPassword' | Select-Object -Last 1
+		If ($Bitlocker_Object.'msFVE-RecoveryPassword'){
+			$BitLocker_Key = $BitLocker_Object.'msFVE-RecoveryPassword'
+
+			#$strToReport = $_.name,$BitLocker_Key
+			$strToReport = [PSCustomObject]@{
+				Computer = $_.name
+				BitLockerKey = $BitLocker_Key
+			}
+			$AllComputers += $strToReport
+			#Display Output
+			#Write-Host $strToReport
+
+			#Save to Report
+			#$strToReport | Out-File C:\temp\Report.txt -append
+		} Else {
+			$BitLocker_Key = "None"
+			#$strToReport = $_.name,$BitLocker_Key
+			$strToReport = [PSCustomObject]@{
+				Computer = $_.name
+				BitLockerKey = $BitLocker_Key
+			}
+			$AllComputers += $strToReport
+			#Write-Host $strToReport
+		}
+	}
+	If ($Computer) {
+		If ($AllComputers.Computer -NotContains $Computer) {
+			Write-Host "The computer specified was not found."
+		} Else {
+			$ComputerInfo = new-object psobject
+			$ComputerInfo = $AllComputers | Where-Object -Property Computer -eq -Value $Computer
+			$ComputerInfo | Format-List
+			If ($ComputerInfo.BitlockerKey -eq "None") {
+				Write-Host "There is no bitlocker key for this compuer."
+			} Else {
+
+				Write-Host "The bitlocker key has been copied to the clipboard.`n"
+				$ComputerInfo.BitlockerKey | Clip
+			}
+		}
+	} Else {
+		$AllComputers
+	}
+
+<#
+	.SYNOPSIS
+		Takes a deleted user, and converts their email to a shared mailbox. Can add permissions and an autoreply.
+	.PARAMETER Computer
+		[Optional] Specify the name of the computer to retrieve the BitLockerKey for. Will copy the key to the clipboard if specified.
+	.EXAMPLE
+		Get-BitLockerKey -Computer "ACG-Desktop23"
+	#>
+}
+
+Function Get-DiskUsage($path=".") {
+  Get-ChildItem $path | ForEach-Object { $file = $_ ;
+  Get-ChildItem -r $_.FullName | Measure-Object -property length -sum |
+	Select-Object @{Name="Name";Expression={$file}},Sum}
+}
+Set-Alias -Name du -Value Get-DiskUsage
+
+Function Get-ThunderBolt {
+	$Thunderbolt = Get-WmiObject Win32_SystemDriver | Where-Object -Property DisplayName -Like "*Thunder*"
+	If ($Thunderbolt) {
+		Write-Host "The following ThunderBolt controllers have been detected:"
+		$Thunderbolt
+	} Else {
+		Write-Host "No Thunderbolt Controllers have been detected"
+	}
+}
+
+Function Get-InternetHealth {
+	######### Absolute monitoring values ##########
+	$maxpacketloss = 2 #how much % packetloss until we alert.
+	$MinimumDownloadSpeed = 100 #What is the minimum expected download speed in Mbit/ps
+	$MinimumUploadSpeed = 20 #What is the minimum expected upload speed in Mbit/ps
+	$MaxJitter = 30
+	######### End absolute monitoring values ######
+
+	#Replace the Download URL to where you've uploaded the ZIP file yourself. We will only download this file once.
+	#Latest version can be found at: https://www.speedtest.net/nl/apps/cli
+	$DownloadURL = "https://install.speedtest.net/app/cli/ookla-speedtest-1.0.0-win64.zip"
+	$DownloadLocation = "$($Env:ProgramData)\SpeedtestCLI"
+	$SpeedTestExe = Join-Path -Path $DownloadLocation -ChildPath "\speedtest.exe"
+	Try {
+		If (!$(Test-Path $SpeedTestExe)) {
+			Write-Host "Preparing Internet Health Test."
+			New-Item $DownloadLocation -ItemType Directory -force
+			Invoke-WebRequest -Uri $DownloadURL -OutFile "$($DownloadLocation)\speedtest.zip"
+			Expand-Archive "$($DownloadLocation)\speedtest.zip" -DestinationPath $DownloadLocation -Force
+		}
+	} Catch {
+		Write-Host "The download and extraction of SpeedtestCLI failed. Error: $($_.Exception.Message)"
+		#exit 1
+		Return
+	}
+	$PreviousResults = If (test-path "$($DownloadLocation)\LastResults.txt") { get-content "$($DownloadLocation)\LastResults.txt" | ConvertFrom-Json }
+	Write-Host "Running Internet Health Test."
+	$SpeedtestResults = & $SpeedTestExe --format=json --accept-license --accept-gdpr
+	$SpeedtestResults | Out-File "$($DownloadLocation)\LastResults.txt" -Force
+	$SpeedtestResults = $SpeedtestResults | ConvertFrom-Json
+
+	#creating object
+	[PSCustomObject]$SpeedtestObj = @{
+		downloadspeed = [math]::Round($SpeedtestResults.download.bandwidth / 1000000 * 8, 2)
+		uploadspeed   = [math]::Round($SpeedtestResults.upload.bandwidth / 1000000 * 8, 2)
+		packetloss    = [math]::Round($SpeedtestResults.packetLoss)
+		isp           = $SpeedtestResults.isp
+		ExternalIP    = $SpeedtestResults.interface.externalIp
+		InternalIP    = $SpeedtestResults.interface.internalIp
+		UsedServer    = $SpeedtestResults.server.host
+		ResultsURL    = $SpeedtestResults.result.url
+		Jitter        = [math]::Round($SpeedtestResults.ping.jitter)
+		Latency       = [math]::Round($SpeedtestResults.ping.latency)
+	}
+	$SpeedtestHealth = @()
+	#Comparing against previous result. Alerting is download or upload differs more than 20%.
+	If ($PreviousResults) {
+		Write-Host "Comparing against previous results."
+		If ($PreviousResults.download.bandwidth / $SpeedtestResults.download.bandwidth * 100 -le 80) { $SpeedtestHealth += "Download speed difference is more than 20%" } Else { $SpeedtestHealth += "Download speed appears stable" }
+		If ($PreviousResults.upload.bandwidth / $SpeedtestResults.upload.bandwidth * 100 -le 80) { $SpeedtestHealth += "Upload speed difference is more than 20%" } Else { $SpeedtestHealth += "Upload speed appears stable" }
+	}
+
+	#Comparing against preset variables.
+	Write-Host "Analyzing Results"
+	If ($SpeedtestObj.downloadspeed -lt $MinimumDownloadSpeed) { $SpeedtestHealth += "Download speed is lower than $MinimumDownloadSpeed Mbit/ps" ; $HealthIssue = $True } Else { $SpeedtestHealth += "Download speed is acceptable" }
+	If ($SpeedtestObj.uploadspeed -lt $MinimumUploadSpeed) { $SpeedtestHealth += "Upload speed is lower than $MinimumUploadSpeed Mbit/ps"  ; $HealthIssue = $True }Else { $SpeedtestHealth += "Upload speed is acceptable" }
+	If ($SpeedtestObj.packetloss -gt $MaxPacketLoss) { $SpeedtestHealth += "Packetloss is higher than $maxpacketloss%"  ; $HealthIssue = $True } Else { $SpeedtestHealth += "Packet Loss is acceptable" }
+	If ($SpeedtestObj.Jitter -gt $MaxJitter) { $SpeedtestHealth += "Jitter is higher than $MaxJitter%"  ; $HealthIssue = $True } Else { $SpeedtestHealth += "Jitter is acceptable" }
+
+	Write-Host "Internet Health Test Results:"
+	$SpeedtestObj | Format-Table -AutoSize -HideTableHeaders
+	Write-Host "Internet Health Summary:"
+	If ($HealthIssue) {Write-Host -ForegroundColor Yellow -BackgroundColor Black "There appears to be issues!" } Else { Write-Host -ForegroundColor Green -BackgroundColor Black "All tests results are optimal!"}
+	$SpeedtestHealth
+}
+
+Function Get-LoginHistory {
+	<#
+
+	.SYNOPSIS
+		This script reads the event log "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational" from
+		multiple servers and outputs the human-readable results to a CSV/Table. This data is not filterable in the
+		native Windows Event Viewer.
+
+		Version: November 9, 2016
+
+
+	.SYNOPSIS
+		This script reads the event log "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational" from
+		multiple servers and outputs the human-readable results to a CSV/Table.  This data is not filterable in
+		the native Windows Event Viewer.
+
+		NOTE: Despite this log's name, it includes both RDP logins as well as regular console logins1.
+
+		Author:
+		Mike Crowley
+		https://BaselineTechnologies.com
+
+	 .EXAMPLE
+
+		Get-LoginHistory -ServersToQuery Server1, Server2 -StartTime "November 1"
+
+	.LINK
+		https://MikeCrowley.us/tag/powershell
+
+	#>
+
+	Param(
+		[array]$ServersToQuery = (hostname),
+		[datetime]$StartTime = "January 1, 1970"
+	)
+
+	Foreach ($Server in $ServersToQuery) {
+
+		$LogFilter = @{
+			LogName = 'Microsoft-Windows-TerminalServices-LocalSessionManager/Operational'
+			ID = 21, 23, 24, 25
+			StartTime = $StartTime
+			}
+
+		$AllEntries = Get-WinEvent -FilterHashtable $LogFilter -ComputerName $Server
+
+		$AllEntries | ForEach-Object {
+			$entry = [xml]$_.ToXml()
+			[array]$Output += New-Object PSObject -Property @{
+				TimeCreated = $_.TimeCreated
+				User = $entry.Event.UserData.EventXML.User
+				IPAddress = $entry.Event.UserData.EventXML.Address
+				EventID = $entry.Event.System.EventID
+				ServerName = $Server
+				}
+			}
+		}
+
+	$FilteredOutput += $Output | Select-Object TimeCreated, User, ServerName, IPAddress, @{Name='Action';Expression={
+				if ($_.EventID -eq '21'){"Logon"}
+				if ($_.EventID -eq '22'){"Shell Start"}
+				if ($_.EventID -eq '23'){"Logoff"}
+				if ($_.EventID -eq '24'){"Disconnected"}
+				if ($_.EventID -eq '25'){"Reconnection"}
+				}
+			}
+
+	$FilteredOutput | Sort-Object -Property TimeCreated | Format-Table -AutoSize
+}

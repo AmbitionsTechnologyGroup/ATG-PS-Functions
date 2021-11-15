@@ -1,0 +1,80 @@
+Function Set-AutoLogon ([String] $SiteCode) {
+	Write-Host "Set autologon"
+		#Registry path declaration
+		$RegPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+		[String]$DefaultUsername = 'ATGLocal'
+		[String]$DefaultPassword = $SiteCode + 'T3mpP@ss'
+		#setting registry values
+		Set-ItemProperty $RegPath "AutoAdminLogon" -Value "1" -type String
+		Set-ItemProperty $RegPath "DefaultUsername" -Value $DefaultUsername -type String
+		Set-ItemProperty $RegPath "DefaultPassword" -Value $DefaultPassword -type String
+		Set-ItemProperty $RegPath "AutoLogonCount" -Value "1" -type DWord
+	Write-Host "End of Set autologon"
+}
+
+Function Set-DailyReboot {
+<#
+	.SYNOPSIS
+		Creates a scheduled task to restart the computer daily at 3am, if no one is using the computer.
+		Helpful for maintaining updated and stability.
+#>
+	Write-Host "Schedule Daily Restart"
+		$Action = New-ScheduledTaskAction -Execute 'shutdown.exe' -Argument '-f -r -t 0'
+		$Trigger = New-ScheduledTaskTrigger -Daily -At 3am
+		$Idle = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration 00:30:00 -IdleWaitTimeout 02:00:00
+		$User = "NT AUTHORITY\SYSTEM"
+		Register-ScheduledTask -Action $action -Trigger $trigger -User $User -Settings $Idle -TaskName "Daily Restart" -Description "Daily restart" -Force | Out-Null
+		$NewDate = (Get-ScheduledTask -TaskName "Daily Restart").Triggers.StartBoundary.subString(0,16)
+	Write-Host "The next scheduled 'Daily Restart' task will happen at $([Datetime]::ParseExact($NewDate, 'yyyy-MM-ddTHH:mm', $null))"
+}
+
+Function Set-DailyRebootDelay {
+<#
+	.SYNOPSIS
+		Delays the "Daily Restart" scheduled task by the specified numer of days
+	.PARAMETER Days
+		The number of days to delay the reboot
+	.EXAMPLE
+		'Set-DailyRebootDelay -Days 80' will delay nightly reboots for 80 days!
+#>
+	param
+	(
+		[Parameter(Mandatory=$true)]
+		[Int32]$Days
+	)
+	$DailyRebootTask = Get-ScheduledTask -TaskName "Daily Restart" -ErrorAction SilentlyContinue
+	If (! $DailyRebootTask) {
+		Set-DailyReboot
+	}
+	$DelayedStart = (Get-Date).AddDays($Days).ToString('yyyy-MM-dd') + "T03:00:00-06:00"
+	$Trigger = New-ScheduledTaskTrigger -Daily -At 3am
+	$Trigger.StartBoundary = $DelayedStart
+	$DailyRebootTask.Triggers = $Trigger
+	$DailyRebootTask | Set-ScheduledTask | Out-Null
+	$NewDate = (Get-ScheduledTask -TaskName "Daily Restart").Triggers.StartBoundary.subString(0,16)
+	Write-Host "The next scheduled 'Daily Restart' task will happen at $([Datetime]::ParseExact($NewDate, 'yyyy-MM-ddTHH:mm', $null))"
+}
+
+Function Set-MountainTime {
+	Write-Host "Setting local time zone to Mountain Time"
+	Set-TimeZone -Name "Mountain Standard Time"
+	net start W32Time
+	W32tm /resync /force
+}
+
+Function Set-NumLock {
+	Write-Host "Setting Numlock on keyboard as default"
+	Set-ItemProperty -Path 'Registry::HKU\.DEFAULT\Control Panel\Keyboard' -Name "InitialKeyboardIndicators" -Value "2" -Force -PassThru
+}
+
+Function Set-RunOnceScript {
+	param
+	(
+		[string]$Label,
+		[string]$Script
+	)
+
+	$RunOnceValue = 'PowerShell.exe -ExecutionPolicy Bypass -File "' + $Script + '"'
+	Write-Host "Install After Reboot"
+	Set-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name $Label -Value $RunOnceValue
+}

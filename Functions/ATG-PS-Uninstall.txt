@@ -1,0 +1,36 @@
+Function Uninstall-UmbrellaDNS {
+	$IsInstalled = Get-Service -Name Umbrella_RC -ErrorAction SilentlyContinue
+	$PreDNS = (Get-NetIPConfiguration | Where {$_.Netprofile.Ipv4Connectivity -Like "*Internet*"}).DnsServer.ServerAddresses
+	If ($IsInstalled) {
+		Write-Host "DNS Servers: $PreDNS"
+		Write-Host "Umbrella DNS Client found. Initiating uninstall..."
+		wmic.exe Product where "name='Umbrella Roaming Client'" call uninstall
+		$PostDNS = (Get-NetIPConfiguration | Where {$_.Netprofile.Ipv4Connectivity -Like "*Internet*"}).DnsServer.ServerAddresses
+		Write-Host "DNS Servers: $PostDNS"
+
+		Write-Host "Checking Root Certificate"
+		$CAHASH = "C5091132E9ADF8AD3E33932AE60A5C8FA939E824" #Thumbprint of the Cert set to expire in 2036
+		$RootCertPath = "Cert:\LocalMachine\Root\$CAHASH"
+		$CertInstalled = Get-Item -Path $RootCertPath
+		If ((Test-Path $RootCertPath -ea SilentlyContinue)) {
+			Write-Host "Uninstalling the Umbrella Root Cert"
+
+			$CertInstalled | Remove-Item -Force
+			If(Test-Path "C:\Program Files\Mozilla Firefox\defaults\pref\") {Write-Host "Configuring Firefox settings.";Set-Content "C:\Program Files\Mozilla Firefox\defaults\pref\firefox-windows-truststore.js" "pref('security.enterprise_roots.enabled', false);"}
+		} Else {
+			Write-Host -ForegroundColor Green "The Umbrella Root Cert is not installed."
+		}
+
+		Write-Host "Checking Status Indicator"
+		$IndicKey = Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator | Select-Object -ExpandProperty UseGlobalDNS -ea SilentlyContinue
+		If ($IndicKey -eq 1) {
+			Write-Host "Removing Connectivity Indicator Reg Key"
+			Remove-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' -Name 'UseGlobalDNS' -Force -ea SilentlyContinue
+		} Else {
+			Write-Host -ForegroundColor Green "The Status Indicator not present."
+		}
+	} Else {
+		Write-Host "DNS Servers: $PreDNS"
+		Write-Host "Umbrella DNS Client not found."
+	}
+}

@@ -1,0 +1,16 @@
+Function Join-Domain {
+		param
+	(
+		[Parameter(Mandatory=$true)]
+		[string]$Domain,
+		[Parameter(Mandatory=$true)]
+		[string]$Username,
+		[Parameter(Mandatory=$true)]
+		$Password
+	)
+	Write-Host "Join Domain"
+	$Password = $Password | ConvertTo-SecureString -asPlainText -Force
+	$Username = $Domain + "\" + $Username
+	$credential = New-Object System.Management.Automation.PSCredential($Username,$Password)
+	Add-Computer -DomainName $Domain -Credential $credential
+}
