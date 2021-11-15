@@ -27,12 +27,12 @@ Function Get-ADUserPassExpirations {
 }
 
 Function Get-ATGPS {
-	If (Get-Module -Name "ATGPS*" -ErrorAction SilentlyContinue){
+	If (Get-Module -Name "ATG-PS*" -ErrorAction SilentlyContinue){
 		# List imported functions from ATGPS
 		Write-Host ====================================================
 		Write-Host "The below functions are now loaded and ready to use:"
 		Write-Host ====================================================
-			Get-Command -Module "ATGPS*" | Format-Wide -Column 3
+			Get-Command -Module "ATG-PS*" | Format-Wide -Column 3
 		Write-Host ====================================================
 		Write-Host "Type: 'Help <function name> -Detailed' for more info"
 		Write-Host ====================================================
@@ -43,7 +43,7 @@ Function Get-ATGPS {
 		Write-Host ====================================================
 		Write-Host "The below functions are now loaded and ready to use:"
 		Write-Host ====================================================
-			Get-Command -Module "ATGPS*" | Format-Wide -Column 3
+			Get-Command -Module "ATG-PS*" | Format-Wide -Column 3
 		Write-Host ====================================================
 		Write-Host "Type: 'Help <function name> -Detailed' for more info"
 		Write-Host ====================================================
