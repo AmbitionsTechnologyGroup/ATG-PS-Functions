@@ -103,10 +103,10 @@ $OnlineDattoAgent = iwr https://raw.githubusercontent.com/AmbitionsTechnologyGro
 		If ($InstalledVer -match $OnlineDattoVersion) {
 			Write-Host -ForegroundColor Green 'The'$agent' version '$InstalledVer' is currently installed and it is up to date'
 			#Exit the script
+			Break
 			#Stop-transcript
-			} Else {
+		} Else {
 				Write-Host -ForegroundColor Red 'The'$agent' Version '$InstalledVer' is currently installed and it is NOT up to date. The latest version available is '$OnlineDattoVersion
-		}
 
 		#Download update
 		Write-Host "Downloading the update from $download to $installer"
@@ -175,4 +175,5 @@ $OnlineDattoAgent = iwr https://raw.githubusercontent.com/AmbitionsTechnologyGro
 
 		#Exit the script
 			Stop-transcript
+		}
 }
