@@ -36,6 +36,7 @@ Function Update-DellPackages {
 				#Remove any Windows 10 "Apps"
 				Get-ProvisionedAppPackage -Online | Where-Object {$_.DisplayName -like "*Dell*Update*"} | Remove-ProvisionedAppPackage -Online
 				Get-AppxPackage "*Dell*Update*" | Remove-AppxPackage
+				Get-Package "Dell*Windows 10" | Uninstall-Package -AllVersions -Force
 				If (Get-AppxPackage *Dell*Update*){
 					$apps = Get-ChildItem -Path HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall,HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall | Get-ItemProperty | Where-Object {$_.DisplayName -like "Dell*Update*" } | Select-Object -Property DisplayName, UninstallString
 					ForEach ($ver in $apps) {
