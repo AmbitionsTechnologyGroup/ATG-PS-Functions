@@ -21,7 +21,7 @@ If (!(Get-Module PartnerCenter)) {
 }
 
 # Check if the Azure AD PowerShell module has already been loaded.
-Write-Host "Checking Module Status: MS PartnerCenter"
+Write-Host "Checking Module Status: Azure AD"
 If (!(Get-Module AzureAD)) {
 	# Check if the Azure AD PowerShell module is installed.
 	If ( Get-Module -ListAvailable -Name AzureAD ) {
