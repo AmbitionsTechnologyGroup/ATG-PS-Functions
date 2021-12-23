@@ -1,4 +1,15 @@
 Function Debug-UmbrellaDNS {
+
+	#Policy exposer:
+	$Lookup = Resolve-DnsName -Name debug.opendns.com -Type txt
+	$OrgID = ($Lookup | Where-Object -Property Strings -Match "orgid").Strings -replace "[^0-9]" , ''
+	$Bundle = ($Lookup | Where-Object -Property Strings -Match "bundle").Strings -replace "[^0-9]" , ''
+	$PolicyURL = 'https://dashboard.umbrella.com/o/' + $OrgID + '/#/configuration/policy/' + $Bundle
+	Write-Output "Organization ID: $OrgID"
+	Write-Output "Policy ID: $Bundle"
+	Write-Output "Umbrella DNS Policy applied to this computer:`n`n$PolicyURL"
+	
+	#Diagnostic executable:
 	$X64exe = ${Env:ProgramFiles(x86)} + "\OpenDNS\Umbrella Roaming Client\UmbrellaDiagnostic.exe"
 	$X86exe = $ENV:ProgramFiles + "\OpenDNS\Umbrella Roaming Client\UmbrellaDiagnostic.exe"
 	If (Test-Path $X64exe -ea SilentlyContinue) {
