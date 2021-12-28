@@ -71,7 +71,7 @@ Function Convert-ToSharedMailbox {
 					$Permission = $Rights[$Permission]
 					}
 				}
-				If ($Permission -ne "QUIT") {
+				If ($Permission -ne "QUIT" -and $Response -notlike 'n*') {
 					If ($GiveAccessTo) {
 						$AddUser = $GiveAccessTo
 					} Else {
