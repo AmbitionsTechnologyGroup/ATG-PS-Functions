@@ -86,6 +86,7 @@ Function Convert-ToSharedMailbox {
 					Write-Host "Giving $AddUser $Permission to the mailbox."
 					$NewSharedMailbox | Add-MailboxPermission -User $AddUser -AccessRights $Permission -InheritanceType All -Verbose
 					$NewSharedMailbox | Get-MailboxPermission | FT
+					If ($GiveAccessPermission) {$Response = "no"}
 				} Else { Break }
 			} While ($Response -notlike 'n*')
 		}
