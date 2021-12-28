@@ -1,3 +1,62 @@
+Function Connect-O365AzureAD {
+	If (-not (Get-Command Connect-AzureAD -ErrorAction SilentlyContinue)) {
+			Write-Host "Installing the Azure AD module"
+			Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+			Install-Module -Name AzureAD -AllowClobber -Force
+			$ModVer = (Get-Command Connect-AzureAD).Version
+			If ($ModVer) {
+				Write-Host "Azure AD module version $ModVer has been installed."
+			} Else {
+				Write-Host "Azure AD module failed to install."
+				Break
+			}
+		} Else {
+			$Readhost = 'N'
+			$Readhost = Read-Host "Do you want to check for module updates? This should be done periodically. `n(y/N)"
+			Switch ($ReadHost)
+			{
+				Y {
+					$ModVer = (Get-Command Connect-AzureAD).Version
+					$AvailableModVer = (Find-Module AzureAD -Repository PSGallery).Version
+					If ($ModVer -ne $AvailableModVer) {
+						Write-host "AzureAD has an update from $ModVer to $AvailableModVer.`nInstalling the update."
+						Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+						Install-Module -Name AzureAD -AllowClobber -Force
+					} Else {
+						Write-host "AzureAD is already up to date at version $AvailableModVer."
+					}
+				}
+				N { Write-Host "Skipping update check." }
+				Default { Write-Host "Skipping update check." }
+			}
+		}
+
+			Connect-AzureAD
+
+
+	Write-Host -ForegroundColor White -BackgroundColor DarkRed @"
+		Be sure to disconnect the remote PowerShell session when you're finished.
+		If you close the Windows PowerShell window without disconnecting the session,
+		you could use up all the remote PowerShell sessions available to you,
+		and you'll need to wait for the sessions to expire.
+		To disconnect the remote PowerShell session, run the following command.
+
+		Disconnect-AzureAD
+"@
+
+<#
+	.SYNOPSIS
+		Initiates an Office 365 Azure AD connection.
+
+	.LINK
+		https://docs.microsoft.com/en-us/microsoft-365/enterprise/connect-to-microsoft-365-powershell?view=o365-worldwide
+
+	.EXAMPLE
+		Connect-O365AzureAD
+		Yup, that's it!
+#>
+}
+
 Function Connect-NetExtender {
 	param
 	(
@@ -97,7 +156,6 @@ Function Connect-O365Exchange {
 <#
 	.SYNOPSIS
 		Initiates an Office 365 Exchange connection that is compatible with MFA.
-		This is not compatible with Powershell Core.
 
 	.LINK
 		https://docs.microsoft.com/en-us/powershell/exchange/connect-to-exchange-online-powershell?view=exchange-ps
