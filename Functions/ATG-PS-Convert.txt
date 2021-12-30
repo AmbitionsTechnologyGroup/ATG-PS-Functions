@@ -50,7 +50,6 @@ Function Convert-ToSharedMailbox {
 			Write-Host -NoNewLine 'Press any key to acknowledge and continue...';
 			$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
 		}
-		$DeletedMailbox | Get-MailboxStatistics -IncludeSoftDeletedRecipients | Select-Object DisplayName, IsArchiveMailbox, ItemCount, TotalItemSize | Format-Table –autosize
 		$SmtpAddress = $DeletedMailbox.PrimarySmtpAddress
 		Write-Host "Creating Shared Mailbox."
 		New-Mailbox -Name "SHARED $Name LEFT $DateLeft" -Alias $Alias -PrimarySmtpAddress $SmtpAddress -Shared
