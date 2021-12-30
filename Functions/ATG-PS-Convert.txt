@@ -141,5 +141,9 @@ Function Convert-ToSharedMailbox {
 		Add this switch if you do not want to be prompted for setting up an autoreply.
 	.EXAMPLE
 		Convert-ToSharedMailbox -DateLeft "30SEP2021" -Alias cscippio
+	.EXAMPLE
+		Convert-ToSharedMailbox -DateLeft DEC2021 -Alias kelli -GiveAccessTo javila -GiveAccessPermission ReadPermission -DirectEmailTo javila
+	.EXAMPLE
+		Convert-ToSharedMailbox -DateLeft DEC2021 -Alias rich -NoAccess -NoReply
 	#>
 }
