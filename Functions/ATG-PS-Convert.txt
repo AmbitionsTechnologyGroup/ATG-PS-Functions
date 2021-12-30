@@ -64,14 +64,14 @@ Function Convert-ToSharedMailbox {
 				} Else {
 					$Response = Read-Host -Prompt "Do you want to add any permissions to the shared mailbox? (Y/n)"
 					If (-not $Response) {$Response = "y"}
-					If ($Response -like 'y*') {
+					If ($Response -like "y*") {
 					$Rights = "FullAccess","ReadPermission","QUIT"
 					$Rights | Select-Object @{N='Index'; E={$Rights.IndexOf($_)}}, @{N='Permission'; E={$_}} | Out-Host -Paging -ErrorAction SilentlyContinue
 					$Permission = Read-Host "Please enter the number of the permission you wish to assign."
 					$Permission = $Rights[$Permission]
 					}
 				}
-				If ($Permission -ne "QUIT" -and $Response -notlike 'n*') {
+				If ($Permission -ne "QUIT" -and $Response -notlike "n*") {
 					If ($GiveAccessTo) {
 						$AddUser = $GiveAccessTo
 					} Else {
@@ -88,17 +88,17 @@ Function Convert-ToSharedMailbox {
 					$NewSharedMailbox | Get-MailboxPermission | FT
 					If ($GiveAccessPermission) {$Response = "no"}
 				} Else { Break }
-			} While ($Response -notlike 'n*')
+			} While ($Response -notlike "n*")
 		}
 
 		#AutoReply
-		If(-not $NoAccess) {
+		If(-not $NoReply) {
 			If ($DirectEmailTo) {
 				$ReplyTo = $DirectEmailTo
 			} Else {
 				$Response = Read-Host -Prompt "Do you want to an auto reply? (Y/n)"
 				If (-not $Response) {$Response = "y"}
-				If ($Response -like 'y*') {
+				If ($Response -like "y*") {
 					$ReplyTo = Read-Host "Alias of the user to direct emails to"
 					If (-not $(Get-EXOMailbox -Identity $ReplyTo)) {
 						Do {
@@ -115,8 +115,13 @@ Function Convert-ToSharedMailbox {
 			$NewSharedMailbox | Set-MailboxAutoReplyConfiguration –InternalMessage "$Name is no longer with the organization. Please direct communications to $ReplyToName at $ReplyToEmail" –ExternalMessage "$Name is no longer with the organization. Please direct communications to $ReplyToName at $ReplyToEmail" -Verbose
 			$NewSharedMailbox | Set-MailboxAutoReplyConfiguration -AutoReplyState enabled
 			$NewSharedMailbox | Get-MailboxAutoReplyConfiguration | Select Identity, AutoReplyState, ExternalMessage | FL
+			Clear-Variable -Name ReplyTo -Force
+			Clear-Variable -Name ReplyToName -Force
+			Clear-Variable -Name ReplyToEmail -Force
+
 		}
 	}
+	Clear-Variable -Name NewSharedMailbox -Force
 <#
 	.SYNOPSIS
 		Takes a deleted user, and converts their email to a shared mailbox. Can add permissions and an autoreply.
