@@ -45,7 +45,7 @@ Function Convert-ToSharedMailbox {
 		$Name = $DeletedMailbox.DisplayName
 		$DeletedMailboxSize = ($DeletedMailbox | Get-MailboxStatistics -IncludeSoftDeletedRecipients).TotalItemSize.Value
 		Write-Host "Deleted mailbox for $Name found. It is $DeletedMailboxSize"
-		If ([int64]($DeletedMailboxSize -replace '.+\(|bytes\)') -gt "1GB") {
+		If ([int64]($DeletedMailboxSize -replace '.+\(|bytes\)') -gt "50GB") {
 			Write-Warning -Message "$Name has a mailbox larger then 50GB, the restored shared mailbox needs to be assigned an Office 365 Enterprise E3 or E5 license."
 			Write-Host -NoNewLine 'Press any key to acknowledge and continue...';
 			$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
