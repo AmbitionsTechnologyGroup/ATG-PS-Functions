@@ -373,10 +373,9 @@ function Maintenance {
 	#Check if ATG tools exists
 	Write-Host
 	Write-Host "Portable Apps check:"
-	if (Test-Path C:\ambitions\SystemTools) {
+	if (Test-Path C:\Ambitions\Windows_Repair_Toolbox) {
 		Write-Host -ForegroundColor Green ATG Portable Apps tools are installed
-	}
- else {
+	} Else {
 		Write-Host -ForegroundColor Red ATG Portable Apps tools are NOT installed
 	}
 	#End of Check if ATG tools exists
