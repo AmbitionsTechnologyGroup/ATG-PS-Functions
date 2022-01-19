@@ -11,7 +11,7 @@ Function Get-ADStaleUsers {
 	If (Get-Command ActiveDirectory\Get-AdUser -ErrorAction SilentlyContinue) {
 		$Stale = [DateTime]::Today.AddDays(-180)
 		$SemiStale = [DateTime]::Today.AddDays(-30)
-		$adStaleUserInfo = Get-ADUser -Filter '(LastLogonTimestamp -lt $Stale) -and (Enabled -eq $True) -and (Name -notlike "HealthMailbox*") -and (Description -notlike "DNI*")' -Properties LastLogonTimestamp,Description,Title | Format-Table Name,@{N="LastLogonTimestamp";E={[datetime]::FromFileTime($_.LastLogonTimestamp)}},Description,Title -AutoSize
+		$adStaleUserInfo = Get-ADUser -Filter '(LastLogonTimestamp -lt $Stale) -and (Enabled -eq $True) -and (Name -notlike "HealthMailbox*") -and (Description -notlike "DNI*")' -Properties LastLogonTimestamp,Description,Title | Format-Table Name,@{N="LastLogonTimestamp";E={[datetime]::FromFileTime($_.LastLogonTimestamp)}},Description,Title -AutoSize -
 		$adSemiStaleUserInfo = Get-ADUser -Filter '(LastLogonTimestamp -lt $SemiStale) -and (LastLogonTimestamp -gt $Stale) -and (Enabled -eq $True) -and (Name -notlike "HealthMailbox*") -and (Description -notlike "DNI*")' -Properties LastLogonTimestamp,Description,Title | Format-Table Name,@{N="LastLogonTimestamp";E={[datetime]::FromFileTime($_.LastLogonTimestamp)}},Description,Title -AutoSize
 		Write-Host
 		Write-Output "Stale user accounts that haven't logged on within the last 180 days:"
