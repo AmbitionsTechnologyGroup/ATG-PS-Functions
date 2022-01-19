@@ -140,7 +140,7 @@ Function Get-BitLockerKey {
 
 <#
 	.SYNOPSIS
-		Takes a deleted user, and converts their email to a shared mailbox. Can add permissions and an autoreply.
+		Searches for and retrieves a BitLocker recovery key for the specified computer(s) in Active Directory.
 	.PARAMETER Computer
 		[Optional] Specify the name of the computer to retrieve the BitLockerKey for. Will copy the key to the clipboard if specified.
 	.EXAMPLE
