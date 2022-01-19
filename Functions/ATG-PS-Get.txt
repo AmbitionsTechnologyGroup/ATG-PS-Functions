@@ -148,10 +148,29 @@ Function Get-BitLockerKey {
 	#>
 }
 
-Function Get-DiskUsage($path=".") {
-  Get-ChildItem $path | ForEach-Object { $file = $_ ;
-  Get-ChildItem -r $_.FullName | Measure-Object -property length -sum |
-	Select-Object @{Name="Name";Expression={$file}},Sum}
+Function Get-DiskUsage($Path=".") {
+    Write-Host -ForegroundColor Cyan "  (large folders may take long to calculate...)"
+    Get-ChildItem $path | ForEach-Object {
+        $file = $_
+        Get-ChildItem -r $_.FullName |
+        Measure-Object -property length -sum -ErrorAction SilentlyContinue |
+        Select-Object @{Name="Name";Expression={$file}},
+        @{Name="Space Used (MB)";Expression={([math]::Round(($_.Sum/1024/1024),2))}}
+    } | Format-Table -AutoSize
+
+	<#
+	.SYNOPSIS
+		Either in the current directory or the given path, find all child items
+		and calculate their cumulative size. Output the name of the folder
+		and the space used in Megabytes. If this function is loaded by normal
+		means for this repository, it will be available by its assigned alias 'du'.
+	.PARAMETER Path
+		[Optional] Path to the folder to calculate size of child items.
+	.EXAMPLE
+		Get-DiskUsage "C:\Users"
+	.EXAMPLE
+		Get-DiskUsage $env:OneDrive\Documents
+	#>
 }
 Set-Alias -Name du -Value Get-DiskUsage
 
