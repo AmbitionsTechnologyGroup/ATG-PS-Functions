@@ -26,22 +26,6 @@ Function Optimize-Powershell {
 		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CurrentPage' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
 		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ScreenColors' -Value 23 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
 		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'PopupColors' -Value 245 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable00' -Value 789516 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable01' -Value 14300928 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable02' -Value 958739 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable03' -Value 14521914 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable04' -Value 2035653 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable05' -Value 9967496 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable06' -Value 40129 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable07' -Value 13421772 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable08' -Value 7763574 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable09' -Value 16742459 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable10' -Value 837142 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable11' -Value 14079585 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable12' -Value 5654759 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable13' -Value 10354868 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable14' -Value 10875385 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable15' -Value 15921906 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
 		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'InsertMode' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
 		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'QuickEdit' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
 		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ScreenBufferSize' -Value 7864440 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
@@ -78,22 +62,6 @@ Function Optimize-Powershell {
 	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ExtendedEditKey' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
 	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ScreenColors' -Value 23 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
 	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'PopupColors' -Value 245 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable00' -Value 789516 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable01' -Value 14300928 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable02' -Value 958739 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable03' -Value 14521914 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable04' -Value 2035653 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable05' -Value 9967496 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable06' -Value 40129 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable07' -Value 13421772 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable08' -Value 7763574 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable09' -Value 16742459 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable10' -Value 837142 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable11' -Value 14079585 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable12' -Value 5654759 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable13' -Value 10354868 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable14' -Value 10875385 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ColorTable15' -Value 15921906 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
 	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'InsertMode' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
 	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'QuickEdit' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
 	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ScreenBufferSize' -Value 327680120 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
@@ -118,22 +86,6 @@ Function Optimize-Powershell {
 	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'DefaultForeground' -Value -1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
 	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'DefaultBackground' -Value -1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
 	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'WindowPosition' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'ColorTable00' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'ColorTable01' -Value 8388608 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'ColorTable02' -Value 32768 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'ColorTable03' -Value 8421376 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'ColorTable04' -Value 128 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'ColorTable05' -Value 8388736 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'ColorTable06' -Value 32896 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'ColorTable07' -Value 12632256 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'ColorTable08' -Value 8421504 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'ColorTable09' -Value 16711680 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'ColorTable10' -Value 65280 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'ColorTable11' -Value 16776960 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'ColorTable12' -Value 255 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'ColorTable13' -Value 16711935 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'ColorTable14' -Value 65535 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'ColorTable15' -Value 16777215 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
 	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'ScreenBufferSize' -Value 671088790 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
 	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'FaceName' -Value 'Lucida Console' -PropertyType String -Force -ea SilentlyContinue | Out-Null
 	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'HistoryNoDup' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
