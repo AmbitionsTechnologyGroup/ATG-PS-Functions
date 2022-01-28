@@ -627,80 +627,12 @@ Function NetworkDevices {
 	#Clean up whitespace
 	$Manufact = $Manufact -replace '(^\s+|\s+$)', '' -replace '\s+', ' '
 	###########################################################################################################################################################################
-	if ( $Manufact -like "*Dell*") {
-		Write-Host -NoNewline $Manufact" computer "
-		[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-		[Bool]$Dev = $false
-		$Serial = get-ciminstance win32_bios
-		$ServiceTag = $Serial.SerialNumber
-		#Test $ServiceTag = "64G5GQ1"
-		$ApiKey = "e78de8d4-a2b0-40d1-9bac-a090266ff528"
-		If ($Dev) {
-			$URL1 = "https://sandbox.api.dell.com/support/assetinfo/v4/getassetwarranty/$ServiceTag"
-		}
-		else {
-			$URL1 = "https://api.dell.com/support/assetinfo/v4/getassetwarranty/$ServiceTag"
-		}$URL2 = "?apikey=$Apikey"
-		$URL = $URL1 + $URL2
-		# Get Data
-		$Request = Invoke-RestMethod -URI $URL -Method GET -contenttype 'Application/xml'
-		# Extract Warranty Info
-		$Warranty = $Request.AssetWarrantyResponse.AssetEntitlementData | where ServiceLevelDescription -NE 'Dell Digitial Delivery'
-		$Warranty = $Warranty | Sort @{expression = "EndDate"; Descending = $true }, @{expression = "ServiceLevelGroup"; Descending = $true }
-		# Read first entry if available
-		If ($Warranty -is [Object]) {
-			$EndDate = $Warranty[0].EndDate
-		}
-		else {
-			$SLA = 'Expired'
-		}
-		Write-Host -NoNewLine "w/ ServiceTag $ServiceTag"
-		Write-Host -NoNewLine ": "
-		$EndDate = $EndDate.AddDays(1)
-		$EndDateD = $EndDate.ToShortDateString()
-		$Today = Get-Date
-		if (($Today.AddDays(180)) -gt $EndDate) {
-			$diff = (get-date) - $EndDate
-			$diff = [math]::round(($diff.TotalDays))
-			if ((Get-Date) -gt $EndDate) {
-				$diff = (get-date) - $EndDate
-				$diff = [math]::round(($diff.TotalDays))
-				Write-Host -NoNewLine -ForegroundColor Red "Warranty expired on $EndDateD "
-				If ($diff -lt 32) {
-					Write-Host -ForegroundColor Red which was $diff day`(s`) ago.
-    }
-				If ($diff -gt 180 -And $diff -le 365) {
-					$diff = [math]::round($diff / 30.4375)
-					Write-Host -ForegroundColor Red which was $diff month`(s`) ago.
-    }
-				If ($diff -ge 365) {
-					$diff = [math]::round($diff / 365)
-					Write-Host -ForegroundColor Red which was $diff year`(s`) ago.
-    }
-
-			}
-			else {
-				$diff = $EndDate - (get-date)
-				$diff = [math]::round(($diff.TotalDays))
-				Write-Host -ForegroundColor Yellow "Warranty is ending soon, on $EndDateD which is in $diff day`(s`)"
-			}
-
-		}
-		else {
-			Write-Host -NoNewLine -ForegroundColor Green "Warranty is good "
-			$diff = $EndDate - (get-date)
-			$diff = [math]::round(($diff.TotalDays))
-			If ($diff -gt 180 -And $diff -le 365) {
-				$diff = [math]::round($diff / 30.4375)
-				Write-Host -ForegroundColor Green "for $diff month`(s`)"
-   }
-			If ($diff -ge 365) {
-				$diff = [math]::round($diff / 365)
-				Write-Host -ForegroundColor Green "for $diff year`(s`)"
-   }
-		}
-	}
- else {
+	If ( $Manufact -like "*Dell*") {
+		Install-Module -Name Get-DellWarranty -Force
+		'l73e091fbc84eb4ca480893549f0525313' | Out-File $env:appdata\Microsoft\Windows\PowerShell\DellKey.txt -Force
+		'd18ab8b38afd4b889e11a4baea74586e' | Out-File $env:appdata\Microsoft\Windows\PowerShell\DellSec.txt -Force
+		Get-DellWarranty -Show
+	} Else {
 		Write-Host 'Unable to determine the warranty, please check manually.'
 	}
 	#End of Warranty Check
