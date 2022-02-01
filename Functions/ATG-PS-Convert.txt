@@ -121,13 +121,13 @@ Function Convert-ToSharedMailbox {
 			$NewSharedMailbox | Set-MailboxAutoReplyConfiguration –InternalMessage "$Name is no longer with the organization. Please direct communications to $ReplyToName at $ReplyToEmail" –ExternalMessage "$Name is no longer with the organization. Please direct communications to $ReplyToName at $ReplyToEmail" -Verbose
 			$NewSharedMailbox | Set-MailboxAutoReplyConfiguration -AutoReplyState enabled
 			$NewSharedMailbox | Get-MailboxAutoReplyConfiguration | Select Identity, AutoReplyState, ExternalMessage | FL
-			Clear-Variable -Name ReplyTo -Force
-			Clear-Variable -Name ReplyToName -Force
-			Clear-Variable -Name ReplyToEmail -Force
+			Clear-Variable -Name ReplyTo -Force -ErrorAction SilentlyContinue
+			Clear-Variable -Name ReplyToName -Force -ErrorAction SilentlyContinue
+			Clear-Variable -Name ReplyToEmail -Force -ErrorAction SilentlyContinue
 
 		}
 	}
-	Clear-Variable -Name NewSharedMailbox -Force
+	Clear-Variable -Name NewSharedMailbox -Force -ErrorAction SilentlyContinue
 <#
 	.SYNOPSIS
 		Takes a deleted user, and converts their email to a shared mailbox. Can add permissions and an autoreply.
