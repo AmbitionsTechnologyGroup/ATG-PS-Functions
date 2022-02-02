@@ -7,6 +7,7 @@ Function Optimize-Powershell {
 				$time = $date.GetDateTimeFormats()[88]
 				$curdir = $ExecutionContext.SessionState.Path.CurrentLocation #.Path.Split('\')[-1]
 				If ($curdir.Length -eq 0) {$curdir = $ExecutionContext.SessionState.Drive.Current.Name+':\'}
+				Write-Host
 				Write-Host ''$env:USERNAME'@'$env:COMPUTERNAME' |' -NoNewLine -BackgroundColor Black -ForegroundColor Yellow
 				Write-Host ' DIR:'$curdir' |' -NoNewLine -BackgroundColor Black -ForegroundColor Yellow
 				Write-Host ''$time' ' -BackgroundColor Black -ForegroundColor Yellow
