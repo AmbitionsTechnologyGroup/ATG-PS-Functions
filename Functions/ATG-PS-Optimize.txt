@@ -4,7 +4,7 @@ Function Optimize-Powershell {
 
 		Function prompt {
 				$date = Get-Date
-				$time = $date.GetDateTimeFormats()[88]
+				$time = $date.GetDateTimeFormats()[10]
 				$curdir = $ExecutionContext.SessionState.Path.CurrentLocation #.Path.Split('\')[-1]
 				If ($curdir.Length -eq 0) {$curdir = $ExecutionContext.SessionState.Drive.Current.Name+':\'}
 				Write-Host
