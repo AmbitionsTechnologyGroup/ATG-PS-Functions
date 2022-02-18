@@ -7,7 +7,6 @@ We are using a **function-based system**. There are 2 ways to load the functions
 
 **Run _either_:**
 ```powershell
-$progressPreference = 'silentlyContinue' #If running from a LogMeIn terminal
 iwr tinyurl.com/get-atgps -useb | iex
 ```
 
