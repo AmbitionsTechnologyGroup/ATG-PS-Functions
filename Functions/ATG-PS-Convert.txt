@@ -56,7 +56,9 @@ Function Convert-ToSharedMailbox {
 		Write-Host "Waiting 30 seconds for mailbox to fully initialize."
 		Sleep -Seconds 30
 		$NewSharedMailbox = Get-EXOMailbox -Identity $Alias
-		$NewSharedMailbox | Select DisplayName, RecipientTypeDetails
+	        $NewSharedMailbox | Select DisplayName, RecipientTypeDetails
+	        Write-Host "Hiding the mailbox from address lists."
+                $NewSharedMailbox | Set-Mailbox -HiddenFromAddressListsEnabled:$true
 		Write-Host "Restoring deleted mailbox to new shared mailbox."
 		New-MailboxRestoreRequest -SourceMailbox $DeletedMailbox.GUID.GUID -TargetMailbox $NewSharedMailbox.GUID.GUID -AllowLegacyDNMismatch
 		Get-MailboxRestoreRequest | FT
