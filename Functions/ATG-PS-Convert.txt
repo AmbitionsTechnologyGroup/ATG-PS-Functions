@@ -61,7 +61,7 @@ Function Convert-ToSharedMailbox {
 		$NewSharedMailbox | Set-Mailbox -HiddenFromAddressListsEnabled:$true -MaxSendSize 150MB -MaxReceiveSize 150MB
 		
 		Write-Host "Restoring deleted mailbox to new shared mailbox."
-		$RestoreName = $Alias + $(Get-Date -uFormat %T_%d%b%Y)
+		$RestoreName = $Alias + "_" + $(Get-Date -uFormat %T_%d%b%Y)
 		New-MailboxRestoreRequest -Name $RestoreName -SourceMailbox $DeletedMailbox.GUID.GUID -TargetMailbox $NewSharedMailbox.GUID.GUID -AllowLegacyDNMismatch -ConflictResolutionOption UpdateFromSource -AssociatedMessagesCopyOption DoNotCopy -ExcludeDumpster -SkipMerging FolderACLs,FolderRules
 		Write-Host "Retrieving Restore Status"
 		Get-SharedMailboxRestoreRequest
