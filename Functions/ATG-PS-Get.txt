@@ -319,3 +319,12 @@ Function Get-LoginHistory {
 
 	$FilteredOutput | Sort-Object -Property TimeCreated | Format-Table -AutoSize
 }
+
+Function Get-SharedMailboxRestoreRequest {
+	Get-MailboxRestoreRequest | Get-MailboxRestoreRequestStatistics -IncludeReport | FT TargetAlias, Status, StatusDetail, PercentComplete, DataConsistencyScore -AutoSize
+	<#
+	.SYNOPSIS
+		Shows the status of current or recently run Mailbox Restore Requests. Must be connected to Exchange Online to Run.
+		Used in conjunction with the Convert-ToSharedMailbox command.
+	#>
+}

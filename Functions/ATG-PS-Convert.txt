@@ -56,13 +56,16 @@ Function Convert-ToSharedMailbox {
 		Write-Host "Waiting 30 seconds for mailbox to fully initialize."
 		Sleep -Seconds 30
 		$NewSharedMailbox = Get-EXOMailbox -Identity $Alias
-	        $NewSharedMailbox | Select DisplayName, RecipientTypeDetails
-	        Write-Host "Hiding the mailbox from address lists."
-                $NewSharedMailbox | Set-Mailbox -HiddenFromAddressListsEnabled:$true
+		$NewSharedMailbox | Select DisplayName, RecipientTypeDetails
+		Write-Host "Hiding the mailbox from address lists."
+		$NewSharedMailbox | Set-Mailbox -HiddenFromAddressListsEnabled:$true -MaxSendSize 150MB -MaxReceiveSize 150MB
+		
 		Write-Host "Restoring deleted mailbox to new shared mailbox."
-		New-MailboxRestoreRequest -SourceMailbox $DeletedMailbox.GUID.GUID -TargetMailbox $NewSharedMailbox.GUID.GUID -AllowLegacyDNMismatch
-		Get-MailboxRestoreRequest | FT
-		Write-Host -ForegroundColor Yellow -BackgroundColor Black "Run Get-MailboxRestoreRequest to see the progress of the restore."
+		$RestoreName = $Alias + $(Get-Date -uFormat %T_%d%b%Y)
+		New-MailboxRestoreRequest -Name $RestoreName -SourceMailbox $DeletedMailbox.GUID.GUID -TargetMailbox $NewSharedMailbox.GUID.GUID -AllowLegacyDNMismatch -ConflictResolutionOption UpdateFromSource -AssociatedMessagesCopyOption DoNotCopy -ExcludeDumpster -SkipMerging FolderACLs,FolderRules
+		Write-Host "Retrieving Restore Status"
+		Get-SharedMailboxRestoreRequest
+		Write-Host -ForegroundColor Yellow -BackgroundColor Black "Run Get-SharedMailboxRestoreRequest to see the progress of the restore."
 
 		#Mailbox Permissions
 		If(-not $NoAccess) {
