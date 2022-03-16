@@ -129,6 +129,33 @@ Function Convert-ToSharedMailbox {
 				}
 			}
 		}
+
+		# Forward Email
+		If(-not $NoForward) {
+			If ($DirectEmailTo) {
+				$ForwardTo = $DirectEmailTo
+			} Else {
+				$Response = Read-Host -Prompt "Do you want to forward emails? (Y/n)"
+				If (-not $Response) {$Response = "y"}
+				If ($Response -like "y*") {
+					$ForwardTo = Read-Host "Alias of the user to forward emails to"
+					If (-not $(Get-EXOMailbox -Identity $ForwardTo)) {
+						Do {
+							$ForwardTo = Read-Host "That alias didn't work. Enter another one or type QUIT to stop:`n"
+							If ($ForwardTo -match "QUIT") {Break}
+						} While (-not $(Get-EXOMailbox -Identity $ForwardTo))
+					}
+					$ForwardTo = Get-EXOMailbox -Identity $ForwardTo
+					$ForwardToName = $ForwardTo.DisplayName
+					$ForwardToEmail = $ForwardTo.PrimarySmtpAddress
+					$NewSharedMailbox | Set-Mailbox -DeliverToMailboxAndForward $true -ForwardingSMTPAddress $ForwardToEmail
+					$NewSharedMailbox | Format-List ForwardingSMTPAddress,DeliverToMailboxandForward
+					Clear-Variable -Name ForwardTo -Force -ErrorAction SilentlyContinue
+					Clear-Variable -Name ForwardToName -Force -ErrorAction SilentlyContinue
+					Clear-Variable -Name ForwardToEmail -Force -ErrorAction SilentlyContinue
+				}
+			}
+		}
 	}
 	Clear-Variable -Name NewSharedMailbox -Force -ErrorAction SilentlyContinue
 <#
