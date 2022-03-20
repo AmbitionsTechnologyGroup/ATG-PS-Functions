@@ -463,14 +463,14 @@ function LongMaintenance {
 			$SQLEd = ((Get-ItemProperty -path "registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Microsoft SQL Server\$path\Setup").Edition)
 			$PatchLevel = (Get-ItemProperty -path "registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Microsoft SQL Server\$path\Setup").PatchLevel
 			Write-Host SQL Database Instance Name: $SQLName ($SQLEd)
-			Write-Host -NoNewLine "SQL Service Pack Build Version: "
+			Write-Host -NoNewLine "SQL Service Pack Build Version | Patch: "
 			$SQLweb = New-Object Net.WebClient
 			$SQLstring = $SQLweb.DownloadString("https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Maintenance-Checks/SQL_SP_Current_Build_Numbers.txt")
-			if ($SQLstring -match $Version) {
-				Write-Host -ForegroundColor Green $Version `(Service Pack $SQLSP`) and it is up to date!
+			if (($SQLstring -match $Version) -or ($SQLstring -match $PatchLevel)) {
+				Write-Host -ForegroundColor Green $Version | $PatchLevel `(Service Pack $SQLSP`) and it is up to date!
 			}
 			else {
-				Write-Host -ForegroundColor Red $Version `(Service Pack $SQLSP`)and it is NOT up to date!
+				Write-Host -ForegroundColor Red $Version | $PatchLevel `(Service Pack $SQLSP`) and it is NOT up to date!
 			}
 			Write-Host "------------------------------------------------------"
 		}
