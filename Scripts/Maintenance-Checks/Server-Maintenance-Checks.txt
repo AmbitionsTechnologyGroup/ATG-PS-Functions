@@ -467,10 +467,10 @@ function LongMaintenance {
 			$SQLweb = New-Object Net.WebClient
 			$SQLstring = $SQLweb.DownloadString("https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Maintenance-Checks/SQL_SP_Current_Build_Numbers.txt")
 			if (($SQLstring -match $Version) -or ($SQLstring -match $PatchLevel)) {
-				Write-Host -ForegroundColor Green $Version | $PatchLevel `(Service Pack $SQLSP`) and it is up to date!
+				Write-Host -ForegroundColor Green "$Version | $PatchLevel `(Service Pack $SQLSP`) and it is up to date!"
 			}
 			else {
-				Write-Host -ForegroundColor Red $Version | $PatchLevel `(Service Pack $SQLSP`) and it is NOT up to date!
+				Write-Host -ForegroundColor Red "$Version | $PatchLevel `(Service Pack $SQLSP`) and it is NOT up to date!"
 			}
 			Write-Host "------------------------------------------------------"
 		}
