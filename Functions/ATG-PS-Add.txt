@@ -42,19 +42,22 @@ Function Add-ChromeShortcut{
 }
 
 Function Add-FileFolderShortcut {
-
 	param
 	(
 		[Parameter(Mandatory=$true)]
 		[string]$SourceLnk,
 
 		[Parameter(Mandatory=$true)]
-		[string]$DestinationPath
+		[string]$DestinationPath,
+
+		[Parameter(Mandatory=$false)]
+		[string]$StartIn
 	)
 
 	$WshShell = New-Object -comObject WScript.Shell
 	$Shortcut = $WshShell.CreateShortcut($SourceLnk)
 	$Shortcut.TargetPath = $DestinationPath
+	If ($StartIn) {$Shortcut.WorkingDirectory = $StartIn}
 	$Shortcut.Save()
 
 	<#
@@ -65,10 +68,12 @@ Function Add-FileFolderShortcut {
 	.PARAMETER DestinationPath
 		What the shortcut is pointing to. "C:\Ambitions\RyanIsAwesome.txt"
 	.EXAMPLE
-		Add-FileFolderShortcut "$env:Public\Desktop\Ambitions Folder.lnk" "C:\Ambitions"
+		Add-FileFolderShortcut -SourceLnk "$env:Public\Desktop\Ambitions Folder.lnk" -DestinationPath "C:\Ambitions"
 		This example puts a shortcut on the desktop called "Ambitions Folder" and points to C:\Ambitions.
+	.EXAMPLE
+		Add-FileFolderShortcut -SourceLnk "$env:Public\Desktop\ProLaw.lnk" -DestinationPath "\\rradb.robles.law\ProLaw\ProLaw.exe" -StartIn "\\rradb.robles.law\ProLaw"
+		This example puts a shortcut on the desktop called ProLaw and with the working directory filled out.
 	#>
-
 }
 
 Function Add-IEShortcut {

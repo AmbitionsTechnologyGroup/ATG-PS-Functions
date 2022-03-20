@@ -78,3 +78,19 @@ Function Set-RunOnceScript {
 	Write-Host "Install After Reboot"
 	Set-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name $Label -Value $RunOnceValue
 }
+
+Function Set-WeeklyReboot {
+<#
+	.SYNOPSIS
+		Creates a scheduled task to restart the computer Weekly on Sunday at 3am, if no one is using the computer.
+		Helpful for maintaining updated and stability.
+#>
+	Write-Host "Schedule Weekly Restart"
+		$Action = New-ScheduledTaskAction -Execute 'shutdown.exe' -Argument '-f -r -t 0'
+		$Trigger = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek Sunday -At 3am
+		$Idle = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration 00:30:00 -IdleWaitTimeout 02:00:00
+		$User = "NT AUTHORITY\SYSTEM"
+		Register-ScheduledTask -Action $action -Trigger $trigger -User $User -Settings $Idle -TaskName "Weekly Restart" -Description "Weekly restart" -Force | Out-Null
+		$NewDate = (Get-ScheduledTask -TaskName "Weekly Restart").Triggers.StartBoundary.subString(0,16)
+	Write-Host "The next scheduled 'Weekly Restart' task will happen at $([Datetime]::ParseExact($NewDate, 'yyyy-MM-ddTHH:mm', $null))"
+}

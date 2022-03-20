@@ -31,8 +31,14 @@ Function Convert-ToSharedMailbox {
 		Do {
 			#Active User Check
 			If ($(Get-EXOMailbox -Identity $Alias -ErrorAction SilentlyContinue)) {
-				Write-Host "That mailbox appears to be for an active user.`nPlease delete the user before proceeding..."
-				Break
+				Write-Host "That mailbox appears to be for an active user."
+				$Response = Read-Host -Prompt "Do you want to forcefully delete the user and proceed? (y/N)"
+				If (-not $Response) {$Response = "else"}
+				If ($Response -like "y*") {
+					Write-Host "Forcefully deleting the mailbox for $($DeletedMailbox.DisplayName)."
+					Write-Host "Please ensure sync is disabled for the user."
+					Remove-Mailbox -Identity $Alias
+				} Else { Break }
 			}
 			#Retry the alias
 			$Alias = Read-Host "That alias didn't work. Enter another one or type QUIT to stop:`n"
