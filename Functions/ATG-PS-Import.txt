@@ -1,0 +1,189 @@
+Function Import-PPESenderLists {
+	$Global:blocked = @()
+	$Global:trusted = @()
+	Function Read-InputBoxDialog([string]$Message, [string]$WindowTitle, [string]$DefaultText)
+	{
+		Add-Type -AssemblyName Microsoft.VisualBasic
+		return [Microsoft.VisualBasic.Interaction]::InputBox($Message, $WindowTitle, $DefaultText)
+	}
+	Function Read-MultiLineInputBoxDialog() {
+		param(
+			[string]$Message,
+			[string]$WindowTitle,
+			[string]$DefaultText
+		)
+
+		Add-Type -AssemblyName System.Drawing
+		Add-Type -AssemblyName System.Windows.Forms
+
+		# Create the Label.
+		$label = New-Object System.Windows.Forms.Label
+		$label.Location = New-Object System.Drawing.Size(10,10)
+		$label.Size = New-Object System.Drawing.Size(280,20)
+		$label.AutoSize = $true
+		$label.Text = $Message
+
+		# Create the TextBox used to capture the user's text.
+		$textBox = New-Object System.Windows.Forms.TextBox
+		$textBox.Location = New-Object System.Drawing.Size(10,40)
+		$textBox.Size = New-Object System.Drawing.Size(575,200)
+		$textBox.AcceptsReturn = $true
+		$textBox.AcceptsTab = $false
+		$textBox.Multiline = $true
+		$textBox.ScrollBars = 'Both'
+		$textBox.Text = $DefaultText
+
+		# Create the OK button.
+		$okButton = New-Object System.Windows.Forms.Button
+		$okButton.Location = New-Object System.Drawing.Size(415,250)
+		$okButton.Size = New-Object System.Drawing.Size(75,25)
+		$okButton.Text = "OK"
+		$okButton.Add_Click({ $form.Tag = $textBox.Text; $form.Close() })
+
+		# Create the Cancel button.
+		$cancelButton = New-Object System.Windows.Forms.Button
+		$cancelButton.Location = New-Object System.Drawing.Size(510,250)
+		$cancelButton.Size = New-Object System.Drawing.Size(75,25)
+		$cancelButton.Text = "Cancel"
+		$cancelButton.Add_Click({ $form.Tag = $null; $form.Close() })
+
+		# Create the form.
+		$form = New-Object System.Windows.Forms.Form
+		$form.Text = $WindowTitle
+		$form.Size = New-Object System.Drawing.Size(610,320)
+		$form.FormBorderStyle = 'FixedSingle'
+		$form.StartPosition = "CenterScreen"
+		$form.AutoSizeMode = 'GrowAndShrink'
+		$form.Topmost = $True
+		$form.AcceptButton = $okButton
+		$form.CancelButton = $cancelButton
+		$form.ShowInTaskbar = $true
+
+		# Add all of the controls to the form.
+		$form.Controls.Add($label)
+		$form.Controls.Add($textBox)
+		$form.Controls.Add($okButton)
+		$form.Controls.Add($cancelButton)
+
+		# Initialize and show the form.
+		$form.Add_Shown({$form.Activate()})
+		$form.ShowDialog() > $null   # Trash the text of the button that was clicked.
+
+		# Return the text that the user entered.
+		return $form.Tag
+	}
+
+
+	Function Test-Entries {
+		Write-Host "Scanning for invalid entries"
+		#$Global:domain = '*@' + $Global:domain
+		$PreBlockedCount = $Global:blocked.count
+		$Global:blocked = $Global:blocked | Where-Object {$_ -notlike $('*@' + $Global:domain)}
+		$Global:blocked = $Global:blocked.Replace('*@','')
+		$PostBlockedCount = $Global:blocked.count
+
+		$PreTrustedCount = $Global:trusted.count
+		$Global:trusted = $Global:trusted | Where-Object {$_ -notlike ('*@' + $Global:domain)}
+		$Global:trusted = $Global:trusted.Replace('*@','')
+		$PostTrustedCount = $Global:trusted.count
+		$TotalRemovedCount = $($PreBlockedCount - $PostBlockedCount) + $($PreTrustedCount - $PostTrustedCount)
+		Write-Host "Removed $TotalRemovedCount invalid entries."
+	}
+
+
+	Function Test-User {
+		Write-Host "Checking for a valid user"
+		$Mailbox = Get-Mailbox -Identity $User -ErrorAction SilentlyContinue
+		If ($Mailbox) {
+			$Global:Name = $Mailbox.DisplayName
+			Write-Host "Mailbox for $Name was successfully found."
+		} Else {
+			$Mailbox = Get-ExoMailbox | Where-Object {($_.EmailAddresses -match $User) -or ($_.PrimarySmtpAddress -match $User)}
+			If (-not $Mailbox) {
+				Write-Host "Mailbox not found."
+				Break
+			} ElseIf ($Mailbox.Count -gt 1) {
+				Write-Host "Multiple mailboxes found. Please refine your search."
+				Break
+			} ElseIf ($Mailbox) {
+				$Global:User = $Mailbox.Alias
+				$Global:Name = $Mailbox.DisplayName
+				Write-Host "Mailbox for $Name was successfully found by secondary email address."
+			}
+		}
+	}
+
+	Function Import-Entries {
+		#Check for empty lists
+		If ([string]::IsNullOrWhiteSpace($blocked)) {Clear-Variable blocked}
+		If ([string]::IsNullOrWhiteSpace($trusted)) {Clear-Variable trusted}
+		$BadBlocked = @()
+		$BadTrusted = @()
+		Try {
+			Write-Host "Attempting to configure all addresses at once."
+			If ($blocked -and $trusted) {
+				Write-Host "Blocked and Trusted Lists found, importing both."
+				Set-MailboxJunkEmailConfiguration $User -BlockedSendersAndDomains @{Add=$blocked} -TrustedSendersAndDomains @{Add=$trusted} -ContactsTrusted $true -ErrorAction Stop
+			} elseif ($blocked -and !($trusted)) {
+				Write-Host "Only Blocked list found, importing it."
+				Set-MailboxJunkEmailConfiguration $User -BlockedSendersAndDomains @{Add=$blocked} -ErrorAction Stop
+			} elseif (!($blocked) -and $trusted) {
+				Write-Host "Only Trusted list found, importing it."
+				Set-MailboxJunkEmailConfiguration $User -TrustedSendersAndDomains @{Add=$trusted} -ContactsTrusted $true -ErrorAction Stop
+			} elseif (!($blocked) -and !($trusted)) {
+				Write-Host "Neither a blocked list nor a trusted list found. Is there anything to import?"
+			}
+			Write-Host "It worked!"
+			Get-MailboxJunkEmailConfiguration -Identity $User | Format-Table Identity, TrustedSendersAndDomains, BlockedSendersAndDomains -AutoSize
+		} Catch {
+			Write-Host "That didn't work, trying one at a time."
+			$CurrentSettings = Get-MailboxJunkEmailConfiguration -Identity $User
+			$blocked | ForEach-Object {
+				Write-Host "Blocking: $_"
+				$CurrentEmail = $_
+				If ($CurrentSettings.BlockedSendersAndDomains -Contains $_){
+					Write-Host -ForegroundColor Green "Already Blocked: $_"
+				} Else {
+					Try {
+						Set-MailboxJunkEmailConfiguration $User -BlockedSendersAndDomains @{Add=$_} -ErrorAction Stop
+					} Catch {
+						Write-Host -ForegroundColor Red "Failed to block: $_"
+						$BadBlocked += $CurrentEmail
+						Clear-Variable CurrentEmail
+					}
+				}
+			}
+			$trusted | ForEach-Object {
+				Write-Host "Trusting $_"
+				$CurrentEmail = $_
+				If ($CurrentSettings.TrustedSendersAndDomains -Contains $_){
+					Write-Host -ForegroundColor Green "Already trusted: $_"
+				} Else {
+					Try {
+						Set-MailboxJunkEmailConfiguration $User -TrustedSendersAndDomains @{Add=$_} -ErrorAction Stop
+					} Catch {
+						Write-Host -ForegroundColor Red "Failed to trust: $_"
+						$BadTrusted += $CurrentEmail
+						Clear-Variable CurrentEmail
+					}
+				}
+			}
+			Set-MailboxJunkEmailConfiguration $User -ContactsTrusted $true
+			$BadBlocked
+			$BadTrusted
+			Get-MailboxJunkEmailConfiguration -Identity $User | Format-Table Identity, TrustedSendersAndDomains, BlockedSendersAndDomains -AutoSize
+		}
+	}
+	$Global:Email = Read-InputBoxDialog -Message "Please enter the user's email address:" -WindowTitle "Email Address"
+	$Global:User = $Email.Split("@")[0]
+	$Global:domain = $Email.Split("@")[1]
+	$User
+	$Global:domain
+	Test-User
+	$Global:blocked = (Read-MultiLineInputBoxDialog -Message "Please paste in the blocked senders for $Global:Name from Proofpoint" -WindowTitle "ProofPoint Blocked Senders") -split [System.Environment]::NewLine
+	$Global:trusted = (Read-MultiLineInputBoxDialog -Message "Please paste in the Safe Sender List for $Global:Name from Proofpoint" -WindowTitle "ProofPoint Safe Senders") -split [System.Environment]::NewLine
+
+	Test-Entries
+	Import-Entries
+	Clear-Variable user,email,domain,blocked,trusted -ea SilentlyContinue
+}
