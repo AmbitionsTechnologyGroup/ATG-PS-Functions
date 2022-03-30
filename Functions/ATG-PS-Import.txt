@@ -194,10 +194,10 @@ Function Import-PPESenderLists {
 			<#$Mailbox = Get-ExoMailbox | Where-Object {($_.EmailAddresses -match $Global:User) -or ($_.PrimarySmtpAddress -match $Global:User)}#>
 			If (-not $Mailbox) {
 				Write-Host "Mailbox not found."
-				Break
+				#Break
 			} ElseIf ($Mailbox.Count -gt 1) {
 				Write-Host "Multiple mailboxes found. Please refine your search."
-				Break
+				#Break
 			} ElseIf ($Mailbox) {
 				$Global:User = $Mailbox.Alias
 				$Global:Name = $Mailbox.DisplayName
@@ -210,14 +210,14 @@ Function Import-PPESenderLists {
 		Write-Host "Scanning for invalid entries"
 		If ($Global:blocked) {
 			$PreBlockedCount = $Global:blocked.count
-			$Global:blocked = $Global:blocked | Where-Object {$_ -notlike $('*@' + $Global:domain)}
+			$Global:DomainList | ForEach-Object {$Global:blocked = $Global:blocked | Where-Object {$_ -notlike $('*@' + $_)}}
 			$Global:blocked = $Global:blocked.Replace('*@','')
 			$PostBlockedCount = $Global:blocked.count
 		}
 		
 		If ($Global:trusted) {
 			$PreTrustedCount = $Global:trusted.count
-			$Global:trusted = $Global:trusted | Where-Object {$_ -notlike ('*@' + $Global:domain)}
+			$Global:DomainList | ForEach-Object {$Global:trusted = $Global:trusted | Where-Object {$_ -notlike $('*@' + $_)}}
 			$Global:trusted = $Global:trusted.Replace('*@','')
 			$PostTrustedCount = $Global:trusted.count
 		}
@@ -237,13 +237,13 @@ Function Import-PPESenderLists {
 			Write-Host "Attempting to configure all addresses at once."
 			If ($Global:blocked -and $Global:trusted) {
 				Write-Host "Blocked and Trusted Lists found, importing both."
-				Set-MailboxJunkEmailConfiguration $Global:User -BlockedSendersAndDomains @{Add=$Global:blocked} -TrustedSendersAndDomains @{Add=$Global:trusted} -ContactsTrusted $true -ErrorAction Stop
+				Set-MailboxJunkEmailConfiguration $Global:User -BlockedSendersAndDomains @{Add=$Global:blocked} -TrustedSendersAndDomains @{Add=$Global:trusted} -ContactsTrusted $false -ErrorAction Stop
 			} elseif ($Global:blocked -and !($Global:trusted)) {
 				Write-Host "Only Blocked list found, importing it."
 				Set-MailboxJunkEmailConfiguration $Global:User -BlockedSendersAndDomains @{Add=$Global:blocked} -ErrorAction Stop
 			} elseif (!($Global:blocked) -and $Global:trusted) {
 				Write-Host "Only Trusted list found, importing it."
-				Set-MailboxJunkEmailConfiguration $Global:User -TrustedSendersAndDomains @{Add=$Global:trusted} -ContactsTrusted $true -ErrorAction Stop
+				Set-MailboxJunkEmailConfiguration $Global:User -TrustedSendersAndDomains @{Add=$Global:trusted} -ContactsTrusted $false -ErrorAction Stop
 			} elseif (!($Global:blocked) -and !($Global:trusted)) {
 				Write-Host "Neither a blocked list nor a trusted list found. Is there anything to import?"
 			}
@@ -252,37 +252,41 @@ Function Import-PPESenderLists {
 		} Catch {
 			Write-Host "That didn't work, trying one at a time."
 			$CurrentSettings = Get-MailboxJunkEmailConfiguration -Identity $Global:User
-			$Global:blocked | ForEach-Object {
-				Write-Host "Blocking: $_"
-				$CurrentEmail = $_
-				If ($CurrentSettings.BlockedSendersAndDomains -Contains $_){
-					Write-Host -ForegroundColor Green "Already Blocked: $_"
-				} Else {
-					Try {
-						Set-MailboxJunkEmailConfiguration $Global:User -BlockedSendersAndDomains @{Add=$_} -ErrorAction Stop
-					} Catch {
-						Write-Host -ForegroundColor Red "Failed to block: $_"
-						$BadBlocked += $CurrentEmail
-						Clear-Variable CurrentEmail
+			If ($Global:blocked) {
+				$Global:blocked | ForEach-Object {
+					Write-Host "Blocking: $_"
+					$CurrentEmail = $_
+					If ($CurrentSettings.BlockedSendersAndDomains -Contains $_){
+						Write-Host -ForegroundColor Green "Already Blocked: $_"
+					} Else {
+						Try {
+							Set-MailboxJunkEmailConfiguration $Global:User -BlockedSendersAndDomains @{Add=$_} -ErrorAction Stop
+						} Catch {
+							Write-Host -ForegroundColor Red "Failed to block: $_"
+							$BadBlocked += $CurrentEmail
+							Clear-Variable CurrentEmail
+						}
 					}
 				}
 			}
-			$Global:trusted | ForEach-Object {
-				Write-Host "Trusting $_"
-				$CurrentEmail = $_
-				If ($CurrentSettings.TrustedSendersAndDomains -Contains $_){
-					Write-Host -ForegroundColor Green "Already trusted: $_"
-				} Else {
-					Try {
-						Set-MailboxJunkEmailConfiguration $Global:User -TrustedSendersAndDomains @{Add=$_} -ErrorAction Stop
-					} Catch {
-						Write-Host -ForegroundColor Red "Failed to trust: $_"
-						$BadTrusted += $CurrentEmail
-						Clear-Variable CurrentEmail
+			If ($Global:trusted) {
+				$Global:trusted | ForEach-Object {
+					Write-Host "Trusting $_"
+					$CurrentEmail = $_
+					If ($CurrentSettings.TrustedSendersAndDomains -Contains $_){
+						Write-Host -ForegroundColor Green "Already trusted: $_"
+					} Else {
+						Try {
+							Set-MailboxJunkEmailConfiguration $Global:User -TrustedSendersAndDomains @{Add=$_} -ErrorAction Stop
+						} Catch {
+							Write-Host -ForegroundColor Red "Failed to trust: $_"
+							$BadTrusted += $CurrentEmail
+							Clear-Variable CurrentEmail
+						}
 					}
 				}
 			}
-			Set-MailboxJunkEmailConfiguration $Global:User -ContactsTrusted $true
+			Set-MailboxJunkEmailConfiguration $Global:User -ContactsTrusted $false
 			$BadBlocked
 			$BadTrusted
 			Get-MailboxJunkEmailConfiguration -Identity $Global:User | Format-Table Identity, TrustedSendersAndDomains, BlockedSendersAndDomains -AutoSize
@@ -293,22 +297,29 @@ Function Import-PPESenderLists {
 	Export-PPEListsViaAPI
 	$Directory = $Global:ExportFolder #Read-Host "Enter directory of exported files"
 	Clear-Variable user,email,domain,blocked,trusted -Force -Scope Global -ea SilentlyContinue
-	$Global:UserBlockedSenderList = Import-Csv -Path $($Directory + "\UserBlockedSenderList.csv")
-	$Global:UserSafeSenderList = Import-Csv -Path $($Directory + "\UserSafeSenderList.csv")
+	$Global:RawUserBlockedSenderList = Import-Csv -Path $($Directory + "\UserBlockedSenderList.csv")
+	$Global:RawUserSafeSenderList = Import-Csv -Path $($Directory + "\UserSafeSenderList.csv")
+	$Global:DomainList = (Get-AcceptedDomain).DomainName
+	$Global:UserBlockedSenderList = $Global:RawUserBlockedSenderList
+	$Global:UserSafeSenderList = $Global:RawUserSafeSenderList
+	ForEach ($Domain in $Global:DomainList){$Global:UserBlockedSenderList = $Global:UserBlockedSenderList | Where-Object {$_.Entry -notlike $('*@' + $Domain)}}
+	ForEach ($Domain in $Global:DomainList){$Global:UserSafeSenderList = $Global:UserSafeSenderList | Where-Object {$_.Entry -notlike $('*@' + $Domain)}}
+
+
 	$Global:Users = ($Global:UserBlockedSenderList.PrimaryEmail + $Global:UserSafeSenderList.PrimaryEmail) | Sort -Unique
 	$Global:AllUserMailboxes = Get-Mailbox
 	$Global:Users | ForEach-Object {
 		$Global:Email = $_
 		$Global:User = $Global:Email.Split("@")[0]
-		$Global:domain = $Global:Email.Split("@")[1]
-		Write-Host "Processing: User= $Global:User | Domain= $Global:domain"
+		#$Global:domain = $Global:Email.Split("@")[1]
+		Write-Host "Processing: User= $Global:User# | Domain= $Global:domain"
 		Test-User
 		#$Global:blocked = @()
 		#$Global:trusted = @()
 		$Global:blocked = ($Global:UserBlockedSenderList | Where-Object {$_.PrimaryEmail -eq $Global:Email}).Entry
 		$Global:trusted = ($Global:UserSafeSenderList | Where-Object {$_.PrimaryEmail -eq $Global:Email}).Entry
 		Write-Host "There are $($Global:blocked.count) blocked entries and $($Global:trusted.count) trusted entries for $Global:User"
-		Test-Entries
+		#Test-Entries
 		Import-Entries
 		Clear-Variable user,name,email,domain,blocked,trusted -Force -Scope Global -ea SilentlyContinue
 		Write-Host "`n`n"
@@ -422,10 +433,10 @@ Function Import-PPESingleUserSenderLists {
 			$Mailbox = Get-ExoMailbox | Where-Object {($_.EmailAddresses -match $User) -or ($_.PrimarySmtpAddress -match $User)}
 			If (-not $Mailbox) {
 				Write-Host "Mailbox not found."
-				Break
+				#Break
 			} ElseIf ($Mailbox.Count -gt 1) {
 				Write-Host "Multiple mailboxes found. Please refine your search."
-				Break
+				#Break
 			} ElseIf ($Mailbox) {
 				$Global:User = $Mailbox.Alias
 				$Global:Name = $Mailbox.DisplayName
