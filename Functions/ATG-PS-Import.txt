@@ -185,7 +185,7 @@ Function Import-PPESenderLists {
 
 	Function Test-User {
 		Write-Host "Checking for a valid user"
-		$Mailbox = ($AllUserMailboxes | Where-Object -Property EmailAddresses -match $Global:User)
+		$Global:Mailbox = ($AllUserMailboxes | Where-Object -Property EmailAddresses -match $Global:User)
 		If ($Mailbox) {
 			$Global:User = $Mailbox.Alias
 			$Global:Name = $Mailbox.DisplayName
@@ -312,7 +312,7 @@ Function Import-PPESenderLists {
 		$Global:Email = $_
 		$Global:User = $Global:Email.Split("@")[0]
 		#$Global:domain = $Global:Email.Split("@")[1]
-		Write-Host "Processing: User= $Global:User# | Domain= $Global:domain"
+		Write-Host "Processing: User= $Global:User"
 		Test-User
 		#$Global:blocked = @()
 		#$Global:trusted = @()
@@ -320,8 +320,8 @@ Function Import-PPESenderLists {
 		$Global:trusted = ($Global:UserSafeSenderList | Where-Object {$_.PrimaryEmail -eq $Global:Email}).Entry
 		Write-Host "There are $($Global:blocked.count) blocked entries and $($Global:trusted.count) trusted entries for $Global:User"
 		#Test-Entries
-		Import-Entries
-		Clear-Variable user,name,email,domain,blocked,trusted -Force -Scope Global -ea SilentlyContinue
+		If ($Global:Mailbox){Import-Entries}
+		Clear-Variable user,name,email,mailbox,domain,blocked,trusted -Force -Scope Global -ea SilentlyContinue
 		Write-Host "`n`n"
 	}
 	$UserCount = $Global:Users.Count
