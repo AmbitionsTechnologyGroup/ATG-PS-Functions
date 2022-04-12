@@ -15,18 +15,18 @@ Function Optimize-Powershell {
 			}
 			If (!(Get-Module -Name AdvancedHistory -ListAvailable)) {
 				Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue
-				Install-Module AdvancedHistory -Scope AllUsers -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+				Install-Module AdvancedHistory -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 			}
-				Import-Module AdvancedHistory -Scope AllUsers -Force
+				Import-Module AdvancedHistory -Force
 				Enable-AdvancedHistory -Unique
 
 			If (!(Get-Module -Name PSReadline -ListAvailable)) {
 				If ($Providers -NotContains "Nuget") {
 					Install-PackageProvider -Name NuGet -Force -ErrorAction SilentlyContinue
 				}
-				Install-Module PSReadline -Scope AllUsers -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+				Install-Module PSReadline -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 			}
-				Import-Module PSReadline -Scope AllUsers -Force
+				Import-Module PSReadline -Force
 				Try {
 					Set-PSReadLineOption -PredictionSource HistoryAndPlugin -ErrorAction Stop
 				} Catch {
