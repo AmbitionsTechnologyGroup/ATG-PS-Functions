@@ -344,29 +344,39 @@ Function Update-PowershellModules {
 	If ($Providers -NotContains "Nuget") {
 		Install-PackageProvider -Name NuGet -Force -ErrorAction SilentlyContinue
 	}
-	$Modules = Get-Module
-	$ModulesToInstall = "PSReadline","PowerShellGet"
+	Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue
+	$ModulesToInstall = @("PSReadline","PowerShellGet","AdvancedHistory")
 	$ModulesToInstall | ForEach-Object {
 		$Mod = $_
-		Remove-Module $Mod -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-		Uninstall-Module $Mod -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-		If ($Modules.Name -NotContains $Mod) {
-			Write-Host "$Mod not found, installing."
-			Install-Module -Name $Mod -Scope AllUsers -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+		Write-Host "Processing $Mod"
+		If (Get-Module -Name $Mod -ListAvailable) {
 			Try {
-				Import-Module -Name $Mod -Scope AllUsers -Force -ErrorAction Stop -WarningAction SilentlyContinue
+				Remove-Module $Mod -Force -ErrorAction Stop -WarningAction SilentlyContinue
+				Uninstall-Module $Mod -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 			} Catch {
-				Import-Module -Name $Mod -Force -WarningAction SilentlyContinue
+				Uninstall-Module $Mod -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 			}
+		}
+		Install-Module -Name $Mod -Scope AllUsers -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+		Try {
+			Import-Module -Name $Mod -Scope AllUsers -Force -ErrorAction Stop -WarningAction SilentlyContinue
+		} Catch {
+			Import-Module -Name $Mod -Force -WarningAction SilentlyContinue
 		}
 		Clear-Variable -Name Mod -Force
 	}
+	Write-Host "Updating all modules"
 	Try {
 		Update-Module -Scope AllUsers -Force -WarningAction SilentlyContinue
 	} Catch {
 		Update-Module -Force -WarningAction SilentlyContinue
 	}
-	Set-PSReadLineOption -PredictionSource History
+	Write-Host "Settings Prediction Source"
+	Try {
+		Set-PSReadLineOption -PredictionSource HistoryAndPlugin -ErrorAction Stop
+	} Catch {
+		Set-PSReadLineOption -PredictionSource History
+	}
 	Get-Module | Select-Object Name, Version, Description
 }
 
