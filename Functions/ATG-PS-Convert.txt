@@ -68,7 +68,7 @@ Function Convert-ToSharedMailbox {
 		
 		Write-Host "Restoring deleted mailbox to new shared mailbox."
 		$RestoreName = $Alias + "_" + $(Get-Date -uFormat %T_%d%b%Y)
-		New-MailboxRestoreRequest -Name $RestoreName -SourceMailbox $DeletedMailbox.GUID.GUID -TargetMailbox $NewSharedMailbox.GUID.GUID -AllowLegacyDNMismatch -ConflictResolutionOption UpdateFromSource -AssociatedMessagesCopyOption DoNotCopy -ExcludeDumpster -SkipMerging FolderACLs,FolderRules
+		New-MailboxRestoreRequest -Name $RestoreName -SourceMailbox $DeletedMailbox.GUID.GUID -TargetMailbox $NewSharedMailbox.GUID.GUID -AllowLegacyDNMismatch -ConflictResolutionOption ForceCopy -AssociatedMessagesCopyOption DoNotCopy
 		Write-Host "Retrieving Restore Status"
 		Get-SharedMailboxRestoreRequest
 		Write-Host -ForegroundColor Yellow -BackgroundColor Black "Run Get-SharedMailboxRestoreRequest to see the progress of the restore."
@@ -164,6 +164,13 @@ Function Convert-ToSharedMailbox {
 		}
 	}
 	Clear-Variable -Name NewSharedMailbox -Force -ErrorAction SilentlyContinue
+	$(
+	Write-Host -NoNewLine "Obtaining progress, which can be repeated with the "
+	Write-Host -ForegroundColor Yellow -NoNewLine "Get-SharedMailboxRestoreRequest"
+	Write-Host " command."
+	)
+	Get-SharedMailboxRestoreRequest
+
 <#
 	.SYNOPSIS
 		Takes a deleted user, and converts their email to a shared mailbox. Can add permissions and an autoreply.
