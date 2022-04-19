@@ -324,45 +324,69 @@ function Maintenance {
 	}
 	#End of Anti-Virus installed
 
-	#Firewall Check
-	Write-Host
-	Write-Host "Windows Firewall Check:"
-	$GPFW = (gpresult /scope COMPUTER /Z)
-	$fw = netsh advfirewall show currentprofile
-	If ($fw -like 'Domain*') {
-		Write-Host -ForegroundColor Green -NoNewLine 'The firewall profile is set to Domain'
-		netsh advfirewall show current | Select-String -Pattern "State" -OutVariable fs > $null
-		$GPFW = ($GPFW | Select-String -pattern "DomainProfile\\EnableFirewall" -Context 0, 2 | Out-String)
-	}
-	If ($fw -like 'Private*') {
-		Write-Host -ForegroundColor Red -NoNewLine 'The firewall profile is set to Private'
-		netsh advfirewall show current | Select-String -Pattern "State" -OutVariable fs > $null
-		$GPFW = ($GPFW | Select-String -pattern "PrivateProfile\\EnableFirewall" -Context 0, 2 | Out-String)
-	}
-	If ($fw -like 'Public*') {
-		Write-Host -ForegroundColor Red -NoNewLine 'The firewall profile is set to Public'
-		netsh advfirewall show current | Select-String -Pattern "State" -OutVariable fs > $null
-		$GPFW = ($GPFW | Select-String -pattern "PublicProfile\\EnableFirewall" -Context 0, 2 | Out-String)
-	}
-	If (($GPFW -like "*0, 0, 0, 0*") -AND ($GPFW -like "*Enabled*")) { $fs = 'OFF'; $GPONOFF = 'OFF' }
-	If (($GPFW -like "*1, 0, 0, 0*") -AND ($GPFW -like "*Enabled*")) { $fs = 'ON'; $GPONOFF = 'ON' }
-	If ($fs -match 'ON') {
-		If ($GPONOFF -match 'ON') {
-			Write-Host -ForegroundColor Green ' and it is turned ON by Group Policy'
+	Function Get-FWCheck {
+	#Firewall Enabled Check
+		Write-Host
+		Write-Host "Windows Firewall Enabled Check:"
+		$GPFW = (gpresult /scope COMPUTER /Z)
+		$fw = netsh advfirewall show currentprofile
+		If ($fw -like 'Domain*') {
+			Write-Host -ForegroundColor Green -NoNewLine 'The firewall profile is set to Domain'
+			netsh advfirewall show current | Select-String -Pattern "State" -OutVariable fs > $null
+			$GPFW = ($GPFW | Select-String -pattern "DomainProfile\\EnableFirewall" -Context 0, 2 | Out-String)
+			$FWName = 'Domain'
 		}
-		else {
-			Write-Host -ForegroundColor Green ' and it is turned ON'
+		If ($fw -like 'Private*') {
+			Write-Host -ForegroundColor Red -NoNewLine 'The firewall profile is set to Private'
+			netsh advfirewall show current | Select-String -Pattern "State" -OutVariable fs > $null
+			$GPFW = ($GPFW | Select-String -pattern "PrivateProfile\\EnableFirewall" -Context 0, 2 | Out-String)
+			$FWName = 'Private'
 		}
+		If ($fw -like 'Public*') {
+			Write-Host -ForegroundColor Red -NoNewLine 'The firewall profile is set to Public'
+			netsh advfirewall show current | Select-String -Pattern "State" -OutVariable fs > $null
+			$GPFW = ($GPFW | Select-String -pattern "PublicProfile\\EnableFirewall" -Context 0, 2 | Out-String)
+			$FWName = 'Public'
+		}
+		If (($GPFW -like "*0, 0, 0, 0*") -AND ($GPFW -like "*Enabled*")) { $fs = 'OFF'; $GPONOFF = 'OFF' }
+		If (($GPFW -like "*1, 0, 0, 0*") -AND ($GPFW -like "*Enabled*")) { $fs = 'ON'; $GPONOFF = 'ON' }
+		If ($fs -match 'ON') {
+			If ($GPONOFF -match 'ON') {
+				Write-Host -ForegroundColor Green ' and it is turned ON by Group Policy'
+			} Else {
+				Write-Host -ForegroundColor Green ' and it is turned ON'
+			}
+		} Else {
+			If ($GPONOFF -match 'OFF') {
+				Write-Host -ForegroundColor Red ' and it is turned OFF by Group Policy'
+			}
+			else {
+				Write-Host -ForegroundColor Red ' and it is turned OFF'
+			}
+		}
+		#End of Firewall Enabled Check
+
+	#Firewall Settings Check
+		Write-Host
+		Write-Host "Windows Firewall Default Inbound Action Check:"
+		$ActiveFWProfile = Get-NetFirewallProfile -Name $FWName
+		If ($ActiveFWProfile.DefaultInboundAction -ne 'Allow'){
+			Write-Host -ForegroundColor Green "The $FWName profile is set to block connections by default."
+		} Else {
+			Write-Host -ForegroundColor Red "The $FWName profile is set to allow connections by default."
+		}
+
+		Write-Host
+		Write-Host "Windows Firewall Disabled Interfaces Check:"
+		If ($($ActiveFWProfile.DisabledInterfaceAliases) -eq "NotConfigured") {
+			Write-Host -ForegroundColor Green 'The $FWName profile is set to protect all interfaces.'
+		} Else {
+			Write-Host -ForegroundColor Red "The $FWName profile is set NOT to protect all interfaces.`nThe unprotected interfaces are:`n$($ActiveFWProfile.DisabledInterfaceAliases | FL | Out-STring)"
+		}
+
+	#End of Firewall Settings Check
 	}
- Else {
-		If ($GPONOFF -match 'OFF') {
-			Write-Host -ForegroundColor Red ' and it is turned OFF by Group Policy'
-		}
-		else {
-			Write-Host -ForegroundColor Red ' and it is turned OFF'
-		}
-	}
-	#End of Firewall Check
+	Get-FWCheck
 
 	#Datto Backup Check
 	Write-Host
