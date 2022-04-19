@@ -265,6 +265,24 @@ Function Get-InternetHealth {
 	$SpeedtestHealth
 }
 
+Function Get-ListeningPorts {
+		<#
+
+	.SYNOPSIS
+		Checks for processes that are listening on an open port. Useful for troubleshooting firewall issues.
+
+	 .EXAMPLE
+		Get-ListeningPorts
+
+	.LINK
+		https://azega.org/list-open-ports-using-powershell/
+
+	#>
+
+	get-nettcpconnection | where {($_.State -eq "Listen") -and ($_.RemoteAddress -eq "0.0.0.0")} | select LocalPort,@{Name="Process";Expression={(Get-Process -Id $_.OwningProcess).ProcessName}},LocalAddress,State | Sort LocalPort
+
+}
+
 Function Get-LoginHistory {
 	<#
 
