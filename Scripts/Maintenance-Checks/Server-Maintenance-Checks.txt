@@ -325,82 +325,90 @@ function Maintenance {
 	#End of Anti-Virus installed
 
 	#Firewall Enabled Check
-	Function Get-FWCheck {
-		$GPFW = (gpresult /scope COMPUTER /Z)
-		$fws = Get-NetConnectionProfile
-		Foreach ($fw in $fws) {
-			Write-Host
-			Write-Host -ForegroundColor Magenta "____________ Connected Network: $($fw.InterfaceAlias) ($($fw.Name)) ____________"
-			Write-Host -ForegroundColor Magenta -NoNewLine "|  "
-			Write-Host "Windows Firewall Enabled Check:"
-			If (($fw.NetworkCategory -eq 'DomainAuthenticated') -or ($fw.NetworkCategory -eq '2')) {
-				Write-Host -ForegroundColor Magenta -NoNewLine "|  "
-				Write-Host -ForegroundColor Green -NoNewLine 'The firewall profile is set to Domain'
-				netsh advfirewall show current | Select-String -Pattern "State" -OutVariable fs > $null
-				$GPFW = ($GPFW | Select-String -pattern "DomainProfile\\EnableFirewall" -Context 0, 2 | Out-String)
-				$FWName = 'Domain'
-			}
-			If (($fw.NetworkCategory -eq 'Private') -or ($fw.NetworkCategory -eq '1')) {
-				Write-Host -ForegroundColor Magenta -NoNewLine "|  "
-				Write-Host -ForegroundColor Red -NoNewLine 'The firewall profile is set to Private'
-				netsh advfirewall show current | Select-String -Pattern "State" -OutVariable fs > $null
-				$GPFW = ($GPFW | Select-String -pattern "PrivateProfile\\EnableFirewall" -Context 0, 2 | Out-String)
-				$FWName = 'Private'
-			}
-			If (($fw.NetworkCategory -eq 'Public') -or ($fw.NetworkCategory -eq '0')) {
-				Write-Host -ForegroundColor Magenta -NoNewLine "|  "
-				Write-Host -ForegroundColor Red -NoNewLine 'The firewall profile is set to Public'
-				netsh advfirewall show current | Select-String -Pattern "State" -OutVariable fs > $null
-				$GPFW = ($GPFW | Select-String -pattern "PublicProfile\\EnableFirewall" -Context 0, 2 | Out-String)
-				$FWName = 'Public'
-			}
-			If (($GPFW -like "*0, 0, 0, 0*") -AND ($GPFW -like "*Enabled*")) { $fs = 'OFF'; $GPONOFF = 'OFF' }
-			If (($GPFW -like "*1, 0, 0, 0*") -AND ($GPFW -like "*Enabled*")) { $fs = 'ON'; $GPONOFF = 'ON' }
-			If ($fs -match 'ON') {
-				If ($GPONOFF -match 'ON') {
-					Write-Host -ForegroundColor Magenta -NoNewLine "|  "
-					Write-Host -ForegroundColor Green ' and it is turned ON by Group Policy'
-				} Else {
-					Write-Host -ForegroundColor Green ' and it is turned ON'
-				}
-			} Else {
-				If ($GPONOFF -match 'OFF') {
-					Write-Host -ForegroundColor Red ' and it is turned OFF by Group Policy'
-				}
-				else {
-					Write-Host -ForegroundColor Red ' and it is turned OFF'
-				}
-			}
-			#End of Firewall Enabled Check
-
-		#Firewall Settings Check
-			Write-Host -ForegroundColor Magenta "|  "
-			Write-Host -ForegroundColor Magenta -NoNewLine "|  "
-			Write-Host "Windows Firewall Default Inbound Action Check:"
-			$ActiveFWProfile = Get-NetFirewallProfile -Name $FWName
-			If ($ActiveFWProfile.DefaultInboundAction -ne 'Allow'){
-				Write-Host -ForegroundColor Magenta -NoNewLine "|  "
-				Write-Host -ForegroundColor Green "The $FWName profile is set to block connections by default."
-			} Else {
-				Write-Host -ForegroundColor Magenta -NoNewLine "|  "
-				Write-Host -ForegroundColor Red "The $FWName profile is set to allow connections by default."
-			}
-
-			Write-Host -ForegroundColor Magenta "|  "
-			Write-Host -ForegroundColor Magenta -NoNewLine "|  "
-			Write-Host "Windows Firewall Disabled Interfaces Check:"
-			If ($($ActiveFWProfile.DisabledInterfaceAliases) -eq "NotConfigured") {
-				Write-Host -ForegroundColor Magenta -NoNewLine "|  "
-				Write-Host -ForegroundColor Green "The $FWName profile is set to protect all interfaces."
-			} Else {
-				Write-Host -ForegroundColor Magenta -NoNewLine "|  "
-				Write-Host -ForegroundColor Red "The $FWName profile is set NOT to protect all interfaces.`nThe unprotected interfaces are:`n$($ActiveFWProfile.DisabledInterfaceAliases | FL | Out-STring)"
-			}
-			Write-Host -ForegroundColor Magenta "¯¯¯¯¯¯¯¯¯¯¯¯ Connected Network: $($fw.InterfaceAlias) ($($fw.Name)) ¯¯¯¯¯¯¯¯¯¯¯¯"
+Function Get-FWCheck {
+	$GPFW = (gpresult /scope COMPUTER /Z)
+	$fws = Get-NetConnectionProfile
+	Foreach ($fw in $fws) {
+		Write-Host
+		If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta "____________ Connected Network: $($fw.InterfaceAlias) ($($fw.Name)) ____________"}
+		If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
+		Write-Host "Windows Firewall Enabled Check:"
+		If (($fw.NetworkCategory -eq 'DomainAuthenticated') -or ($fw.NetworkCategory -eq '2')) {
+			If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
+			Write-Host -ForegroundColor Green -NoNewLine 'The firewall profile is set to Domain'
+			netsh advfirewall show current | Select-String -Pattern "State" -OutVariable fs > $null
+			$GPFW = ($GPFW | Select-String -pattern "DomainProfile\\EnableFirewall" -Context 0, 2 | Out-String)
+			$FWName = 'Domain'
 		}
+		If (($fw.NetworkCategory -eq 'Private') -or ($fw.NetworkCategory -eq '1')) {
+			If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
+			Write-Host -ForegroundColor Red -NoNewLine 'The firewall profile is set to Private'
+			netsh advfirewall show current | Select-String -Pattern "State" -OutVariable fs > $null
+			$GPFW = ($GPFW | Select-String -pattern "PrivateProfile\\EnableFirewall" -Context 0, 2 | Out-String)
+			$FWName = 'Private'
+		}
+		If (($fw.NetworkCategory -eq 'Public') -or ($fw.NetworkCategory -eq '0')) {
+			If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
+			Write-Host -ForegroundColor Red -NoNewLine 'The firewall profile is set to Public'
+			netsh advfirewall show current | Select-String -Pattern "State" -OutVariable fs > $null
+			$GPFW = ($GPFW | Select-String -pattern "PublicProfile\\EnableFirewall" -Context 0, 2 | Out-String)
+			$FWName = 'Public'
+		}
+		If (($GPFW -like "*0, 0, 0, 0*") -AND ($GPFW -like "*Enabled*")) { $fs = 'OFF'; $GPONOFF = 'OFF' }
+		If (($GPFW -like "*1, 0, 0, 0*") -AND ($GPFW -like "*Enabled*")) { $fs = 'ON'; $GPONOFF = 'ON' }
+		If ($fs -match 'ON') {
+			If ($GPONOFF -match 'ON') {
+				If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
+				Write-Host -ForegroundColor Green ' and it is turned ON by Group Policy'
+			} Else {
+				Write-Host -ForegroundColor Green ' and it is turned ON'
+			}
+		} Else {
+			If ($GPONOFF -match 'OFF') {
+				Write-Host -ForegroundColor Red ' and it is turned OFF by Group Policy'
+			}
+			else {
+				Write-Host -ForegroundColor Red ' and it is turned OFF'
+			}
+		}
+		#End of Firewall Enabled Check
+		
+	#Firewall Settings Check
+		If ($fws.count -gt 1) {
+			Write-Host -ForegroundColor Magenta "|  "
+			Write-Host -ForegroundColor Magenta -NoNewLine "|  "
+		} Else {
+			Write-Host
+		}
+		Write-Host "Windows Firewall Default Inbound Action Check:"
+		$ActiveFWProfile = Get-NetFirewallProfile -Name $FWName
+		If ($ActiveFWProfile.DefaultInboundAction -ne 'Allow'){
+			If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
+			Write-Host -ForegroundColor Green "The $FWName profile is set to block connections by default."
+		} Else {
+			If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
+			Write-Host -ForegroundColor Red "The $FWName profile is set to allow connections by default."
+		}
+		
+		If ($fws.count -gt 1) {
+			Write-Host -ForegroundColor Magenta "|  "
+			Write-Host -ForegroundColor Magenta -NoNewLine "|  "
+		} Else {
+			Write-Host
+		}
+		Write-Host "Windows Firewall Disabled Interfaces Check:"
+		If ($($ActiveFWProfile.DisabledInterfaceAliases) -eq "NotConfigured") {
+			If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
+			Write-Host -ForegroundColor Green "The $FWName profile is set to protect all interfaces."
+		} Else {
+			If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
+			Write-Host -ForegroundColor Red "The $FWName profile is set NOT to protect all interfaces.`nThe unprotected interfaces are:`n$($ActiveFWProfile.DisabledInterfaceAliases | FL | Out-STring)"
+		}
+		If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta "¯¯¯¯¯¯¯¯¯¯¯¯ Connected Network: $($fw.InterfaceAlias) ($($fw.Name)) ¯¯¯¯¯¯¯¯¯¯¯¯"}
 	}
-	Get-FWCheck
-	#End of Firewall Settings Check
+}
+Get-FWCheck
+#End of Firewall Settings Check
 
 	#Datto Backup Check
 	Write-Host
