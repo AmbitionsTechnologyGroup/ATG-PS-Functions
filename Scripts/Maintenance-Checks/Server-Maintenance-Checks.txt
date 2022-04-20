@@ -909,8 +909,12 @@ Function DefaultDomainPolicy {
 	Write-Host 'Guest Accounts Disabled Check:'
 	$Guest = Select-String -Path C:\Ambitions\DDP_GPO.xml -Pattern "Guest" -context 0, 1
 	[void] ($Guest -match '>(\d)<')
-	If ($matches[1] -eq '1') { $Guest = 'Enabled'; $ForColor = 'red' }; If ($matches[1] -eq '0') { $Guest = 'Disabled'; $ForColor = 'green' }
-	Write-host -ForegroundColor $ForColor 'Guest Accounts are set to' $Guest
+	If ($Guest) {
+		If ($matches[1] -eq '1') { $Guest = 'Enabled'; $ForColor = 'red' }; If ($matches[1] -eq '0') { $Guest = 'Disabled'; $ForColor = 'green' }
+		Write-host -ForegroundColor $ForColor 'Guest Accounts are set to' $Guest
+	} Else {
+		Write-host -ForegroundColor Red 'Guest Accounts are not configured.'
+	}
 	#End of Guest Accounts Disabled
 
 	#Password Hash Not Stored
