@@ -105,7 +105,7 @@ $OnlineDattoAgent = iwr https://raw.githubusercontent.com/AmbitionsTechnologyGro
 			#Log the attempt
 			$date = Get-Date
 			$date = $date.ToShortDateString()
-			Add-Content C:\Ambitions\DattoUpdateLog.txt "$date	Scripted	The $agent was checked and found to be up to date at version $InstalledVer. More info: C:\Ambitions\DattoUpdate.log"
+			Add-Content C:\Ambitions\DattoUpdateLog.txt "$date | Scripted | The $agent is already up to date with version $InstalledVer. Check DattoUpdate.log"
 
 			#Exit the script
 			Break
@@ -176,7 +176,7 @@ $OnlineDattoAgent = iwr https://raw.githubusercontent.com/AmbitionsTechnologyGro
 		#Log the major system Change
 			$date = Get-Date
 			$date = $date.ToShortDateString()
-			Add-Content C:\Ambitions\DattoUpdateLog.txt "$date	Scripted	The $agent was updated from version $InstalledVer to $NewInstalledVer . More info: C:\Ambitions\DattoUpdate.log"
+			Add-Content C:\Ambitions\DattoUpdateLog.txt "$date | Scripted | The $agent was updated from version $InstalledVer to $NewInstalledVer. Check DattoUpdate.log"
 
 		#Exit the script
 			Stop-transcript
