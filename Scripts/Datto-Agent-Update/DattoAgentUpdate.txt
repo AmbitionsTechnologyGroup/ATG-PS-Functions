@@ -82,7 +82,7 @@ $OnlineDattoAgent = iwr https://raw.githubusercontent.com/AmbitionsTechnologyGro
 		#Designate save location
 		$installer = "C:\Ambitions\DattoWindowsAgent.exe"
 		#Designate which services to work with
-		$services = @("Datto Backup Agent Service", "DattoProvider")
+		$services = @("Datto Backup Agent Service")
 		#Website to look at for the latest version number
 		$OnlineDattoVersion = $OnlineDattoAgent.DattoWindowsAgent.Version
 		$InstalledVer = (Get-Item $FileVer).VersionInfo.ProductVersion
@@ -102,6 +102,11 @@ $OnlineDattoAgent = iwr https://raw.githubusercontent.com/AmbitionsTechnologyGro
 	} Else {
 		If ($InstalledVer -match $OnlineDattoVersion) {
 			Write-Host -ForegroundColor Green 'The'$agent' version '$InstalledVer' is currently installed and it is up to date'
+			#Log the attempt
+			$date = Get-Date
+			$date = $date.ToShortDateString()
+			Add-Content C:\Ambitions\DattoUpdateLog.txt "$date	Scripted	The $agent was checked and found to be up to date at version $InstalledVer. More info: C:\Ambitions\DattoUpdate.log"
+
 			#Exit the script
 			Break
 			#Stop-transcript
@@ -126,9 +131,9 @@ $OnlineDattoAgent = iwr https://raw.githubusercontent.com/AmbitionsTechnologyGro
 		}
 
 		#Stop Services
-			foreach ($service in $services) {
+			Foreach ($service in $services) {
 				Write-Host "Stopping service $service"
-				Stop-Service -displayname "$service" -Force
+				Stop-Service -displayname "$service" -Force -ErrorAction Continue
 			}
 		#Let services have time to fully stop
 			Start-Sleep -s 5
