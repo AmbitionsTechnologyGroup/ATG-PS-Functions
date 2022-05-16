@@ -5,3 +5,129 @@ Function Invoke-Win10Decrap {
 	Enable-SSL
 	Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Win-10-DeCrapifier/Windows10Decrapifier.txt -UseBasicParsing | Invoke-Expression
 }
+
+Function Invoke-NDDCScan {
+	Function Send-To-Teams{
+		$date = Get-Date -Format g
+		$uri = "https://ambitionsgroup.webhook.office.com/webhookb2/897d2b4c-50c6-49cb-a694-50e3c7265bdc@cf4bdd06-b03d-4baf-8565-1265469a874f/IncomingWebhook/76b156bb6cc141ff92af58477b8d115c/04d33247-ee72-41af-a5ae-1c4281262441"
+		
+		$body = ConvertTo-Json -Depth 4 @{
+			themeColor = $color
+			title = $title
+			text = "$env:computername at $env:userdomain says"
+			sections = @(
+				@{
+					facts = @(
+						@{
+						name = 'Date'
+						value = $date
+						},
+						@{
+						name = 'Server'
+						value = $server
+						},
+						@{
+						name = 'Message'
+						value = $message
+						}
+					)
+				}
+			)
+		}
+		Invoke-RestMethod -uri $uri -Method Post -body $body -ContentType 'application/json'
+	}
+	#Sets default title and color for notifications
+	$title = $env:userdomain + ': Automated NDDC Upload Notification'
+	$color = '808080'
+
+	Write-Host "Downloading the NDDC Utility"
+	$NddcURL = "https://s3.amazonaws.com/networkdetective/download/NetworkDetectiveDataCollector.exe"
+	$NddcFolder = $ENV:SystemDrive + '\Ambitions\NddcAuto'
+	$null = (New-Item -ItemType Directory -Force -Path $NddcFolder)
+	$NddcDownloadPath = $NddcFolder + '\NetworkDetectiveDataCollector.zip'
+	$Nddcexe = $NddcFolder + '\nddc.exe'
+	Remove-Item $NddcDownloadPath -ea SilentlyContinue
+	(New-Object System.Net.WebClient).DownloadFile($NddcURL, $NddcDownloadPath)
+	Expand-Archive -Path $NddcDownloadPath -DestinationPath $NddcFolder -Force
+	
+Write-Host "Optimizing Run Settings based on previous manual run."
+	$PCInfo = Get-ComputerInfo
+	$RunNdp = Get-Content "C:\Ambitions\nddc\run.ndp"
+	
+	$OutbaseLine = $($RunNdp | Select-String -Pattern '-outbase').LineNumber
+	$nddcountbase = "nddc_" + $($PCInfo.CsDomain) + "_" + $($PCInfo.CsName) + "_" + $(Get-date -Format yyyy-MM-dd)
+	$RunNdp[$OutbaseLine] = $nddcountbase
+	
+	$outdirLine = $($RunNdp | Select-String -Pattern '-outdir').LineNumber
+	$outputfolder = $NddcFolder + '\' + $nddcountbase
+	$null = (New-Item -ItemType Directory -Force -Path $outputfolder)
+	$nddcoutdir = $outputfolder
+	$RunNdp[$outdirLine] = $nddcoutdir
+
+	If (Test-Path "C:\Ambitions\scripts\Server_Reboot_Cred.txt") {
+		$CredUserLine = $($RunNdp | Select-String -Pattern '-credsuser').LineNumber
+		$RunNdp[$CredUserLine] = gc C:\Ambitions\scripts\server_reboot_user.txt
+		
+		$credsepwd2Line = $($RunNdp | Select-String -Pattern '-credsepwd2').LineNumber
+		$RunNdp[$credsepwd2Line] = (pwsh -command "Get-Content 'C:\Ambitions\Scripts\Server_Reboot_Cred.txt' | ConvertTo-SecureString | ConvertFrom-SecureString -asplaintext")
+	}
+
+	$RunNdpFile = $NddcFolder + '\run.ndp'
+	$RunNdp | Set-Content -Path $RunNdpFile -Force
+	
+		
+Write-Host "Running NDDC"
+	& $Nddcexe -file $RunNdpFile
+	Clear-Content -Path $RunNdpFile -Force
+	$ExportedFile = $($outputfolder + "\" + $nddcountbase + ".ndf")
+	
+Write-Host;Write-Host -NoNewLine "Preparing for connection to nddc.ambitionsgroup.com | "
+	If (Get-Module -ListAvailable -Name Posh-SSH) {
+		Write-Host @greenCheck;Write-Host " SSH already enabled"
+	} Else {
+		Write-Host "Enabling SSH"
+		Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.208 -Force -ErrorAction SilentlyContinue
+		Install-Module -Name Posh-SSH -AllowClobber -Confirm:$False -Force
+	}
+
+# Set the credentials
+	$Password = ConvertTo-SecureString 's0t7fR4YzS0AO5wW7HwDUleD' -AsPlainText -Force
+	$Credential = New-Object System.Management.Automation.PSCredential ('dh_wu6qvp', $Password)
+
+# Set local file path, SFTP path, and the backup location path which I assume is an SMB path
+	$UploadID = $($PCInfo.CsName) + "_" + $($PCInfo.CsDomain)
+	$SftpPath = "/home/dh_wu6qvp/nddc.ambitionsgroup.com/Uploads/" + $UploadID
+	$SftpLink = "sftp://ftp.nddc.ambitionsgroup.com/Uploads/" + $UploadID
+
+# Set the IP of the SFTP server
+	$SftpIp = 'ftp.nddc.ambitionsgroup.com'
+
+Write-Host "Establishing the SFTP connection"
+	$ThisSession = New-SFTPSession -ComputerName $SftpIp -Credential $Credential -AcceptKey
+
+Write-Host "Uploading the file to the SFTP path"
+	New-SFTPItem -SessionId ($ThisSession).SessionId -Path $SftpPath -ItemType Directory -ErrorAction SilentlyContinue
+	Set-SFTPItem -SessionId ($ThisSession).SessionId -Path $ExportedFile -Destination $SftpPath -Force
+
+Write-Host "Disconnecting all SFTP connections"
+	Get-SFTPSession | Remove-SFTPSession -ErrorAction SilentlyContinue
+
+Write-Host "Send to Teams"
+	$Message = "NDDC has scanned and uploaded to $SftpLink Check https://ambitions.itglue.com/806129/passwords/17437892 for access."
+	If (Select-String -Path $ExportedFile -SimpleMatch "Invalid Active Directory username") {
+		$Message = $Message + " The stored username and password appear to be incorrect. Please run NDDC manually at least once in C:\Ambitions\nddc and get to the point where the scan begins. You can cancel it after that."
+	}
+	$server = "$env:computername"
+	Send-To-Teams
+
+Write-Host "Logging the attempt"
+	$date = Get-Date
+	$date = $date.ToShortDateString()
+	Add-Content "C:\Ambitions\NDDC Auto Scan Log.txt" "$date | NDDC has scanned and uploaded to $SftpLink Check https://ambitions.itglue.com/806129/passwords/17437892 for access."
+	If (Select-String -Path $ExportedFile -SimpleMatch "Invalid Active Directory username") {
+		Add-Content "C:\Ambitions\NDDC Auto Scan Log.txt" "$date | ERROR: The stored username and password appear to be incorrect. Please run NDDC manually at least once in C:\Ambitions\nddc and get to the point where the scan begins. You can cancel it after that."
+	}
+
+Write-Host "Cleaning up"
+	Remove-Item -Recurse -Force $outputfolder
+}

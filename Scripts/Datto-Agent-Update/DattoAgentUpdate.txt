@@ -38,7 +38,7 @@ Start-transcript -path C:\Ambitions\DattoUpdate.log -force -append
 #Create Prerequisite folder
 If(!(test-path C:\Ambitions))
 {
-      New-Item -ItemType Directory -Force -Path C:\Ambitions
+	New-Item -ItemType Directory -Force -Path C:\Ambitions
 }
 
 #Get available versions
@@ -62,7 +62,7 @@ $OnlineDattoAgent = iwr https://raw.githubusercontent.com/AmbitionsTechnologyGro
 		$OnlineDattoVersion = $OnlineDattoAgent.ShadowSnapAgent.Version
 		$InstalledVer = (Get-ItemProperty "$RegKeyVer" -Name "DisplayVersion" -ErrorAction SilentlyContinue).DisplayVersion
 		Function DattoPattern {Set-Variable -Name OnlineDattoversion -Value ((Select-String -Path "C:\Ambitions\dattowebver.txt" -Pattern "current version")[-1]) -Scope Global}
-        #Wait to continue if a backup is running
+		#Wait to continue if a backup is running
 		While (Get-Process sbrun -ErrorAction SilentlyContinue) {
 			Write-Host "A backup is running at $(get-date). Waiting 1 minute."
 			start-sleep 60
@@ -87,7 +87,7 @@ $OnlineDattoAgent = iwr https://raw.githubusercontent.com/AmbitionsTechnologyGro
 		$OnlineDattoVersion = $OnlineDattoAgent.DattoWindowsAgent.Version
 		$InstalledVer = (Get-Item $FileVer).VersionInfo.ProductVersion
 		Function DattoPattern {Set-Variable -Name OnlineDattoversion -Value ((Select-String -Path "C:\Ambitions\dattowebver.txt" -Pattern "<strong>Agent Version")[0]) -Scope Global}
-        #Wait to continue if a backup is running
+		#Wait to continue if a backup is running
 		While (vssadmin list writers | Select-String "Waiting" | Select-String "for responses." -NotMatch) {
 			Write-Host "A backup is running at $(get-date). Waiting 1 minute."; Start-Sleep 60
 		}
@@ -145,7 +145,7 @@ $OnlineDattoAgent = iwr https://raw.githubusercontent.com/AmbitionsTechnologyGro
 		# Let installer have time to fully wrap up
 			Start-Sleep -s 30
 		#Configure services
-			foreach ($service in $services) {
+			Foreach ($service in $services) {
 				Write-Host "Setting auto-restart for service $service"
 			#Get service name from Display Name
 				$servicename = (Get-Service -DisplayName "$service" | Format-Table -hidetableheaders Name | Out-String)
@@ -157,7 +157,7 @@ $OnlineDattoAgent = iwr https://raw.githubusercontent.com/AmbitionsTechnologyGro
 				Start-Service -displayname "$service"
 			}
 		#Show if services are running
-			foreach ($service in $services) {
+			Foreach ($service in $services) {
 				Get-Service -displayname "$service"
 			}
 
