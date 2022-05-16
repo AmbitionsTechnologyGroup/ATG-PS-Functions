@@ -69,6 +69,7 @@ Write-Host "Optimizing Run Settings based on previous manual run."
 		$RunNdp[$CredUserLine] = gc C:\Ambitions\scripts\server_reboot_user.txt
 		
 		$credsepwd2Line = $($RunNdp | Select-String -Pattern '-credsepwd2').LineNumber
+		$RunNdp[$($credsepwd2Line -1)] = '-credsepwd'
 		$RunNdp[$credsepwd2Line] = (pwsh -command "Get-Content 'C:\Ambitions\Scripts\Server_Reboot_Cred.txt' | ConvertTo-SecureString | ConvertFrom-SecureString -asplaintext")
 	}
 
