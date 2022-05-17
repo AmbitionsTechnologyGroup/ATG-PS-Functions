@@ -96,7 +96,7 @@ Write-Host;Write-Host -NoNewLine "Preparing for connection to nddc.ambitionsgrou
 	$Credential = New-Object System.Management.Automation.PSCredential ('dh_wu6qvp', $Password)
 
 # Set local file path, SFTP path, and the backup location path which I assume is an SMB path
-	$UploadID = $($PCInfo.CsName) + "_" + $($PCInfo.CsDomain)
+	$UploadID = $($PCInfo.CsDomain) + "_" + $($PCInfo.CsName)
 	$SftpPath = "/home/dh_wu6qvp/nddc.ambitionsgroup.com/Uploads/" + $UploadID
 	$SftpLink = "sftp://ftp.nddc.ambitionsgroup.com/Uploads/" + $UploadID
 
