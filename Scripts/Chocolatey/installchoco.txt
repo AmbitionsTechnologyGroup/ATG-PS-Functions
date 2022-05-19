@@ -33,13 +33,13 @@
 	} else {
 		Write-Host "You're not at a specialized site."
 		Write-Host "Install Ambitions Chocolatey Server"
+			$ChocoName = "ACG-Choco-local"
+			$packageRepo = 'http://10.40.0.41:8081/repository/chocolatey-group/'
+			$SourceAdd += "`nchoco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=2"
+
 			$ChocoName = "ACG-Choco"
 			$packageRepo = 'http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/'
 			$SourceAdd = "choco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=1"
-
-			$ChocoName = "ACG-Choco-local"
-			$packageRepo = 'http://10.40.0.41:8081/repository/chocolatey-group/'
-			$SourceAdd = "choco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=2"
 	}
 
 	<#
