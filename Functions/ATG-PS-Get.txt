@@ -265,6 +265,22 @@ Function Get-InternetHealth {
 	$SpeedtestHealth
 }
 
+Function Get-IPConfig {
+	<#
+	.DESCRIPTION
+		Get-IPConfig attempts to extract only useful information from network adapters and display it in an easy to reay way.
+		This is only IPv4 for now.
+	#>
+
+	Get-netipaddress -AddressFamily IPv4 -PrefixOrigin Dhcp,Manual | Sort InterfaceIndex | Format-Table -AutoSize -Property `
+	InterfaceAlias,`
+	@{Name = 'Domain' ; Expression = {$($_ | Get-NetIPConfiguration).NetProfile.Name}},`
+	@{Name = 'Status' ; Expression = {$($_ | Get-NetIPConfiguration).NetAdapter.Status}},`
+	@{Name = 'IP Address' ; Expression = {$($_.IPAddress + "/" + $_.PrefixLength)}},`
+	@{Name = 'DefaultGateway' ; Expression = {$($_ | Get-NetIPConfiguration).IPv4DefaultGateway.NextHop}},`
+	@{Name = 'DNS Server(s)' ; Expression = {$(($_ | Get-NetIPConfiguration).DNSServer | Where-Object -Property AddressFamily -eq 2).ServerAddresses}}
+}
+
 Function Get-ListeningPorts {
 		<#
 
@@ -289,7 +305,7 @@ Function Get-ListeningPorts {
 	Param(
 		[Parameter(Mandatory=$false)]
 		[Switch]$IncludeIp6
-    )
+	)
 
 	$IpAddresses = (Get-NetIPAddress).IPAddress | Where-Object { $_ -notmatch "::" }
 	$IpAddresses += "0.0.0.0"
