@@ -385,3 +385,94 @@ Function Get-SharedMailboxRestoreRequest {
 		Used in conjunction with the Convert-ToSharedMailbox command.
 	#>
 }
+
+Function Get-UserMailboxAccess {
+	param
+		(
+			[Parameter(Mandatory=$True)]
+			[string]$User
+		)
+
+	$progressPreference = 'Continue'
+	Write-Progress -Activity "Validating user: $User"
+	$ValidatedUser = Get-EXOMailbox -Identity $User -ErrorAction SilentlyContinue
+	If (-not $ValidatedUser) {
+		Do {
+			#Retry the User
+			$User = Read-Host "Entry `"$User`" didn't work. Check your spelling and try again or type QUIT to stop:`n"
+			If ($User -match "QUIT") {Break}
+			$ValidatedUser = Get-EXOMailbox -Identity $User -ErrorAction SilentlyContinue
+			#Active User Check
+			If ($ValidatedUser) {
+				Write-Host "Entry `"$User`" has been validated!"
+			}
+		} While (-not $ValidatedUser)
+		$User = $ValidatedUser.Identity
+		Write-Host $User
+	} Else {$User = $ValidatedUser.Identity}
+
+	Write-Progress -Activity "Collecting list of mailboxes"
+		$Mailboxes = Get-ExoMailbox -ResultSize Unlimited
+
+	Write-Progress -Activity "Gathering mailbox access permissions"
+		$Access = $Mailboxes | Get-MailboxPermission -User $User
+
+	Write-Progress -Activity "Gathering 'Send As' permissions"
+		$SendAs = $Mailboxes | Get-RecipientPermission -Trustee $User
+
+	Write-Progress -Activity "Gathering 'Send On Behalf' permissions"
+		$SendOnBehalf = $Mailboxes | ? {$_.GrantSendOnBehalfTo -match $User}
+	
+	Write-Progress -Activity * -Completed
+	
+	Write-Host "-----Results for $User-----"
+	If ($Access) {
+		Write-Host "$User has mailbox access to:"
+		Write-Host -ForegroundColor Yellow "$(($Access | FT Identity,AccessRights -HideTableHeaders | Out-String).Trim())"
+	} Else {
+		Write-Host "$User does not have direct access to any other mailboxes."
+	}
+
+	If ($SendAs) {
+		Write-Host "$User has 'Send As' permissions for:"
+		Write-Host -ForegroundColor Yellow "$($SendAs.Identity)"
+	} Else {
+		Write-Host "$User does not have Send As access to any other mailboxes."
+	}
+
+	If ($SendOnBehalf) {
+		Write-Host "$User has 'Send As' permissions for:"
+		Write-Host -ForegroundColor Yellow "$($SendOnBehalf.Identity)"
+	} Else {
+		Write-Host "$User does not have Send On Behalf access to any other mailboxes."
+	}
+	
+	<#
+	.DESCRIPTION
+		Check's what permissions a user has over other mailboxes including Direct Access, Send As, and Send on Behalf.
+	.PARAMETER User
+		[Require] Specify the alias or name of the person to check.
+	.EXAMPLE
+		[Command]: Get-UserMailboxAccess -User Marcus
+
+		-----Results for Marcus Rael-----
+		Marcus Rael does not have direct access to any other mailboxes.
+		Marcus Rael does not have Send As access to any other mailboxes.
+		Marcus Rael does not have Send On Behalf access to any other mailboxes.
+	.EXAMPLE
+		[Command]: Get-UserMailboxAccess -User Marcus
+		
+		-----Results for Chelsea Sandoval-----
+		Chelsea Sandoval has mailbox access to:
+		Brian S. Colon    {FullAccess}
+		Christopher Ryan  {FullAccess}
+		David Roman       {FullAccess}
+		Faxes             {FullAccess}
+		FirmTasks         {FullAccess}
+		Jordon George     {FullAccess}
+		Randy Autio       {FullAccess}
+		Simmone Contreras {FullAccess}
+		Chelsea Sandoval does not have Send As access to any other mailboxes.
+		Chelsea Sandoval does not have Send On Behalf access to any other mailboxes.
+	#>
+}
