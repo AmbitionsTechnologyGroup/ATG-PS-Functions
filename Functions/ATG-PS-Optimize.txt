@@ -13,6 +13,9 @@ Function Optimize-Powershell {
 				Write-Host ''$time' ' -BackgroundColor Black -ForegroundColor Yellow
 				'[Command]: '
 			}
+			If ((Get-PSRepository -Name "PSGallery").InstallationPolicy -eq "Untrusted") {
+				Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted -ErrorAction SilentlyContinue
+			}
 			If (!(Get-Module -Name AdvancedHistory -ListAvailable)) {
 				Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue
 				Install-Module AdvancedHistory -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
