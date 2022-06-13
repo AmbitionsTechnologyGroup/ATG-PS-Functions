@@ -310,7 +310,11 @@ If (!$agent) {
 	$date = $date.ToShortDateString()
 	Add-Content C:\Ambitions\DattoUpdateLog.txt "$date | Scripted | The $agent is deprecated and will be updated to use the Datto Windows Agent. Check DattoUpdate.log"
 	Unblock-Install
+	Get-VSSWriter | Restart-VSSWriter
 	Uninstall-ShadowSnap
+	Get-VSSWriter | Restart-VSSWriter
+	Uninstall-ShadowSnap
+	Get-VSSWriter | Restart-VSSWriter
 	Set-DattoAgentVariables
 	Unblock-Install
 	Get-UpdateDownload
