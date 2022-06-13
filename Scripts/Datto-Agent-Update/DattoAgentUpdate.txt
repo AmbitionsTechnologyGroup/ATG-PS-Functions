@@ -120,13 +120,16 @@ Function Uninstall-ShadowSnap {
 		regsvr32 /u /s "$ShadowProtectFolder\sbimgmnt.dll"
 	}
 
+	If (Test-Path -Path "HKLM:\SYSTEM\CurrentControlSet\services\Storagecraft Imageready" -PathType Container) {
+		Set-Location -Path "HKLM:\SYSTEM\CurrentControlSet\services\Storagecraft Imageready"
+		New-ItemProperty . -name DeleteFlag -value 1 -PropertyType "DWord" -Force
+	}
 
-	Set-Location -Path "HKLM:\SYSTEM\CurrentControlSet\services\Storagecraft Imageready"
-	New-ItemProperty . -name DeleteFlag -value 1 -PropertyType "DWord" -Force
-
-	Set-Location -Path "HKLM:\SYSTEM\CurrentControlSet\services\sbmount"
-	New-ItemProperty . -name DeleteFlag -value 1 -PropertyType "DWord" -Force
-	Set-ItemProperty . -name "Start" -value 4
+	If (Test-Path -Path "HKLM:\SYSTEM\CurrentControlSet\services\sbmount" -PathType Container) {
+		Set-Location -Path "HKLM:\SYSTEM\CurrentControlSet\services\sbmount"
+		New-ItemProperty . -name DeleteFlag -value 1 -PropertyType "DWord" -Force
+		Set-ItemProperty . -name "Start" -value 4
+	}
 
 	Set-Location -Path ${env:ProgramFiles(x86)}
 

@@ -164,14 +164,14 @@ Function Get-BitLockerKey {
 }
 
 Function Get-DiskUsage($Path=".") {
-    Write-Host -ForegroundColor Cyan "  (large folders may take long to calculate...)"
-    Get-ChildItem $path | ForEach-Object {
-        $file = $_
-        Get-ChildItem -r $_.FullName |
-        Measure-Object -property length -sum -ErrorAction SilentlyContinue |
-        Select-Object @{Name="Name";Expression={$file}},
-        @{Name="Space Used (MB)";Expression={([math]::Round(($_.Sum/1024/1024),2))}}
-    } | Format-Table -AutoSize
+	Write-Host -ForegroundColor Cyan "  (large folders may take long to calculate...)"
+	Get-ChildItem $path | ForEach-Object {
+		$file = $_
+		Get-ChildItem -r $_.FullName |
+		Measure-Object -property length -sum -ErrorAction SilentlyContinue |
+		Select-Object @{Name="Name";Expression={$file}},
+		@{Name="Space Used (MB)";Expression={([math]::Round(($_.Sum/1024/1024),2))}}
+	} | Format-Table -AutoSize
 
 	<#
 	.SYNOPSIS
@@ -491,4 +491,54 @@ Function Get-UserMailboxAccess {
 		Chelsea Sandoval does not have Send As access to any other mailboxes.
 		Chelsea Sandoval does not have Send On Behalf access to any other mailboxes.
 	#>
+}
+
+Function Get-VSSWriter {
+	[CmdletBinding()]
+
+	Param (
+		[ValidateSet('Stable', 'Failed', 'Waiting for completion')]
+		[String]
+		$Status
+	) #Param
+
+	BEGIN { Write-Verbose "BEGIN: Get-KPVSSWriter"} #BEGIN
+
+	PROCESS {
+		#Command to retrieve all writers, and split them into groups
+		Write-Verbose "Retrieving VSS Writers"
+		VSSAdmin list writers |
+		Select-String -Pattern 'Writer name:' -Context 0, 4 |
+		ForEach-Object {
+
+			#Removing clutter
+			Write-Verbose "Removing clutter "
+			$Name = $_.Line -replace "^(.*?): " -replace "'"
+			$Id = $_.Context.PostContext[0] -replace "^(.*?): "
+			$InstanceId = $_.Context.PostContext[1] -replace "^(.*?): "
+			$State = $_.Context.PostContext[2] -replace "^(.*?): "
+			$LastError = $_.Context.PostContext[3] -replace "^(.*?): "
+
+			#Create object
+			Write-Verbose "Creating object"
+			foreach ($Prop in $_) {
+				$Obj = [pscustomobject]@{
+					Name       = $Name
+					Id         = $Id
+					InstanceId = $InstanceId
+					State      = $State
+					LastError  = $LastError
+				}
+			}#foreach
+			#Change output based on Status provided
+			If ($PSBoundParameters.ContainsKey('Status')) {
+				Write-Verbose "Filtering out the results"
+				$Obj | Where-Object { $_.State -like "*$Status" }
+			} #if
+			else {
+				$Obj
+			} #else
+		}#foreach-object
+	} #PROCESS
+	END { } #END
 }
