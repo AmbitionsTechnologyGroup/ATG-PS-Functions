@@ -189,6 +189,29 @@ Function Get-DiskUsage($Path=".") {
 }
 Set-Alias -Name du -Value Get-DiskUsage
 
+Function Get-DomainInfo {
+	<#
+	.SYNOPSIS
+		Obtains useful information about the domain a computer is connected to.
+	#>
+	Write-Host "Obtaining Domain Info..."
+	$ComputerInfo = Get-ComputerInfo
+	If ($ComputerInfo.CsDomainRole -ne "StandaloneWorkstation") {
+		$Domain = ($ComputerInfo).CSDomain
+		Write-Host "`nDomain: "$Domain
+		$DomainControllerIP = (Resolve-DnsName $Domain).IpAddress
+		Write-Host "`nDomain Controller(s):"
+		$DomainControllerIP | % {
+			Write-Host "IP: $_ | FQDN: $((Resolve-DnsName $_).NameHost) | Pingable: $(Test-NetConnection -ComputerName $_ -InformationLevel Quiet) "
+		}
+		Write-Host "`nDNS Servers:"
+		(Get-DnsServerResourceRecord -ZoneName $Domain -RRType NS).RecordData.NameServer
+	} Else {
+		Write-Host "`nComputer is not joined to a domain. Showing network info instead."
+		Get-IpConfig
+	}
+}
+
 Function Get-ThunderBolt {
 	$Thunderbolt = Get-WmiObject Win32_SystemDriver | Where-Object -Property DisplayName -Like "*Thunder*"
 	If ($Thunderbolt) {
