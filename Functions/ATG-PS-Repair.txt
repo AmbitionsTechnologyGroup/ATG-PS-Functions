@@ -37,3 +37,27 @@ Function Repair-Windows {
 	$EndTime | FT | Out-Host
 	Write-Host "Run this function repeately until no errors show up. If this fails after 3 tries, upgrade or reinstall windows"
 }
+
+Function Repair-Volumes {
+<#
+	.SYNOPSIS
+		Sequentially checks and repairs each volume.
+#>
+	$Drives = Get-Volume | Where-Object {($_.DriveType -eq "Fixed") -and ($_.OperationalStatus -eq "OK") -and !($_.FileSystem -Match "FAT")}
+	ForEach ($Drive in $Drives){
+		If ($Drive.DriveLetter) {$Letter = ($Drive.DriveLetter).ToString()}
+		If ($Drive.FriendlyName) {$FN = $Drive.FriendlyName}
+		$ObjectId = $Drive.ObjectId
+		Write-Host Scanning Volume:
+		$Drive | FT
+		$chkdsk = Repair-Volume -ObjectId $ObjectId -Scan
+		Write-Host $chkdsk
+		If ($chkdsk -ne "NoErrorsFound") {
+			Write-Host "Errors found on drive $Letter - $FN. Attempting to repair."
+			$Repair = Repair-Volume -ObjectId $ObjectId -SpotFix
+			Write-Host $Repair
+		}
+		Clear-Variable Letter,ObjectId,FN -ErrorAction SilentlyContinue
+		Write-Host -ForegroundColor Yellow "-_-_-_-_-_-_-_-_-_-_-_-_-"
+	}
+}
