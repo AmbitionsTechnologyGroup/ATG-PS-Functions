@@ -204,8 +204,8 @@ Function Get-DomainInfo {
 		$DomainControllerIP | % {
 			Write-Host "IP: $_ | FQDN: $((Resolve-DnsName $_).NameHost) | Pingable: $(Test-NetConnection -ComputerName $_ -InformationLevel Quiet) "
 		}
-		Write-Host "`nDNS Servers:"
-		(Get-DnsServerResourceRecord -ZoneName $Domain -RRType NS).RecordData.NameServer
+		Write-Host "`nLocal Network Info:"
+		Get-IpConfig
 	} Else {
 		Write-Host "`nComputer is not joined to a domain. Showing network info instead."
 		Get-IpConfig
