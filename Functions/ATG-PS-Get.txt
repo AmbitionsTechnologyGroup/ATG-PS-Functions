@@ -163,6 +163,116 @@ Function Get-BitLockerKey {
 	#>
 }
 
+Function Global:Get-DellWarranty {
+	Param(
+		[Switch] $Brand,
+		[Parameter(ParameterSetName = "seta",
+			Position = 0)]
+		[Switch] $Local,
+		[Parameter(
+			ParameterSetName = "setb",
+			Mandatory = $false,
+			ValueFromPipelineByPropertyName = $true,
+			ValueFromPipeline = $true,
+			Position = 1)]
+		[String[]] $ServiceTags,
+		[Parameter(ParameterSetName = "setc")]
+		[Switch] $Paste,
+		[Switch] $Show,
+		[Switch] $CopyToClipBoard
+	)
+	#$ServiceTags = $Null
+	If ((Test-Path "$env:appdata\Microsoft\Windows\PowerShell\DellKey.txt") -ne $true) {
+		Write-Host "Autentication Needed. Please refer to https://ambitions.itglue.com/806129/docs/10204492" -ForegroundColor White -BackgroundColor Red
+		Break
+	}
+	If ((Test-Path "$env:appdata\Microsoft\Windows\PowerShell\DellSec.txt") -ne $true) {
+		Write-Host "Autentication Needed. Please refer to https://ambitions.itglue.com/806129/docs/10204492" -ForegroundColor White -BackgroundColor Red
+		Break
+	}
+	$FinalObj = @()
+	If (-not $ServiceTags) {
+		If ($Paste) {
+			Write-Host "Paste or enter a list of service tags, one per line.`nIf copying from Excel, after you paste here, click into Excel then press ESC a couple of time.`nThen press enter 2x to continue:"
+			$ServiceTags = @()
+			While ($a = read-host) {
+				$ServiceTags += $a
+			}
+			#$ServiceTags = @($List.split("``n"))
+			$Local = $False
+		} Else {
+			$Local = $True
+		}
+	}
+
+	If ($Local) {
+		$ServiceTags = ((Get-WmiObject -Class "Win32_Bios").SerialNumber)
+	}
+	Write-Host "Getting Warranties for $($ServiceTags.Count) Service Tag(s)."
+	Foreach ($ServiceTag in $ServiceTags) {
+		If ($Show) {Write-Host "Processing $ServiceTag"}
+		#If ($ServiceTag -eq $(Get-WmiObject -Class "Win32_Bios").SerialNumber) { $Show = $true }
+		$ApiKey = Get-Content "$env:appdata\Microsoft\Windows\PowerShell\DellKey.txt"
+		$ApiSecret = Get-Content "$env:appdata\Microsoft\Windows\PowerShell\DellSec.txt"
+		[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+		$Auth = Invoke-WebRequest "https://apigtwb2c.us.dell.com/auth/oauth/v2/token?client_id=${ApiKey}&client_secret=${ApiSecret}&grant_type=client_credentials" -Method Post
+		$AuthSplit = $Auth.Content -split ('"')
+		$AuthKey = $AuthSplit[3]
+
+		#$ServiceTag = $(Get-WmiObject -Class "Win32_Bios").SerialNumber
+
+		$body = "?servicetags=" + $ServiceTag + "&Method=Get"
+
+		$response = Invoke-WebRequest -uri https://apigtwb2c.us.dell.com/PROD/sbil/eapi/v5/asset-entitlements${body} -Headers @{"Authorization" = "bearer ${AuthKey}"; "Accept" = "application/json" }
+		$content = $response.Content | ConvertFrom-Json
+
+		#Sort, then parse the first (start) and last (end) warranty entitlement
+		$sortedEntitlements = $content.entitlements | Sort-Object endDate #Dell doesn't list in order. This sorts so the latest entitlement is last.
+		$WarrantyEndDateRaw = (($sortedEntitlements.endDate | Select-Object -Last 1).split("T"))[0]
+		$WarrantyEndDate = [datetime]::ParseExact($WarrantyEndDateRaw, "yyyy-MM-dd", $null)
+		$WarrantyStartDateRaw = (($sortedEntitlements.startDate | Select-Object -First 1).split("T"))[0]
+		$WarrantyStartDate = [datetime]::ParseExact($WarrantyStartDateRaw, "yyyy-MM-dd", $null)
+		$WarrantyLevel = ($sortedEntitlements.serviceLevelDescription | Select-Object -Last 1)
+		$ShipDateRaw = (($content.shipDate).split("T"))[0]
+		$ShipDate = [datetime]::ParseExact($ShipDateRaw, "yyyy-MM-dd", $null)
+		
+		If ($content.systemDescription) {
+			$Model = $content.systemDescription
+		} Else {
+			$Model = $content.productLineDescription #Sometimes Dell blanks the systemDescription. systemDescription likely has the data
+		}
+
+		$Today = get-date
+		If ($Today -ge $WarrantyEndDate){
+		#Write-Host "`nWarranty has expired for $ServiceTag ($Model) " -ForegroundColor White -BackgroundColor Red
+		$WarrantyExpired = "Expired" #Variable useful for mass export
+		} Else {
+			$WarrantyExpired = "Not Expired"
+		}
+		#Returns data as a PSObject which can be used for batch/scripting purposes
+		$Obj = New-Object psobject
+		$Obj | Add-Member -Type NoteProperty -Name 'ServiceTag' -Value $ServiceTag
+		$Obj | Add-Member -Type NoteProperty -Name 'Model' -Value $Model
+		$Obj | Add-Member -Type NoteProperty -Name 'OriginalShipDate' -Value $ShipDate
+		$Obj | Add-Member -Type NoteProperty -Name 'WarrantyStartDate' -Value $WarrantyStartDate
+		$Obj | Add-Member -Type NoteProperty -Name 'WarrantyEndDate' -Value $WarrantyEndDate
+		$Obj | Add-Member -Type NoteProperty -Name 'WarrantyExpired' -Value $WarrantyExpired
+		$Obj | Add-Member -Type NoteProperty -Name 'WarrantySupportLevel' -Value $WarrantyLevel
+		$FinalObj += $Obj
+	}
+	If ($Show) {
+		$FinalObj | Format-Table -AutoSize
+	}
+	If ($CopyToClipBoard){
+		$Path = $Env:Temp + '\' + [guid]::NewGuid().ToString() + '.csv'
+		$FinalObj | Export-CSV -Delimiter "`t" -NoTypeInformation -Path $Path
+		Get-Content -Path $Path | Set-Clipboard
+		Remove-Item -Path $Path -Force
+		Write-Host "Results have been copied to the clipboard."
+	}
+	Clear-Variable Show,FinalObj,Path,CopyToClipBoard -Force -ErrorAction SilentlyContinue
+}
+
 Function Get-DiskUsage($Path=".") {
 	Write-Host -ForegroundColor Cyan "  (large folders may take long to calculate...)"
 	Get-ChildItem $path | ForEach-Object {
