@@ -193,7 +193,7 @@ Function Global:Get-DellWarranty {
 	$FinalObj = @()
 	If (-not $ServiceTags) {
 		If ($Paste) {
-			Write-Host "Paste or enter a list of service tags, one per line.`nIf copying from Excel, after you paste here, click into Excel then press ESC a couple of time.`nThen press enter 2x to continue:"
+			Write-Host -ForegroundColor Yellow "Paste or enter a list of service tags, one per line.`n`nIf copying from Excel: After you paste here, click into Excel then press ESC a couple of times.`nThen press enter 2x to continue:"
 			$ServiceTags = @()
 			While ($a = read-host) {
 				$ServiceTags += $a
