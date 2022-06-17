@@ -33,7 +33,11 @@ Function Optimize-Powershell {
 				Try {
 					Set-PSReadLineOption -PredictionSource HistoryAndPlugin -ErrorAction Stop
 				} Catch {
-					Set-PSReadLineOption -PredictionSource History
+					Try {
+						Set-PSReadLineOption -PredictionSource History
+					} Catch {
+						Set-PSReadLineOption -PredictionSource None
+					}
 				}
 
 			iwr tinyurl.com/get-atgps -useb | iex
