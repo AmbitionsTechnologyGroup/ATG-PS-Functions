@@ -5,6 +5,7 @@
 #13JUL2022 Deprecated Shadowsnap. Will remove this agent and install DWA in it's place.
 #20MAR2019 Updated version lookup to find last version listed on page, as datto has forked versions and now lists multiple
 #08NOV2018 Updated Datto agent regex lookup to includ any number of sub versions. Will now find 2.0.7.1 and not just 2.0.7
+iwr tinyurl.com/get-atgps -useb | iex
 Get-Atgps -Force
 Start-transcript -path C:\Ambitions\DattoUpdate.log -force -append
 #=====================================================================================================================#
