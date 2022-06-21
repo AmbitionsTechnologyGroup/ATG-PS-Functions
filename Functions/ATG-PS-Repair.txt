@@ -43,12 +43,16 @@ Function Repair-Volumes {
 	.SYNOPSIS
 		Sequentially checks and repairs each volume.
 #>
-	$Drives = Get-Volume | Where-Object {($_.DriveType -eq "Fixed") -and ($_.OperationalStatus -eq "OK") -and !($_.FileSystem -Match "FAT")}
+	$Drives = Get-Volume | Where-Object {
+		(($_.DriveType -eq "Fixed") -or ($_.DriveType -eq "3"))`
+		-and $(If ($_.OperationalStatus){$_.OperationalStatus -eq "OK"} Else {Return $True})`
+		-and !($_.FileSystem -Match "FAT")
+	}
 	ForEach ($Drive in $Drives){
 		If ($Drive.DriveLetter) {$Letter = ($Drive.DriveLetter).ToString()}
 		If ($Drive.FriendlyName) {$FN = $Drive.FriendlyName}
 		$ObjectId = $Drive.ObjectId
-		Write-Host Scanning Volume:
+		Write-Host -NoNewLine "Scanning Volume:"
 		$Drive | FT
 		$chkdsk = Repair-Volume -ObjectId $ObjectId -Scan
 		Write-Host $chkdsk
