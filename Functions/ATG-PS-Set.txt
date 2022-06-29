@@ -80,7 +80,7 @@ Function Set-RunOnceScript {
 }
 
 Function Set-ServerRebootScriptPassword {
-	If ($(whoami) -match "nt authority\system") {
+	If ($(whoami) -match 'system') {
 	$User = Get-Content -Path C:\Ambitions\scripts\server_reboot_user.txt
 	Write-Host "Enter the current password for the user $User"
 	$Password = Read-Host -AsSecureString
