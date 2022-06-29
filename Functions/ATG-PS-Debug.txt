@@ -24,20 +24,20 @@ Function Debug-UmbrellaDNS {
 Write-Host @"
 
   -d, --domain=VALUE         A specific URL to target with tests (e.g.
-                               opendns.com)
+							   opendns.com)
   -s, --silent               Automatically run tests in silent mode (will not
-                               show the UI or new windows; defaults to -i
-                               output)
+							   show the UI or new windows; defaults to -i
+							   output)
   -i, --internet             Output all results to diagnostic.opendns.com;
-                               destination URL will print to console as
-                               'url=URL'
+							   destination URL will print to console as
+							   'url=URL'
   -o, --output=VALUE         Output to a file, which will print to console as
-                               'outputFile=FILE'; can be a full path, make sure
-                               to use "quotes" if needed
+							   'outputFile=FILE'; can be a full path, make sure
+							   to use "quotes" if needed
   -c, --console              Output all results to console as text
-      --erc                  Force the Roaming Client tests to be performed
-      --noerc                Skip the Roaming Client tests even if it's
-                               installed
+	  --erc                  Force the Roaming Client tests to be performed
+	  --noerc                Skip the Roaming Client tests even if it's
+							   installed
   -h, -?, --help             Display this usage statement
 
 If run without -o or -c arguments, -i is the default output; if run with -o or -c, then -i must be explicitly set if desired as additional output.
@@ -50,4 +50,18 @@ If run without -o or -c arguments, -i is the default output; if run with -o or -
 	} Else {
 		Start-Process $UDexe
 	}
+}
+
+Function Debug-ServerRebootScript {
+# All scripts and funtions are now run from ps.ambitionsgroup.com (github)
+	Write-Host -NoNewLine "`n - Retrieving Ambitions Server Reboot Script -"
+	$greenCheck = @{
+		Object = [Char]8730
+		ForegroundColor = 'Green'
+		NoNewLine = $true
+		}
+	$progressPreference = 'silentlyContinue'
+	[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192
+	Set-ExecutionPolicy Bypass -Scope Process -Force
+	(Invoke-WebRequest "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Server-Reboots/ServerReboots_WhatIf.txt" -UseBasicParsing).Content | Invoke-Expression
 }

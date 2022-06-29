@@ -79,6 +79,17 @@ Function Set-RunOnceScript {
 	Set-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name $Label -Value $RunOnceValue
 }
 
+Function Set-ServerRebootScriptPassword {
+	If ($(whoami) -match "nt authority\system") {
+	$User = Get-Content -Path C:\Ambitions\scripts\server_reboot_user.txt
+	Write-Host "Enter the current password for the user $User"
+	$Password = Read-Host -AsSecureString
+	$Password | ConvertFrom-SecureString | Out-File "C:\Ambitions\Scripts\Server_Reboot_Cred.txt"
+	} Else {
+		Write-Error "You must run this command as the system user via ConnectWise Backstage or PSExec.exe."
+	}
+}
+
 Function Set-WeeklyReboot {
 <#
 	.SYNOPSIS
