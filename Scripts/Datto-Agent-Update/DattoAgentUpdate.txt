@@ -304,7 +304,7 @@ If (!$agent) {
 	Write-Host "No agent is installed, EXITING!"
 	#Exit the script
 	#Stop-transcript
-} ElseIf ($agent = "ShadowSnap Agent") {
+} ElseIf ($agent -match "ShadowSnap Agent") {
 	Write-Host -ForegroundColor Red 'The'$agent' is deprecated and will be updated to use the Datto Windows Agent.'
 	#Log the attempt
 	$date = Get-Date
