@@ -21,7 +21,11 @@ Function Optimize-Powershell {
 				Install-Module AdvancedHistory -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 			}
 				Import-Module AdvancedHistory -Force
-				Enable-AdvancedHistory -Unique
+				Try {
+					Enable-AdvancedHistory -Unique
+				} Catch {
+					#Oh well
+				}
 
 			If (!(Get-Module -Name PSReadline -ListAvailable)) {
 				If ($Providers -NotContains "Nuget") {
@@ -40,10 +44,11 @@ Function Optimize-Powershell {
 					}
 				}
 
-			iwr tinyurl.com/get-atgps -useb | iex
-			Expand-Terminal
-			cls
-			If ($PSScriptRoot -notmatch [regex]::Escape('C:\Program Files (x86)\ITSPlatform\tmp\scripting\')) {
+
+			If ($PSScriptRoot -notlike "C:\Program Files (x86)\ITSPlatform\tmp\scripting\*") {
+				iwr tinyurl.com/get-atgps -useb | iex
+				Expand-Terminal
+				cls
 				Write-Host "`n`nWelcome, I await your command...`n`n"
 			} Else {
 				#This is running from Continuum!
@@ -83,7 +88,7 @@ Function Optimize-Powershell {
 		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'DefaultForeground' -Value -1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
 		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'DefaultBackground' -Value -1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
 		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'WindowPosition' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		Write-Output "Windows 10"
+		#Write-Output "Windows 10"
 	} Else {
 
 		if((Test-Path -LiteralPath "HKCU:\Console") -ne $true) {  New-Item "HKCU:\Console" -force -ea SilentlyContinue }
@@ -124,7 +129,12 @@ Function Optimize-Powershell {
 	Write-Output "Not Windows 10"
 	}
 
-	If (-not (Test-Path $PROFILE -EA SilentlyContinue)) {New-Item -Type File -Force $PROFILE}
+	If (-not (Test-Path $PROFILE -EA SilentlyContinue)) {
+		New-Item -Type File -Force $PROFILE
+	} Else {
+		Remove-Item -Path $PROFILE -Force -EA SilentlyContinue
+		New-Item -Type File -Force $PROFILE
+	}
 
 	$Commands | Out-File -FilePath $Profile -Force
 

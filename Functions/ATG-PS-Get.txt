@@ -626,6 +626,82 @@ Function Get-UserMailboxAccess {
 	#>
 }
 
+Function Get-UserProfileSpace {
+	$Profiles = (Get-CimInstance win32_userprofile | ? {$_.Special -eq $False})
+	#$Profiles | Select -Property LocalPath, @{Name = 'Last Activity' ; Expression = {(Get-Item ($_.LocalPath + "\AppData\Local")).LastWriteTime}} | Sort-Object "Last Activity"
+	$ActiveProfiles = @()
+	$FolderSizes = @{}
+	#$FinalExport.add('HostName','User','Desktop(MB)','Documents(MB)','Pictures(MB)'}
+	$StaleLimit = (Get-date).AddDays(-90)
+	$ProfilePaths = $Profiles.LocalPath
+	$global:Desktop = 0
+	$global:Documents = 0
+	$global:Pictures = 0
+	$global:BigObject = $()
+
+	ForEach ($ProfilePath in $ProfilePaths) {
+		#$ProfilePath = "C:\Users\rshoemaker"
+		$LastActivity = If (Test-Path -Path $($ProfilePath + "\AppData") -ErrorAction SilentlyContinue){
+			(Get-ChildItem -Path $($ProfilePath + "\AppData") | Sort LastWriteTime -Descending)[0].LastWriteTime
+		} Else {Return 0}
+		If ($LastActivity -gt $StaleLimit) {
+			#Write-Host $ProfilePath is recent with an activity date of $LastActivity
+			$ActiveProfiles += $ProfilePath
+		} Else {
+			#Write-Host $ProfilePath is old with an activity date of $LastActivity
+		}
+	}
+	#Write-Host $($ActiveProfiles.Count) active profiles found.
+	#$ActiveProfiles
+
+	If ($ActiveProfiles) {
+		Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+		Install-Module -Name PSFolderSize -Repository PSGallery -Force
+		ForEach ($ActiveProfile in $ActiveProfiles) {
+			[Decimal]$FolderSizeSum = 0.00
+			#Write-Host $($ActiveProfile | split-path -leaf)
+			$Folders = @("Desktop","Documents","Pictures")
+			$FolderSizes = [PSCustomObject]@{}
+			ForEach ($Folder in $Folders) {
+				If (Test-Path -Path $($ActiveProfile + "\" + "$Folder")) {
+					$GetSize = (Get-FolderSize -Path $ActiveProfile -FolderName $Folder).SizeMB
+					If ($GetSize.Count -gt 1) {
+						[Decimal]$Size = $($GetSize)[0] | Out-String
+					} Else {
+						[Decimal]$Size = $($GetSize) | Out-String
+					}
+					#Write-Host `t$Folder $Size
+					Set-Variable -Name $Folder -Value $Size -Force
+				} Else {
+					Set-Variable -Name $Folder -Value 0 -Force
+				}
+
+			} #ForEach ($Folder in $Folders)
+			$FolderSizes = [PSCustomObject]@{
+				"User" = $($ActiveProfile | split-path -leaf).ToLower()
+				"Host" = $env:computername
+				"Date" = $(Get-Date -Format "yyyyMMdd")
+
+				"Desktop" = $Desktop
+				"Documents" = $Documents
+				"Pictures" = $Pictures
+				"Total" = $Desktop + $Documents + $Pictures
+			}
+			#$FolderSizes
+			If ($BigObject.Count -eq 0){
+				$BigObject = ($FolderSizes | ConvertTo-Csv -NoTypeInformation)
+			} Else {
+				$BigObject += ($FolderSizes | ConvertTo-Csv -NoTypeInformation)[-1]
+			}
+			$global:Desktop = 0
+			$global:Documents = 0
+			$global:Pictures = 0
+		} #ForEach ($ActiveProfile in $ProfilePaths)
+	} #If (ActiveProfiles)
+
+	Return $BigObject
+}
+
 Function Get-VSSWriter {
 	[CmdletBinding()]
 
