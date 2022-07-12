@@ -77,7 +77,7 @@ Function Debug-ServerRebootScript {
 	(Invoke-WebRequest "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Server-Reboots/ServerReboots_WhatIf.txt" -UseBasicParsing).Content | Invoke-Expression
 }
 
-Function Debug-UmbrellaDnsClient {
+Function Debug-UmbrellaProxiedDnsServer {
 	$IsInstalled = Get-Service -Name Umbrella_RC -ErrorAction SilentlyContinue
 	If ($IsInstalled) {
 		Write-Host "------------------------------------------------------------------"
