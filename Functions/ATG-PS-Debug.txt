@@ -52,6 +52,17 @@ If run without -o or -c arguments, -i is the default output; if run with -o or -
 	}
 }
 
+Function Debug-SharedMailboxRestoreRequest {
+	<#
+	.SYNOPSIS
+		Draft function. Investigates why a mailbox restore shows as Investigate.
+	#>
+	$Stats = Get-MailboxRestoreRequest -Status "Failed" | Get-MailboxRestoreRequestStatistics -IncludeReport
+	Write-Host "$Stats.Name"
+	$stats.Report.Failures | Format-List FailureType, Message
+	$stats.Report.MailboxVerification | where { $_.DataConsistencyScore -ne "Perfect" } | Format-List TargetFolder, MissingItemsInTargetBucket
+}
+
 Function Debug-ServerRebootScript {
 # All scripts and funtions are now run from ps.ambitionsgroup.com (github)
 	Write-Host -NoNewLine "`n - Retrieving Ambitions Server Reboot Script -"
