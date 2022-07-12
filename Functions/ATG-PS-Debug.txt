@@ -76,3 +76,31 @@ Function Debug-ServerRebootScript {
 	Set-ExecutionPolicy Bypass -Scope Process -Force
 	(Invoke-WebRequest "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Server-Reboots/ServerReboots_WhatIf.txt" -UseBasicParsing).Content | Invoke-Expression
 }
+
+Function Debug-UmbrellaDnsClient {
+	$IsInstalled = Get-Service -Name Umbrella_RC -ErrorAction SilentlyContinue
+	If ($IsInstalled) {
+		Write-Host "------------------------------------------------------------------"
+		Write-Host -ForegroundColor Green "Umbrella DNS client is installed."
+		$OpenDnsPath = $Env:ProgramData + "\OpenDNS\ERC"
+		Write-Host "------------------------------------------------------------------`nProxied DNS servers:"
+		Get-ChildItem -Path $OpenDnsPath -Filter "Resolver*.conf" | Get-Content
+		$OpenDnsPath = $Env:ProgramData + "\OpenDNS\ERC"
+		$Servers = Get-ChildItem -Path $OpenDnsPath -Filter "Resolver*.conf" | Get-Content
+		$Servers = ($Servers | Select-String -Pattern '\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b').Line -replace 'nameserver '
+		Write-Host "------------------------------------------------------------------`nTesting Proxied DNS Servers"
+		ForEach ($Server in $Servers) {
+			Write-Host -NoNewline "Testing $Server`: "
+			Try {
+				Resolve-DnsName -Name 8.8.8.8 -Server $Server -DnsOnly -QuickTimeout -ErrorAction Stop | Out-Null
+				Write-Host -ForegroundColor Green "$Server is responsive."
+			} Catch {
+				Write-Host -ForegroundColor Red "$Server is unresponsive."
+			}
+		}
+		Write-Host "------------------------------------------------------------------`nExcluded IP / DNS values:"
+		Get-Content -Path $($OpenDnsPath + "\whitelist.txt")
+	} Else {
+		Write-Host -ForegroundColor Red "Umbrella DNS client is NOT installed."
+	}
+}
