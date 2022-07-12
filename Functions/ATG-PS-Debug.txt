@@ -99,7 +99,7 @@ Function Debug-UmbrellaProxiedDnsServer {
 			}
 		}
 		Write-Host "------------------------------------------------------------------`nExcluded IP / DNS values:"
-		Get-Content -Path $($OpenDnsPath + "\whitelist.txt")
+		Get-ChildItem -Path $OpenDnsPath -Filter "*list.txt" | Get-Content
 	} Else {
 		Write-Host -ForegroundColor Red "Umbrella DNS client is NOT installed."
 	}
