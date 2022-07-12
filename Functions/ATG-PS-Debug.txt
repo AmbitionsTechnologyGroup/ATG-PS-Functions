@@ -92,8 +92,9 @@ Function Debug-UmbrellaProxiedDnsServer {
 		ForEach ($Server in $Servers) {
 			Write-Host -NoNewline "Testing $Server`: "
 			Try {
-				Resolve-DnsName -Name 8.8.8.8 -Server $Server -DnsOnly -QuickTimeout -ErrorAction Stop | Out-Null
-				Write-Host -ForegroundColor Green "$Server is responsive."
+				$FQDN = $((Resolve-DnsName -Name $Server -Server $Server -DnsOnly -QuickTimeout -ErrorAction Stop).NameHost)
+				Write-Host -ForegroundColor Green "$Server is responsive. FQDN: $FQDN"
+				Clear-Variable FQDN -Force -ErrorAction SilentlyContinue
 			} Catch {
 				Write-Host -ForegroundColor Red "$Server is unresponsive."
 			}
