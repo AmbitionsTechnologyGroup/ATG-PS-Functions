@@ -84,10 +84,18 @@ Function Debug-UmbrellaProxiedDnsServer {
 		Write-Host -ForegroundColor Green "Umbrella DNS client is installed."
 		$OpenDnsPath = $Env:ProgramData + "\OpenDNS\ERC"
 		Write-Host "------------------------------------------------------------------`nProxied DNS servers:"
-		$Servers = Get-ChildItem -Path $OpenDnsPath -Filter "Resolver*.conf" | Get-Content
-		$Servers
+		$Servers = Get-ChildItem -Path $OpenDnsPath -Filter "Resolver*.conf"
+		ForEach ($Server in $Servers) {
+			If ($Server -ne $Servers[-1]){
+				$Server | Get-Content
+				Write-Host "########################"
+			} Else {
+				$Server | Get-Content
+			}
+		}
 		$OpenDnsPath = $Env:ProgramData + "\OpenDNS\ERC"
 		$Servers = ($Servers | Select-String -Pattern '\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b').Line -replace 'nameserver '
+		$Servers = $Servers | Sort-Object | Get-Unique
 		Write-Host "------------------------------------------------------------------`nTesting Proxied DNS Servers"
 		ForEach ($Server in $Servers) {
 			Write-Host -NoNewline "Testing $Server`: "
