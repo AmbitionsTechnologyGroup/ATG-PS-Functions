@@ -2,6 +2,8 @@
 	Automated server reboot script
 	Ambitions Technology Group - (505)234-7777
 	RCS
+	22JUL2022
+	Commented out Datto update, they self update now.
 	13MAY2020
 	Broke out prerequisite checks to show just what file is missing.
 	15MAR2019
@@ -142,7 +144,7 @@
 		#Download latest datto update script
 		#Forces downloads to use TLS1.2
 		[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-		(New-Object System.Net.WebClient).DownloadFile("https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Datto-Agent-Update/DattoAgentUpdate.txt", "C:\Ambitions\scripts\DattoAgentUpdate.ps1")
+		<#(New-Object System.Net.WebClient).DownloadFile("https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Datto-Agent-Update/DattoAgentUpdate.txt", "C:\Ambitions\scripts\DattoAgentUpdate.ps1")
 		Unblock-File -Path "C:\Ambitions\scripts\DattoAgentUpdate.ps1"
 		ForEach ($d in $objdata) {
 			$sequence = $d.SEQUENCE | Out-String
@@ -171,7 +173,7 @@
 				$message = "Datto update assessment is being skipped on End User Client VMs"
 				Send-To-Teams
 			}
-		}
+		}#>
 
 		#Reboot, or shutdown the servers in order
 		#Stop-Process -Name "iexplore"

@@ -142,7 +142,7 @@
 		#Download latest datto update script
 		#Forces downloads to use TLS1.2
 		[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192
-		(New-Object System.Net.WebClient).DownloadFile("https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Datto-Agent-Update/DattoAgentUpdate.txt", "C:\Ambitions\scripts\DattoAgentUpdate.ps1")
+		<#(New-Object System.Net.WebClient).DownloadFile("https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Datto-Agent-Update/DattoAgentUpdate.txt", "C:\Ambitions\scripts\DattoAgentUpdate.ps1")
 		Unblock-File -Path "C:\Ambitions\scripts\DattoAgentUpdate.ps1"
 		ForEach ($d in $objdata) {
 			$sequence = $d.SEQUENCE | Out-String
@@ -171,7 +171,7 @@
 				$message = "Datto update assessment is being skipped on End User Client VMs"
 				Send-To-Teams
 			}
-		}
+		}#>
 
 		#Reboot, or shutdown the servers in order
 		#Stop-Process -Name "iexplore"
