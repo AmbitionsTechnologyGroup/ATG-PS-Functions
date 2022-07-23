@@ -66,7 +66,7 @@ Function Debug-SharedMailboxRestoreRequest {
 Function Debug-ServerRebootScript {
 # All scripts and funtions are now run from ps.ambitionsgroup.com (github)
 	Write-Host "Checking Scheduled Task"
-	$Task = Get-ScheduledTask -TaskName "ATG Scheduled Server Reboot*"
+	$Task = Get-ScheduledTask -TaskName "ATG*Scheduled*Server*Reboot*"
 	If ($Task) {
 		Write-Host -NoNewLine "Task State: $($Task.State)"
 		#$Task | Format-List State
@@ -75,16 +75,24 @@ Function Debug-ServerRebootScript {
 		Write-Warning "Scheduled task does not exist!"
 	}
 	Pause
-	Write-Host -NoNewLine "`n - Retrieving Ambitions Server Reboot Script -"
-	$greenCheck = @{
-		Object = [Char]8730
-		ForegroundColor = 'Green'
-		NoNewLine = $true
-		}
-	$progressPreference = 'silentlyContinue'
-	[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192
-	Set-ExecutionPolicy Bypass -Scope Process -Force
-	(Invoke-WebRequest "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Server-Reboots/ServerReboots_WhatIf.txt" -UseBasicParsing).Content | Invoke-Expression
+	Write-Host "Checking Server List"
+	$ServerList = Get-Content -Path C:\Ambitions\Scripts\Server_Reboots.csv -ErrorAction SilentlyContinue | ConvertFrom-Csv
+	If (!($ServerList)) {
+		Write-Warning "Scheduled task does not exist!"
+	} Else {
+		$ServerList | Format-Table
+		Pause
+		Write-Host -NoNewLine "`n - Retrieving Ambitions Server Reboot Script -"
+		$greenCheck = @{
+			Object = [Char]8730
+			ForegroundColor = 'Green'
+			NoNewLine = $true
+			}
+		$progressPreference = 'silentlyContinue'
+		[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192
+		Set-ExecutionPolicy Bypass -Scope Process -Force
+		(Invoke-WebRequest "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Server-Reboots/ServerReboots_WhatIf.txt" -UseBasicParsing).Content | Invoke-Expression
+	}
 }
 
 Function Debug-UmbrellaProxiedDnsServer {
