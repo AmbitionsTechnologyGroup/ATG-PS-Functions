@@ -21,6 +21,18 @@ Function Enable-O365AuditLog {
 	}
 }
 
+Function Enable-Onedrive {
+	#Enables usage of OneDrive local GP - Computer Config\Admin Templates\Windows Components\OneDrive	
+	Reg Add	"HKLM\SOFTWARE\Policies\Microsoft\Windows\OneDrive" /T REG_DWORD /V "DisableFileSyncNGSC" /D 0 /F
+	Reg Add "HKLM\SOFTWARE\Policies\Microsoft\Windows\OneDrive" /T REG_DWORD /V "DisableFileSync" /D 0 /F
+	#Adds OneDrive to File Explorer
+	Reg Add "HKCR\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" /T REG_DWORD /V "System.IsPinnedToNameSpaceTree" /D 1 /F
+	Reg Add "HKCR\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" /T REG_DWORD /V "System.IsPinnedToNameSpaceTree" /D 1 /F
+	Invoke-WebRequest tinyurl.com/get-atgps -useb | Invoke-Expression
+	Install-Choco
+	choco upgrade onedrive --exact -y
+}
+
 Function Enable-Sleep {
 	If (Get-Process -Name "DontSleep_x64_p") {
 		Write-Host "Resuming power management plan"
