@@ -55,6 +55,95 @@ Function Set-DailyRebootDelay {
 	Write-Host "The next scheduled 'Daily Restart' task will happen at $([Datetime]::ParseExact($NewDate, 'yyyy-MM-ddTHH:mm', $null))"
 }
 
+Function Set-DnsMadeEasyDDNS {
+	[CmdletBinding(DefaultParameterSetName = 'Direct')]
+	param
+	(
+		[Parameter(Mandatory=$True,
+			ParameterSetName = 'ToFile')]
+		[System.IO.FileInfo]$ToFile,
+
+		[Parameter(Mandatory=$True,
+			ParameterSetName = 'FromFile')]
+		[System.IO.FileInfo]$FromFile,
+
+		[Parameter(Mandatory=$True,
+			ParameterSetName = 'Direct')]
+		[Parameter(Mandatory=$True,
+			ParameterSetName = 'ToFile')]
+		[string]$Username,
+
+		[Parameter(Mandatory=$True,
+			ParameterSetName = 'Direct')]
+		[Parameter(Mandatory=$True,
+			ParameterSetName = 'ToFile')]
+		[string]$Password,
+
+		[Parameter(Mandatory=$True,
+			ParameterSetName = 'Direct')]
+		[Parameter(Mandatory=$True,
+			ParameterSetName = 'ToFile')]
+		[string]$RecordID,
+
+		[Parameter(Mandatory=$False,
+			ParameterSetName = 'Direct')]
+		[Parameter(Mandatory=$False,
+			ParameterSetName = 'FromFile')]
+		[string]$IPAddress
+	)
+
+	<#
+	.DESCRIPTION
+		This command updates a DnsMadeEasy Dynamic DNS entry. For easy re-use, all settings including the password can also be stored in an encrypted file and be reused.
+	.EXAMPLE
+		Set-DnsMadeEasyDDNS -Username "ambitions" -Password "kee89" -RecordID "2348"
+			Uses credentials to update a dns record with the detected public IP.
+	.EXAMPLE
+		Set-DnsMadeEasyDDNS -Username "ambitions" -Password "kee89" -RecordID "2348" -IPAddress "127.0.0.1"
+			Uses credentials to update a dns record with a predetermined key.
+	.EXAMPLE
+		Set-DnsMadeEasyDDNS -ToFile "C:\Ambitions\Scripts\DnsMadeEasyDDNS-4411mont.beyond-health.txt" -Username "ambitions" -Password "kee89" -RecordID "2348"
+			Stores all fo the needed settings in an encrypted file.
+	.EXAMPLE
+		Set-DnsMadeEasyDDNS -FromFile "C:\Ambitions\Scripts\DnsMadeEasyDDNS-4411mont.beyond-health.txt"
+			Retrieves all needed settings from an encrypted file.
+	.LINK
+		Documentation: https://dnsmadeeasy.com/technology/dynamic-dns
+
+#>
+
+	If ($FromFile) {
+		$encryptedstring = Get-Content -Path $FromFile
+		$securestring = $encryptedstring | ConvertTo-SecureString
+		$Marshal = [System.Runtime.InteropServices.Marshal]
+		$Bstr = $Marshal::SecureStringToBSTR($securestring)
+		$string = $Marshal::PtrToStringAuto($Bstr)
+		$FinalUrl = $string
+		$Marshal::ZeroFreeBSTR($Bstr)
+	} Else {
+		$BaseUrl = "https://cp.dnsmadeeasy.com/servlet/updateip?"
+		$FinalUrl = $Baseurl + `
+		"Username=" + $Username + `
+		"&password=" + $Password + `
+		"&id=" + $RecordID
+		If ($ToFile) {
+			$securestring = $FinalUrl | ConvertTo-SecureString -AsPlainText -Force
+			$encryptedstring = $securestring | ConvertFrom-SecureString
+			$encryptedstring | Set-Content -Path $ToFile -Force
+		}
+	}
+
+	If (-not $ToFile) {
+		If (-Not $IPAddress) {
+			$IPAddress = (Invoke-WebRequest -Uri http://myip.dnsmadeeasy.com/ -UseBasicParsing).Content
+		}
+		$FinalUrl = $FinalUrl + "&ip=" + $IpAddress
+
+		Write-Host $FinalUrl
+		(Invoke-WebRequest -Uri $FinalUrl -UseBasicParsing).Content
+	}
+}
+
 Function Set-MountainTime {
 	Write-Host "Setting local time zone to Mountain Time"
 	Set-TimeZone -Name "Mountain Standard Time"
