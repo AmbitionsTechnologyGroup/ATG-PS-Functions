@@ -33,6 +33,41 @@ Function Get-ADStaleUsers {
 	}
 }
 
+Function Get-ADStaleComputers {
+	<#
+	.SYNOPSIS
+		Retrieves a list of (enabled) Active Directory Computers that haven't logged in recently.
+	#>
+
+	# check the name of the parent process.  If it's LogMeIn, we can't use the Out-GridView UI
+	$parentProcessName = (Get-Process -Id ((Get-WmiObject Win32_Process -Filter "processid='$PID'").ParentProcessId)).Name
+
+	# check to see whether Get-AdComputer is available
+	If (Get-Command ActiveDirectory\Get-AdComputer -ErrorAction SilentlyContinue) {
+		$Stale = [DateTime]::Today.AddDays(-180)
+		$SemiStale = [DateTime]::Today.AddDays(-30)
+		$adStaleComputerInfo = Get-ADComputer -Filter '(LastLogonTimestamp -lt $Stale)' -Properties LastLogonTimestamp,Description,Title | Format-Table Name,@{N="LastLogonTimestamp";E={[datetime]::FromFileTime($_.LastLogonTimestamp)}},Description,Title -AutoSize
+		$adSemiStaleComputerInfo = Get-ADComputer -Filter '(LastLogonTimestamp -lt $SemiStale) -and (LastLogonTimestamp -gt $Stale) -and (Enabled -eq $True) -and (Name -notlike "HealthMailbox*") -and (Description -notlike "DNI*")' -Properties LastLogonTimestamp,Description,Title | Format-Table Name,@{N="LastLogonTimestamp";E={[datetime]::FromFileTime($_.LastLogonTimestamp)}},Description,Title -AutoSize
+		If ($adStaleComputerInfo) {
+			Write-Host
+			Write-Output "Stale Computer accounts that haven't logged on within the last 180 days:"
+			$adStaleComputerInfo | Format-Table -AutoSize
+		} Else {
+			Write-Host
+			Write-Output "No Stale Computer accounts found that haven't logged on within the last 180 days."
+		}
+		If ($adSemiStaleComputerInfo) {
+		Write-Output "Semi-Stale Computer accounts that haven't logged on within the last 30 days (but have within 180 days):"
+		$adSemiStaleComputerInfo | Format-Table -AutoSize
+		} Else {
+			Write-Host
+			Write-Output "No Semi-Stale Computer accounts found that haven't logged on within the last 30 days (but have within 180 days)."
+		}
+	} else { # cannot continue, Get-AdComputer is not available
+		Write-Host "`n [!] This command must be run on a system with Active Directory Powershell Modules (i.e. a domain controller)`n"
+	}
+}
+
 Function Get-ADUserPassExpirations {
 	<#
 	.SYNOPSIS
