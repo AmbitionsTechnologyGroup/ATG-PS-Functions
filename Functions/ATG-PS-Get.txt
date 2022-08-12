@@ -11,24 +11,28 @@ Function Get-ADStaleUsers {
 	If (Get-Command ActiveDirectory\Get-AdUser -ErrorAction SilentlyContinue) {
 		$Stale = [DateTime]::Today.AddDays(-180)
 		$SemiStale = [DateTime]::Today.AddDays(-30)
-		$adStaleUserInfo = Get-ADUser -Filter '(LastLogonTimestamp -lt $Stale) -and (Enabled -eq $True) -and (Name -notlike "HealthMailbox*") -and (Description -notlike "DNI*")' -Properties LastLogonTimestamp,Description,Title | Format-Table Name,@{N="LastLogonTimestamp";E={[datetime]::FromFileTime($_.LastLogonTimestamp)}},Description,Title -AutoSize
-		$adSemiStaleUserInfo = Get-ADUser -Filter '(LastLogonTimestamp -lt $SemiStale) -and (LastLogonTimestamp -gt $Stale) -and (Enabled -eq $True) -and (Name -notlike "HealthMailbox*") -and (Description -notlike "DNI*")' -Properties LastLogonTimestamp,Description,Title | Format-Table Name,@{N="LastLogonTimestamp";E={[datetime]::FromFileTime($_.LastLogonTimestamp)}},Description,Title -AutoSize
+		$adStaleUserInfo = Get-ADUser -Filter '(LastLogonTimestamp -lt $Stale) -and (Enabled -eq $True) -and (Name -notlike "HealthMailbox*") -and (Description -notlike "DNI*")' -Properties LastLogonTimestamp, Description, Title | Format-Table Name, @{N = "LastLogonTimestamp"; E = { [datetime]::FromFileTime($_.LastLogonTimestamp) } }, Description, Title -AutoSize
+		$adSemiStaleUserInfo = Get-ADUser -Filter '(LastLogonTimestamp -lt $SemiStale) -and (LastLogonTimestamp -gt $Stale) -and (Enabled -eq $True) -and (Name -notlike "HealthMailbox*") -and (Description -notlike "DNI*")' -Properties LastLogonTimestamp, Description, Title | Format-Table Name, @{N = "LastLogonTimestamp"; E = { [datetime]::FromFileTime($_.LastLogonTimestamp) } }, Description, Title -AutoSize
 		If ($adStaleUserInfo) {
 			Write-Host
 			Write-Output "Stale user accounts that haven't logged on within the last 180 days:"
 			$adStaleUserInfo | Format-Table -AutoSize
-		} Else {
+		}
+		Else {
 			Write-Host
 			Write-Output "No Stale user accounts found that haven't logged on within the last 180 days."
 		}
 		If ($adSemiStaleUserInfo) {
-		Write-Output "Semi-Stale user accounts that haven't logged on within the last 30 days (but have within 180 days):"
-		$adSemiStaleUserInfo | Format-Table -AutoSize
-		} Else {
+			Write-Output "Semi-Stale user accounts that haven't logged on within the last 30 days (but have within 180 days):"
+			$adSemiStaleUserInfo | Format-Table -AutoSize
+		}
+		Else {
 			Write-Host
 			Write-Output "No Semi-Stale user accounts found that haven't logged on within the last 30 days (but have within 180 days)."
 		}
-	} else { # cannot continue, Get-AdUser is not available
+	}
+ else {
+		# cannot continue, Get-AdUser is not available
 		Write-Host "`n [!] This command must be run on a system with Active Directory Powershell Modules (i.e. a domain controller)`n"
 	}
 }
@@ -46,24 +50,28 @@ Function Get-ADStaleComputers {
 	If (Get-Command ActiveDirectory\Get-AdComputer -ErrorAction SilentlyContinue) {
 		$Stale = [DateTime]::Today.AddDays(-180)
 		$SemiStale = [DateTime]::Today.AddDays(-30)
-		$adStaleComputerInfo = Get-ADComputer -Filter '(LastLogonTimestamp -lt $Stale)' -Properties LastLogonTimestamp,Description,Title | Format-Table Name,@{N="LastLogonTimestamp";E={[datetime]::FromFileTime($_.LastLogonTimestamp)}},Description,Title -AutoSize
-		$adSemiStaleComputerInfo = Get-ADComputer -Filter '(LastLogonTimestamp -lt $SemiStale) -and (LastLogonTimestamp -gt $Stale) -and (Enabled -eq $True) -and (Name -notlike "HealthMailbox*") -and (Description -notlike "DNI*")' -Properties LastLogonTimestamp,Description,Title | Format-Table Name,@{N="LastLogonTimestamp";E={[datetime]::FromFileTime($_.LastLogonTimestamp)}},Description,Title -AutoSize
+		$adStaleComputerInfo = Get-ADComputer -Filter '(LastLogonTimestamp -lt $Stale)' -Properties LastLogonTimestamp, Description, Title | Format-Table Name, @{N = "LastLogonTimestamp"; E = { [datetime]::FromFileTime($_.LastLogonTimestamp) } }, Description, Title -AutoSize
+		$adSemiStaleComputerInfo = Get-ADComputer -Filter '(LastLogonTimestamp -lt $SemiStale) -and (LastLogonTimestamp -gt $Stale) -and (Enabled -eq $True) -and (Name -notlike "HealthMailbox*") -and (Description -notlike "DNI*")' -Properties LastLogonTimestamp, Description, Title | Format-Table Name, @{N = "LastLogonTimestamp"; E = { [datetime]::FromFileTime($_.LastLogonTimestamp) } }, Description, Title -AutoSize
 		If ($adStaleComputerInfo) {
 			Write-Host
 			Write-Output "Stale Computer accounts that haven't logged on within the last 180 days:"
 			$adStaleComputerInfo | Format-Table -AutoSize
-		} Else {
+		}
+		Else {
 			Write-Host
 			Write-Output "No Stale Computer accounts found that haven't logged on within the last 180 days."
 		}
 		If ($adSemiStaleComputerInfo) {
-		Write-Output "Semi-Stale Computer accounts that haven't logged on within the last 30 days (but have within 180 days):"
-		$adSemiStaleComputerInfo | Format-Table -AutoSize
-		} Else {
+			Write-Output "Semi-Stale Computer accounts that haven't logged on within the last 30 days (but have within 180 days):"
+			$adSemiStaleComputerInfo | Format-Table -AutoSize
+		}
+		Else {
 			Write-Host
 			Write-Output "No Semi-Stale Computer accounts found that haven't logged on within the last 30 days (but have within 180 days)."
 		}
-	} else { # cannot continue, Get-AdComputer is not available
+	}
+ else {
+		# cannot continue, Get-AdComputer is not available
 		Write-Host "`n [!] This command must be run on a system with Active Directory Powershell Modules (i.e. a domain controller)`n"
 	}
 }
@@ -80,55 +88,60 @@ Function Get-ADUserPassExpirations {
 	# check to see whether Get-AdUser is available
 	If (Get-Command ActiveDirectory\Get-AdUser -ErrorAction SilentlyContinue) {
 
-		$adUserInfo = Get-ADUser -Filter {Enabled -eq $True -and PasswordNeverExpires -eq $False} `
-		–Properties "DisplayName", "userPrincipalName", "msDS-UserPasswordExpiryTimeComputed" | `
-		Select-Object -Property "Displayname","userPrincipalName",@{Name="ExpiryDate";Expression={[datetime]::FromFileTime($_."msDS-UserPasswordExpiryTimeComputed")}}
+		$adUserInfo = Get-ADUser -Filter { Enabled -eq $True -and PasswordNeverExpires -eq $False } `
+			–Properties "DisplayName", "userPrincipalName", "msDS-UserPasswordExpiryTimeComputed" | `
+			Select-Object -Property "Displayname", "userPrincipalName", @{Name = "ExpiryDate"; Expression = { [datetime]::FromFileTime($_."msDS-UserPasswordExpiryTimeComputed") } }
 
 		# if the parent process of this powershell instance is not explorer.exe, output to PowerShell table.
 		If ($parentProcessName -ne "explorer") {
 			$adUserInfo | Format-Table -AutoSize
-		} Else { # otherwise, grid view UI
+		}
+		Else {
+			# otherwise, grid view UI
 			$adUserInfo | Out-GridView -Title "ATG Powershell --> User Password Expirations"
 		}
 
-	} else { # cannot continue, Get-AdUser is not available
+	}
+ else {
+		# cannot continue, Get-AdUser is not available
 		Write-Host "`n [!] This command must be run on a system with Active Directory Powershell Modules (i.e. a domain controller)`n"
 	}
 }
 
 Function Get-ATGPS {
 	param
-		(
-			[Parameter(Mandatory=$false)]
-			[switch] $Force
-		)
+	(
+		[Parameter(Mandatory = $false)]
+		[switch] $Force
+	)
 	If ($Force) {
 		Write-Host "-Force specified. Force loading latest functions."
-		Start-Job -ScriptBlock {Invoke-WebRequest http://download.ambitionsgroup.com/Scripts/Update-ATGPS.txt -UseBasicParsing | Invoke-Expression} | Receive-Job -AutoRemoveJob -Wait
+		Start-Job -ScriptBlock { Invoke-WebRequest http://download.ambitionsgroup.com/Scripts/Update-ATGPS.txt -UseBasicParsing | Invoke-Expression } | Receive-Job -AutoRemoveJob -Wait
 		$DestinationFiles | ForEach-Object {
 			If (Test-Path $_ -ErrorAction SilentlyContinue) {
 				Import-Module $_ -Global -Force
 			}
 		}
 	}
-	
-	If (Get-Module -Name "ATG-PS*" -ErrorAction SilentlyContinue){
+
+	If (Get-Module -Name "ATG-PS*" -ErrorAction SilentlyContinue) {
 		# List imported functions from ATGPS
 		Write-Host ====================================================
 		Write-Host "The below functions are now loaded and ready to use:"
 		Write-Host ====================================================
-			Get-Command -Module "ATG-PS*" | Format-Wide -Column 3
+		Get-Command -Module "ATG-PS*" | Format-Wide -Column 3
 		Write-Host ====================================================
 		Write-Host "Type: 'Help <function name> -Detailed' for more info"
 		Write-Host ====================================================
-	} Else {
-	$progressPreference = 'silentlyContinue'
-	iwr tinyurl.com/get-atgps -UseBasicParsing | iex
-	# List imported functions from ATGPS
+	}
+ Else {
+		$progressPreference = 'silentlyContinue'
+		iwr tinyurl.com/get-atgps -UseBasicParsing | iex
+		# List imported functions from ATGPS
 		Write-Host ====================================================
 		Write-Host "The below functions are now loaded and ready to use:"
 		Write-Host ====================================================
-			Get-Command -Module "ATG-PS*" | Format-Wide -Column 3
+		Get-Command -Module "ATG-PS*" | Format-Wide -Column 3
 		Write-Host ====================================================
 		Write-Host "Type: 'Help <function name> -Detailed' for more info"
 		Write-Host ====================================================
@@ -137,10 +150,10 @@ Function Get-ATGPS {
 
 Function Get-BitLockerKey {
 	param
-		(
-			[Parameter(Mandatory=$false)]
-			[string]$Computer
-		)
+	(
+		[Parameter(Mandatory = $false)]
+		[string]$Computer
+	)
 	#$Computer = "OPTIPLEX7040-20"
 	$Computers = Get-ADComputer -Filter 'ObjectClass -eq "computer"'
 	$AllComputers = @()
@@ -148,18 +161,18 @@ Function Get-BitLockerKey {
 	$Computers | Foreach-object {
 		#$Computer = $_.name
 		#Check if the Computer Object exists
-		$Computer_Object = Get-ADComputer -Filter {cn -eq $_.name} -Property msTPM-OwnerInformation, msTPM-TpmInformationForComputer
-		If ($Computer_Object -eq $null){
+		$Computer_Object = Get-ADComputer -Filter { cn -eq $_.name } -Property msTPM-OwnerInformation, msTPM-TpmInformationForComputer
+		If ($Computer_Object -eq $null) {
 			Write-Host "Error..."
 		}
 		#Check if the computer object has had a BitLocker Recovery Password
-		$Bitlocker_Object = Get-ADObject -Filter {objectclass -eq 'msFVE-RecoveryInformation'} -SearchBase $Computer_Object.DistinguishedName -Properties 'msFVE-RecoveryPassword' | Select-Object -Last 1
-		If ($Bitlocker_Object.'msFVE-RecoveryPassword'){
+		$Bitlocker_Object = Get-ADObject -Filter { objectclass -eq 'msFVE-RecoveryInformation' } -SearchBase $Computer_Object.DistinguishedName -Properties 'msFVE-RecoveryPassword' | Select-Object -Last 1
+		If ($Bitlocker_Object.'msFVE-RecoveryPassword') {
 			$BitLocker_Key = $BitLocker_Object.'msFVE-RecoveryPassword'
 
 			#$strToReport = $_.name,$BitLocker_Key
 			$strToReport = [PSCustomObject]@{
-				Computer = $_.name
+				Computer     = $_.name
 				BitLockerKey = $BitLocker_Key
 			}
 			$AllComputers += $strToReport
@@ -168,11 +181,12 @@ Function Get-BitLockerKey {
 
 			#Save to Report
 			#$strToReport | Out-File C:\temp\Report.txt -append
-		} Else {
+		}
+		Else {
 			$BitLocker_Key = "None"
 			#$strToReport = $_.name,$BitLocker_Key
 			$strToReport = [PSCustomObject]@{
-				Computer = $_.name
+				Computer     = $_.name
 				BitLockerKey = $BitLocker_Key
 			}
 			$AllComputers += $strToReport
@@ -182,23 +196,26 @@ Function Get-BitLockerKey {
 	If ($Computer) {
 		If ($AllComputers.Computer -NotContains $Computer) {
 			Write-Host "The computer specified was not found."
-		} Else {
+		}
+		Else {
 			$ComputerInfo = new-object psobject
 			$ComputerInfo = $AllComputers | Where-Object -Property Computer -eq -Value $Computer
 			$ComputerInfo | Format-List
 			If ($ComputerInfo.BitlockerKey -eq "None") {
 				Write-Host "There is no bitlocker key for this compuer."
-			} Else {
+			}
+			Else {
 
 				Write-Host "The bitlocker key has been copied to the clipboard.`n"
 				$ComputerInfo.BitlockerKey | Clip
 			}
 		}
-	} Else {
+	}
+ Else {
 		$AllComputers
 	}
 
-<#
+	<#
 	.SYNOPSIS
 		Searches for and retrieves a BitLocker recovery key for the specified computer(s) in Active Directory.
 	.PARAMETER Computer
@@ -245,7 +262,8 @@ Function Global:Get-DellWarranty {
 			}
 			#$ServiceTags = @($List.split("``n"))
 			$Local = $False
-		} Else {
+		}
+		Else {
 			$Local = $True
 		}
 	}
@@ -255,7 +273,7 @@ Function Global:Get-DellWarranty {
 	}
 	Write-Host "Getting Warranties for $($ServiceTags.Count) Service Tag(s)."
 	Foreach ($ServiceTag in $ServiceTags) {
-		If ($Show) {Write-Host "Processing $ServiceTag"}
+		If ($Show) { Write-Host "Processing $ServiceTag" }
 		#If ($ServiceTag -eq $(Get-WmiObject -Class "Win32_Bios").SerialNumber) { $Show = $true }
 		$ApiKey = Get-Content "$env:appdata\Microsoft\Windows\PowerShell\DellKey.txt"
 		$ApiSecret = Get-Content "$env:appdata\Microsoft\Windows\PowerShell\DellSec.txt"
@@ -280,18 +298,20 @@ Function Global:Get-DellWarranty {
 		$WarrantyLevel = ($sortedEntitlements.serviceLevelDescription | Select-Object -Last 1)
 		$ShipDateRaw = (($content.shipDate).split("T"))[0]
 		$ShipDate = [datetime]::ParseExact($ShipDateRaw, "yyyy-MM-dd", $null)
-		
+
 		If ($content.systemDescription) {
 			$Model = $content.systemDescription
-		} Else {
+		}
+		Else {
 			$Model = $content.productLineDescription #Sometimes Dell blanks the systemDescription. systemDescription likely has the data
 		}
 
 		$Today = get-date
-		If ($Today -ge $WarrantyEndDate){
-		#Write-Host "`nWarranty has expired for $ServiceTag ($Model) " -ForegroundColor White -BackgroundColor Red
-		$WarrantyExpired = "Expired" #Variable useful for mass export
-		} Else {
+		If ($Today -ge $WarrantyEndDate) {
+			#Write-Host "`nWarranty has expired for $ServiceTag ($Model) " -ForegroundColor White -BackgroundColor Red
+			$WarrantyExpired = "Expired" #Variable useful for mass export
+		}
+		Else {
 			$WarrantyExpired = "Not Expired"
 		}
 		#Returns data as a PSObject which can be used for batch/scripting purposes
@@ -308,24 +328,24 @@ Function Global:Get-DellWarranty {
 	If ($Show) {
 		$FinalObj | Format-Table -AutoSize
 	}
-	If ($CopyToClipBoard){
+	If ($CopyToClipBoard) {
 		$Path = $Env:Temp + '\' + [guid]::NewGuid().ToString() + '.csv'
 		$FinalObj | Export-CSV -Delimiter "`t" -NoTypeInformation -Path $Path
 		Get-Content -Path $Path | Set-Clipboard
 		Remove-Item -Path $Path -Force
 		Write-Host "Results have been copied to the clipboard."
 	}
-	Clear-Variable Show,FinalObj,Path,CopyToClipBoard -Force -ErrorAction SilentlyContinue
+	Clear-Variable Show, FinalObj, Path, CopyToClipBoard -Force -ErrorAction SilentlyContinue
 }
 
-Function Get-DiskUsage($Path=".") {
+Function Get-DiskUsage($Path = ".") {
 	Write-Host -ForegroundColor Cyan "  (large folders may take long to calculate...)"
 	Get-ChildItem $path | ForEach-Object {
 		$file = $_
 		Get-ChildItem -r $_.FullName |
 		Measure-Object -property length -sum -ErrorAction SilentlyContinue |
-		Select-Object @{Name="Name";Expression={$file}},
-		@{Name="Space Used (MB)";Expression={([math]::Round(($_.Sum/1024/1024),2))}}
+		Select-Object @{Name = "Name"; Expression = { $file } },
+		@{Name = "Space Used (MB)"; Expression = { ([math]::Round(($_.Sum / 1024 / 1024), 2)) } }
 	} | Format-Table -AutoSize
 
 	<#
@@ -361,7 +381,8 @@ Function Get-DomainInfo {
 		}
 		Write-Host "`nLocal Network Info:"
 		Get-IpConfig
-	} Else {
+	}
+ Else {
 		Write-Host "`nComputer is not joined to a domain. Showing network info instead."
 		Get-IpConfig
 	}
@@ -372,7 +393,8 @@ Function Get-ThunderBolt {
 	If ($Thunderbolt) {
 		Write-Host "The following ThunderBolt controllers have been detected:"
 		$Thunderbolt
-	} Else {
+	}
+ Else {
 		Write-Host "No Thunderbolt Controllers have been detected"
 	}
 }
@@ -397,7 +419,8 @@ Function Get-InternetHealth {
 			Invoke-WebRequest -Uri $DownloadURL -OutFile "$($DownloadLocation)\speedtest.zip"
 			Expand-Archive "$($DownloadLocation)\speedtest.zip" -DestinationPath $DownloadLocation -Force
 		}
-	} Catch {
+	}
+ Catch {
 		Write-Host "The download and extraction of SpeedtestCLI failed. Error: $($_.Exception.Message)"
 		#exit 1
 		Return
@@ -439,7 +462,7 @@ Function Get-InternetHealth {
 	Write-Host "Internet Health Test Results:"
 	$SpeedtestObj | Format-Table -AutoSize -HideTableHeaders
 	Write-Host "Internet Health Summary:"
-	If ($HealthIssue) {Write-Host -ForegroundColor Yellow -BackgroundColor Black "There appears to be issues!" } Else { Write-Host -ForegroundColor Green -BackgroundColor Black "All tests results are optimal!"}
+	If ($HealthIssue) { Write-Host -ForegroundColor Yellow -BackgroundColor Black "There appears to be issues!" } Else { Write-Host -ForegroundColor Green -BackgroundColor Black "All tests results are optimal!" }
 	$SpeedtestHealth
 }
 
@@ -450,17 +473,17 @@ Function Get-IPConfig {
 		This is only IPv4 for now.
 	#>
 
-	Get-netipaddress -AddressFamily IPv4 -PrefixOrigin Dhcp,Manual | Sort InterfaceIndex | Format-Table -AutoSize -Property `
-	InterfaceAlias,`
-	@{Name = 'Domain' ; Expression = {$($_ | Get-NetIPConfiguration).NetProfile.Name}},`
-	@{Name = 'Status' ; Expression = {$($_ | Get-NetIPConfiguration).NetAdapter.Status}},`
-	@{Name = 'IP Address' ; Expression = {$($_.IPAddress + "/" + $_.PrefixLength)}},`
-	@{Name = 'DefaultGateway' ; Expression = {$($_ | Get-NetIPConfiguration).IPv4DefaultGateway.NextHop}},`
-	@{Name = 'DNS Server(s)' ; Expression = {$(($_ | Get-NetIPConfiguration).DNSServer | Where-Object -Property AddressFamily -eq 2).ServerAddresses}}
+	Get-netipaddress -AddressFamily IPv4 -PrefixOrigin Dhcp, Manual | Sort InterfaceIndex | Format-Table -AutoSize -Property `
+		InterfaceAlias, `
+	@{Name = 'Domain' ; Expression = { $($_ | Get-NetIPConfiguration).NetProfile.Name } }, `
+	@{Name = 'Status' ; Expression = { $($_ | Get-NetIPConfiguration).NetAdapter.Status } }, `
+	@{Name = 'IP Address' ; Expression = { $($_.IPAddress + "/" + $_.PrefixLength) } }, `
+	@{Name = 'DefaultGateway' ; Expression = { $($_ | Get-NetIPConfiguration).IPv4DefaultGateway.NextHop } }, `
+	@{Name = 'DNS Server(s)' ; Expression = { $(($_ | Get-NetIPConfiguration).DNSServer | Where-Object -Property AddressFamily -eq 2).ServerAddresses } }
 }
 
 Function Get-ListeningPorts {
-		<#
+	<#
 
 	.SYNOPSIS
 		Checks for processes that are listening on an open port. Useful for troubleshooting firewall issues.
@@ -481,7 +504,7 @@ Function Get-ListeningPorts {
 	#>
 
 	Param(
-		[Parameter(Mandatory=$false)]
+		[Parameter(Mandatory = $false)]
 		[Switch]$IncludeIp6
 	)
 
@@ -492,13 +515,15 @@ Function Get-ListeningPorts {
 
 	Get-NetTcpConnection | Where-Object { ($_.State -eq "Listen") -and ( $IpAddresses -contains $_.LocalAddress) } | `
 		Select-Object LocalAddress,
-					  LocalPort,
-					  @{Name="Process Name";Expression={(Get-Process -Id $_.OwningProcess).ProcessName}},
-					  @{Name="Service Name";Expression={ If ((Get-Process -Id $_.OwningProcess).ProcessName -eq "svchost") {
-						  $p = $_.OwningProcess
-						  (Get-WmiObject Win32_Service | Where-Object {$_.ProcessId -eq $p}).Name
-					  } Else {$null} }},
-					  State | Sort LocalPort | Format-Table
+	LocalPort,
+	@{Name = "Process Name"; Expression = { (Get-Process -Id $_.OwningProcess).ProcessName } },
+	@{Name = "Service Name"; Expression = { If ((Get-Process -Id $_.OwningProcess).ProcessName -eq "svchost") {
+				$p = $_.OwningProcess
+						  (Get-WmiObject Win32_Service | Where-Object { $_.ProcessId -eq $p }).Name
+			}
+			Else { $null } }
+	},
+	State | Sort LocalPort | Format-Table
 }
 
 Function Get-LoginHistory {
@@ -540,10 +565,10 @@ Function Get-LoginHistory {
 	Foreach ($Server in $ServersToQuery) {
 
 		$LogFilter = @{
-			LogName = 'Microsoft-Windows-TerminalServices-LocalSessionManager/Operational'
-			ID = 21, 23, 24, 25
+			LogName   = 'Microsoft-Windows-TerminalServices-LocalSessionManager/Operational'
+			ID        = 21, 23, 24, 25
 			StartTime = $StartTime
-			}
+		}
 
 		$AllEntries = Get-WinEvent -FilterHashtable $LogFilter -ComputerName $Server
 
@@ -551,22 +576,22 @@ Function Get-LoginHistory {
 			$entry = [xml]$_.ToXml()
 			[array]$Output += New-Object PSObject -Property @{
 				TimeCreated = $_.TimeCreated
-				User = $entry.Event.UserData.EventXML.User
-				IPAddress = $entry.Event.UserData.EventXML.Address
-				EventID = $entry.Event.System.EventID
-				ServerName = $Server
-				}
+				User        = $entry.Event.UserData.EventXML.User
+				IPAddress   = $entry.Event.UserData.EventXML.Address
+				EventID     = $entry.Event.System.EventID
+				ServerName  = $Server
 			}
 		}
+	}
 
-	$FilteredOutput += $Output | Select-Object TimeCreated, User, ServerName, IPAddress, @{Name='Action';Expression={
-				if ($_.EventID -eq '21'){"Logon"}
-				if ($_.EventID -eq '22'){"Shell Start"}
-				if ($_.EventID -eq '23'){"Logoff"}
-				if ($_.EventID -eq '24'){"Disconnected"}
-				if ($_.EventID -eq '25'){"Reconnection"}
-				}
-			}
+	$FilteredOutput += $Output | Select-Object TimeCreated, User, ServerName, IPAddress, @{Name = 'Action'; Expression = {
+			if ($_.EventID -eq '21') { "Logon" }
+			if ($_.EventID -eq '22') { "Shell Start" }
+			if ($_.EventID -eq '23') { "Logoff" }
+			if ($_.EventID -eq '24') { "Disconnected" }
+			if ($_.EventID -eq '25') { "Reconnection" }
+		}
+	}
 
 	$FilteredOutput | Sort-Object -Property TimeCreated | Format-Table -AutoSize
 }
@@ -580,12 +605,129 @@ Function Get-SharedMailboxRestoreRequest {
 	#>
 }
 
+Function Get-SonicwallInterfaceIP {
+	param(
+		[Parameter(Mandatory = $True,
+			ParameterSetName = 'Direct')]
+		[Parameter(Mandatory = $True,
+			ParameterSetName = 'ToFile')]
+		[string]$SonicWallAddress,
+
+		[Parameter(Mandatory = $True,
+			ParameterSetName = 'Direct')]
+		[Parameter(Mandatory = $True,
+			ParameterSetName = 'ToFile')]
+		[string]$Username,
+
+		[Parameter(Mandatory = $True,
+			ParameterSetName = 'Direct')]
+		[Parameter(Mandatory = $True,
+			ParameterSetName = 'ToFile')]
+		[string]$Password,
+
+		[Parameter(Mandatory = $False,
+			ParameterSetName = 'Direct')]
+		[Parameter(Mandatory = $False,
+			ParameterSetName = 'ToFile')]
+		[int]$Port = '22',
+
+		[Parameter(Mandatory = $True,
+			ParameterSetName = 'Direct')]
+		[Parameter(Mandatory = $True,
+			ParameterSetName = 'ToFile')]
+		[string]$Interface,
+
+		[Parameter(Mandatory = $True,
+			ParameterSetName = 'FromFile')]
+		[System.IO.FileInfo]$FromFile,
+
+		[Parameter(Mandatory = $True,
+			ParameterSetName = 'ToFile')]
+		[System.IO.FileInfo]$ToFile,
+
+		[Parameter(Mandatory = $False,
+			ParameterSetName = 'Direct')]
+		[Parameter(Mandatory = $False,
+			ParameterSetName = 'FromFile')]
+		[Parameter(Mandatory = $False,
+			ParameterSetName = 'ToFile')]
+		[System.IO.FileInfo]$SetDnsMadeEasyFile
+	)
+
+	#Work with settings file.
+	If ($FromFile) {
+		$encryptedstring = Get-Content -Path $FromFile
+		$securestring = $encryptedstring | ConvertTo-SecureString
+		$Marshal = [System.Runtime.InteropServices.Marshal]
+		$Bstr = $Marshal::SecureStringToBSTR($securestring)
+		$string = $Marshal::PtrToStringAuto($Bstr)
+		$string | Invoke-Expression
+		$Marshal::ZeroFreeBSTR($Bstr)
+	}
+ Else {
+		If ($ToFile) {
+			$ParamArray = @(
+				$('[string]$SonicWallAddress = "' + $SonicWallAddress + '"')
+				$('[string]$Username = "' + $Username + '"')
+				$('[string]$Password = "' + $Password + '"')
+				$('[string]$Interface = "' + $Interface + '"')
+				$('[int]$Port = "' + $Port + '"')
+			)
+			If ($SetDnsMadeEasyFile) { $ParamArray += $('[System.IO.FileInfo]$SetDnsMadeEasyFile = "' + $SetDnsMadeEasyFile + '"') }
+			$securestring = $ParamArray | Out-String | ConvertTo-SecureString -AsPlainText -Force
+			$encryptedstring = $securestring | ConvertFrom-SecureString
+			$encryptedstring | Set-Content -Path $ToFile -Force
+		}
+	}
+
+	If (-Not ($ToFile)) {
+		# Check if our module loaded properly
+		If (-not (Get-Module -ListAvailable -Name Posh-SSH)) {
+			# Install the module automatically
+			Install-Module -Name Posh-SSH
+		}
+
+		# Includes
+		Import-Module Posh-SSH
+
+		#Configure the command
+		[string]$Command = "show interface $Interface IP"
+
+		# Generate credentials object for authentication
+		$nopasswd = $Password | ConvertTo-SecureString -AsPlainText -Force
+		$Credential = New-Object System.Management.Automation.PSCredential ($Username, $nopasswd)
+		$Session = New-SSHSession -Computername $SonicWallAddress -Credential $Credential -Acceptkey -Port $Port -OutVariable Session
+
+		$stream = New-SSHShellStream -SSHSession $Session
+		$stream.WriteLine($Command)
+		Start-Sleep 1
+		# Store the output of the command
+		$Output = $stream.Read()
+
+		# Remove the session after we're done
+		Remove-SSHSession -Name $Session | Out-Null
+
+		# return the actual output
+		#Write-Host $Output.Trim();
+
+		# Automatically update the fingerprint for the given host.
+		Remove-SSHTrustedHost $SonicWallAddress | Out-Null
+
+		$IP = ($Output.tostring().split("`n").trim() | Select-String -SimpleMatch "IP Address").Line.split(":").Trim()[-1]
+		$IP
+
+		If ($SetDnsMadeEasyFile) {
+			Set-DnsMadeEasyDDNS -FromFile $SetDnsMadeEasyFile -IPAddress $IP
+		}
+	}
+}
+
 Function Get-UserMailboxAccess {
 	param
-		(
-			[Parameter(Mandatory=$True)]
-			[string]$User
-		)
+	(
+		[Parameter(Mandatory = $True)]
+		[string]$User
+	)
 
 	$progressPreference = 'Continue'
 	Write-Progress -Activity "Validating user: $User"
@@ -594,7 +736,7 @@ Function Get-UserMailboxAccess {
 		Do {
 			#Retry the User
 			$User = Read-Host "Entry `"$User`" didn't work. Check your spelling and try again or type QUIT to stop:`n"
-			If ($User -match "QUIT") {Break}
+			If ($User -match "QUIT") { Break }
 			$ValidatedUser = Get-EXOMailbox -Identity $User -ErrorAction SilentlyContinue
 			#Active User Check
 			If ($ValidatedUser) {
@@ -603,44 +745,48 @@ Function Get-UserMailboxAccess {
 		} While (-not $ValidatedUser)
 		$User = $ValidatedUser.Identity
 		Write-Host $User
-	} Else {$User = $ValidatedUser.Identity}
+	}
+ Else { $User = $ValidatedUser.Identity }
 
 	Write-Progress -Activity "Collecting list of mailboxes"
-		$Mailboxes = Get-ExoMailbox -ResultSize Unlimited
+	$Mailboxes = Get-ExoMailbox -ResultSize Unlimited
 
 	Write-Progress -Activity "Gathering mailbox access permissions"
-		$Access = $Mailboxes | Get-MailboxPermission -User $User
+	$Access = $Mailboxes | Get-MailboxPermission -User $User
 
 	Write-Progress -Activity "Gathering 'Send As' permissions"
-		$SendAs = $Mailboxes | Get-RecipientPermission -Trustee $User
+	$SendAs = $Mailboxes | Get-RecipientPermission -Trustee $User
 
 	Write-Progress -Activity "Gathering 'Send On Behalf' permissions"
-		$SendOnBehalf = $Mailboxes | ? {$_.GrantSendOnBehalfTo -match $User}
-	
+	$SendOnBehalf = $Mailboxes | ? { $_.GrantSendOnBehalfTo -match $User }
+
 	Write-Progress -Activity * -Completed
-	
+
 	Write-Host "-----Results for $User-----"
 	If ($Access) {
 		Write-Host "$User has mailbox access to:"
 		Write-Host -ForegroundColor Yellow "$(($Access | FT Identity,AccessRights -HideTableHeaders | Out-String).Trim())"
-	} Else {
+	}
+ Else {
 		Write-Host "$User does not have direct access to any other mailboxes."
 	}
 
 	If ($SendAs) {
 		Write-Host "$User has 'Send As' permissions for:"
 		Write-Host -ForegroundColor Yellow "$($SendAs.Identity)"
-	} Else {
+	}
+ Else {
 		Write-Host "$User does not have Send As access to any other mailboxes."
 	}
 
 	If ($SendOnBehalf) {
 		Write-Host "$User has 'Send As' permissions for:"
 		Write-Host -ForegroundColor Yellow "$($SendOnBehalf.Identity)"
-	} Else {
+	}
+ Else {
 		Write-Host "$User does not have Send On Behalf access to any other mailboxes."
 	}
-	
+
 	<#
 	.DESCRIPTION
 		Check's what permissions a user has over other mailboxes including Direct Access, Send As, and Send on Behalf.
@@ -655,7 +801,7 @@ Function Get-UserMailboxAccess {
 		Marcus Rael does not have Send On Behalf access to any other mailboxes.
 	.EXAMPLE
 		[Command]: Get-UserMailboxAccess -User Marcus
-		
+
 		-----Results for Chelsea Sandoval-----
 		Chelsea Sandoval has mailbox access to:
 		Brian S. Colon    {FullAccess}
@@ -672,7 +818,7 @@ Function Get-UserMailboxAccess {
 }
 
 Function Get-UserProfileSpace {
-	$Profiles = (Get-CimInstance win32_userprofile | ? {$_.Special -eq $False})
+	$Profiles = (Get-CimInstance win32_userprofile | ? { $_.Special -eq $False })
 	#$Profiles | Select -Property LocalPath, @{Name = 'Last Activity' ; Expression = {(Get-Item ($_.LocalPath + "\AppData\Local")).LastWriteTime}} | Sort-Object "Last Activity"
 	$ActiveProfiles = @()
 	$FolderSizes = @{}
@@ -686,13 +832,15 @@ Function Get-UserProfileSpace {
 
 	ForEach ($ProfilePath in $ProfilePaths) {
 		#$ProfilePath = "C:\Users\rshoemaker"
-		$LastActivity = If (Test-Path -Path $($ProfilePath + "\AppData") -ErrorAction SilentlyContinue){
+		$LastActivity = If (Test-Path -Path $($ProfilePath + "\AppData") -ErrorAction SilentlyContinue) {
 			(Get-ChildItem -Path $($ProfilePath + "\AppData") | Sort LastWriteTime -Descending)[0].LastWriteTime
-		} Else {Return 0}
+		}
+		Else { Return 0 }
 		If ($LastActivity -gt $StaleLimit) {
 			#Write-Host $ProfilePath is recent with an activity date of $LastActivity
 			$ActiveProfiles += $ProfilePath
-		} Else {
+		}
+		Else {
 			#Write-Host $ProfilePath is old with an activity date of $LastActivity
 		}
 	}
@@ -705,37 +853,40 @@ Function Get-UserProfileSpace {
 		ForEach ($ActiveProfile in $ActiveProfiles) {
 			[Decimal]$FolderSizeSum = 0.00
 			#Write-Host $($ActiveProfile | split-path -leaf)
-			$Folders = @("Desktop","Documents","Pictures")
+			$Folders = @("Desktop", "Documents", "Pictures")
 			$FolderSizes = [PSCustomObject]@{}
 			ForEach ($Folder in $Folders) {
 				If (Test-Path -Path $($ActiveProfile + "\" + "$Folder")) {
 					$GetSize = (Get-FolderSize -Path $ActiveProfile -FolderName $Folder).SizeMB
 					If ($GetSize.Count -gt 1) {
 						[Decimal]$Size = $($GetSize)[0] | Out-String
-					} Else {
+					}
+					Else {
 						[Decimal]$Size = $($GetSize) | Out-String
 					}
 					#Write-Host `t$Folder $Size
 					Set-Variable -Name $Folder -Value $Size -Force
-				} Else {
+				}
+				Else {
 					Set-Variable -Name $Folder -Value 0 -Force
 				}
 
 			} #ForEach ($Folder in $Folders)
 			$FolderSizes = [PSCustomObject]@{
-				"User" = $($ActiveProfile | split-path -leaf).ToLower()
-				"Host" = $env:computername
-				"Date" = $(Get-Date -Format "yyyyMMdd")
+				"User"      = $($ActiveProfile | split-path -leaf).ToLower()
+				"Host"      = $env:computername
+				"Date"      = $(Get-Date -Format "yyyyMMdd")
 
-				"Desktop" = $Desktop
+				"Desktop"   = $Desktop
 				"Documents" = $Documents
-				"Pictures" = $Pictures
-				"Total" = $Desktop + $Documents + $Pictures
+				"Pictures"  = $Pictures
+				"Total"     = $Desktop + $Documents + $Pictures
 			}
 			#$FolderSizes
-			If ($BigObject.Count -eq 0){
+			If ($BigObject.Count -eq 0) {
 				$BigObject = ($FolderSizes | ConvertTo-Csv -NoTypeInformation)
-			} Else {
+			}
+			Else {
 				$BigObject += ($FolderSizes | ConvertTo-Csv -NoTypeInformation)[-1]
 			}
 			$global:Desktop = 0
@@ -756,7 +907,7 @@ Function Get-VSSWriter {
 		$Status
 	) #Param
 
-	BEGIN { Write-Verbose "BEGIN: Get-KPVSSWriter"} #BEGIN
+	BEGIN { Write-Verbose "BEGIN: Get-KPVSSWriter" } #BEGIN
 
 	PROCESS {
 		#Command to retrieve all writers, and split them into groups
