@@ -299,6 +299,20 @@ Function Import-PPESenderLists {
 	Clear-Variable user,email,domain,blocked,trusted -Force -Scope Global -ea SilentlyContinue
 	$Global:RawUserBlockedSenderList = Import-Csv -Path $($Directory + "\UserBlockedSenderList.csv")
 	$Global:RawUserSafeSenderList = Import-Csv -Path $($Directory + "\UserSafeSenderList.csv")
+	#Organization Wide List conversion and import
+	$OrgSafeSenderFile = $($Directory + '\OrgSafeSender.csv')
+	(Get-Content $OrgSafeSenderFile).replace('*@', '') | Set-Content $OrgSafeSenderFile
+	(Get-Content $OrgSafeSenderFile).replace(' -- WARNING: ALL Domain Email listed as Safe Sender', '') | Set-Content $OrgSafeSenderFile
+	$OrgBlockedSenderFile = $($Directory + '\OrgBlockedSender.csv')
+	(Get-Content $OrgBlockedSenderFile).replace('*@', '') | Set-Content $OrgBlockedSenderFile
+	(Get-Content $OrgBlockedSenderFile).replace(' -- WARNING: ALL Domain Email listed as Blocked Sender', '') | Set-Content $OrgBlockedSenderFile
+	$Global:RawOrgBlockedSenderList = Import-Csv -Path $OrgBlockedSenderFile
+	$Global:RawOrgSafeSenderList = Import-Csv -Path $OrgSafeSenderFile
+	$OrgBlockedIndividualSenders = $($RawOrgBlockedSenderList | Where-Object -Property Entry -Match '@').Entry
+	$OrgBlockedDomainSenders = $($RawOrgBlockedSenderList | Where-Object -Property Entry -NotMatch '@').Entry
+	$OrgSafeIndividualSenders = $($RawOrgSafeSenderList | Where-Object -Property Entry -Match '@').Entry
+	$OrgSafeDomainSenders = $($RawOrgSafeSenderList | Where-Object -Property Entry -NotMatch '@').Entry
+
 	$Global:DomainList = (Get-AcceptedDomain).DomainName
 	$Global:UserBlockedSenderList = $Global:RawUserBlockedSenderList
 	$Global:UserSafeSenderList = $Global:RawUserSafeSenderList
@@ -324,9 +338,17 @@ Function Import-PPESenderLists {
 		Clear-Variable user,name,email,mailbox,domain,blocked,trusted -Force -Scope Global -ea SilentlyContinue
 		Write-Host "`n`n"
 	}
+
+	Write-Host "Setting Organization Level sender lists."
+	$ContentFilterPolicies = Get-HostedContentFilterPolicy
+	If ($OrgBlockedIndividualSenders) {$ContentFilterPolicies | Set-HostedContentFilterPolicy -BlockedSenders $OrgBlockedIndividualSenders}
+	If ($OrgBlockedDomainSenders) {$ContentFilterPolicies | Set-HostedContentFilterPolicy -BlockedSenderDomains $OrgBlockedDomainSenders}
+	If ($OrgSafeIndividualSenders) {$ContentFilterPolicies | Set-HostedContentFilterPolicy -AllowedSenders $OrgSafeIndividualSenders}
+	If ($OrgSafeDomainSenders) {$ContentFilterPolicies | Set-HostedContentFilterPolicy -AllowedSenderDomains $OrgSafeDomainSenders}
+
 	$UserCount = $Global:Users.Count
-	$TrustedCount = $Global:UserSafeSenderList.Count
-	$BlockedCount = $Global:UserBlockedSenderList.Count
+	$TrustedCount = $Global:UserSafeSenderList.Count + $RawOrgSafeSenderList.Count
+	$BlockedCount = $Global:UserBlockedSenderList.Count + $RawOrgBlockedSenderList.Count
 	Write-Host "Processed $UserCount users, trusted $TrustedCount entries, and blocked $BlockedCount entries."
 }
 
