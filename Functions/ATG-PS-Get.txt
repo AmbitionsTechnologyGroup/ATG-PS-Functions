@@ -1,949 +1,949 @@
 Function Get-ADStaleUsers {
-	<#
-	.SYNOPSIS
-		Retrieves a list of (enabled) Active Directory Users that haven't logged in recently.
-	#>
+    <#
+    .SYNOPSIS
+        Retrieves a list of (enabled) Active Directory Users that haven't logged in recently.
+    #>
 
-	# check the name of the parent process.  If it's LogMeIn, we can't use the Out-GridView UI
-	$parentProcessName = (Get-Process -Id ((Get-WmiObject Win32_Process -Filter "processid='$PID'").ParentProcessId)).Name
+    # check the name of the parent process.  If it's LogMeIn, we can't use the Out-GridView UI
+    $parentProcessName = (Get-Process -Id ((Get-WmiObject Win32_Process -Filter "processid='$PID'").ParentProcessId)).Name
 
-	# check to see whether Get-AdUser is available
-	If (Get-Command ActiveDirectory\Get-AdUser -ErrorAction SilentlyContinue) {
-		$Stale = [DateTime]::Today.AddDays(-180)
-		$SemiStale = [DateTime]::Today.AddDays(-30)
-		$adStaleUserInfo = Get-ADUser -Filter '(LastLogonTimestamp -lt $Stale) -and (Enabled -eq $True) -and (Name -notlike "HealthMailbox*") -and (Description -notlike "DNI*")' -Properties LastLogonTimestamp, Description, Title | Format-Table Name, @{N = "LastLogonTimestamp"; E = { [datetime]::FromFileTime($_.LastLogonTimestamp) } }, Description, Title -AutoSize
-		$adSemiStaleUserInfo = Get-ADUser -Filter '(LastLogonTimestamp -lt $SemiStale) -and (LastLogonTimestamp -gt $Stale) -and (Enabled -eq $True) -and (Name -notlike "HealthMailbox*") -and (Description -notlike "DNI*")' -Properties LastLogonTimestamp, Description, Title | Format-Table Name, @{N = "LastLogonTimestamp"; E = { [datetime]::FromFileTime($_.LastLogonTimestamp) } }, Description, Title -AutoSize
-		If ($adStaleUserInfo) {
-			Write-Host
-			Write-Output "Stale user accounts that haven't logged on within the last 180 days:"
-			$adStaleUserInfo | Format-Table -AutoSize
-		}
-		Else {
-			Write-Host
-			Write-Output "No Stale user accounts found that haven't logged on within the last 180 days."
-		}
-		If ($adSemiStaleUserInfo) {
-			Write-Output "Semi-Stale user accounts that haven't logged on within the last 30 days (but have within 180 days):"
-			$adSemiStaleUserInfo | Format-Table -AutoSize
-		}
-		Else {
-			Write-Host
-			Write-Output "No Semi-Stale user accounts found that haven't logged on within the last 30 days (but have within 180 days)."
-		}
-	}
+    # check to see whether Get-AdUser is available
+    If (Get-Command ActiveDirectory\Get-AdUser -ErrorAction SilentlyContinue) {
+        $Stale = [DateTime]::Today.AddDays(-180)
+        $SemiStale = [DateTime]::Today.AddDays(-30)
+        $adStaleUserInfo = Get-ADUser -Filter '(LastLogonTimestamp -lt $Stale) -and (Enabled -eq $True) -and (Name -notlike "HealthMailbox*") -and (Description -notlike "DNI*")' -Properties LastLogonTimestamp, Description, Title | Format-Table Name, @{N = "LastLogonTimestamp"; E = { [datetime]::FromFileTime($_.LastLogonTimestamp) } }, Description, Title -AutoSize
+        $adSemiStaleUserInfo = Get-ADUser -Filter '(LastLogonTimestamp -lt $SemiStale) -and (LastLogonTimestamp -gt $Stale) -and (Enabled -eq $True) -and (Name -notlike "HealthMailbox*") -and (Description -notlike "DNI*")' -Properties LastLogonTimestamp, Description, Title | Format-Table Name, @{N = "LastLogonTimestamp"; E = { [datetime]::FromFileTime($_.LastLogonTimestamp) } }, Description, Title -AutoSize
+        If ($adStaleUserInfo) {
+            Write-Host
+            Write-Output "Stale user accounts that haven't logged on within the last 180 days:"
+            $adStaleUserInfo | Format-Table -AutoSize
+        }
+        Else {
+            Write-Host
+            Write-Output "No Stale user accounts found that haven't logged on within the last 180 days."
+        }
+        If ($adSemiStaleUserInfo) {
+            Write-Output "Semi-Stale user accounts that haven't logged on within the last 30 days (but have within 180 days):"
+            $adSemiStaleUserInfo | Format-Table -AutoSize
+        }
+        Else {
+            Write-Host
+            Write-Output "No Semi-Stale user accounts found that haven't logged on within the last 30 days (but have within 180 days)."
+        }
+    }
  else {
-		# cannot continue, Get-AdUser is not available
-		Write-Host "`n [!] This command must be run on a system with Active Directory Powershell Modules (i.e. a domain controller)`n"
-	}
+        # cannot continue, Get-AdUser is not available
+        Write-Host "`n [!] This command must be run on a system with Active Directory Powershell Modules (i.e. a domain controller)`n"
+    }
 }
 
 Function Get-ADStaleComputers {
-	<#
-	.SYNOPSIS
-		Retrieves a list of (enabled) Active Directory Computers that haven't logged in recently.
-	#>
+    <#
+    .SYNOPSIS
+        Retrieves a list of (enabled) Active Directory Computers that haven't logged in recently.
+    #>
 
-	# check the name of the parent process.  If it's LogMeIn, we can't use the Out-GridView UI
-	$parentProcessName = (Get-Process -Id ((Get-WmiObject Win32_Process -Filter "processid='$PID'").ParentProcessId)).Name
+    # check the name of the parent process.  If it's LogMeIn, we can't use the Out-GridView UI
+    $parentProcessName = (Get-Process -Id ((Get-WmiObject Win32_Process -Filter "processid='$PID'").ParentProcessId)).Name
 
-	# check to see whether Get-AdComputer is available
-	If (Get-Command ActiveDirectory\Get-AdComputer -ErrorAction SilentlyContinue) {
-		$Stale = [DateTime]::Today.AddDays(-180)
-		$SemiStale = [DateTime]::Today.AddDays(-30)
-		$adStaleComputerInfo = Get-ADComputer -Filter '(LastLogonTimestamp -lt $Stale)' -Properties LastLogonTimestamp, Description, Title | Format-Table Name, @{N = "LastLogonTimestamp"; E = { [datetime]::FromFileTime($_.LastLogonTimestamp) } }, Description, Title -AutoSize
-		$adSemiStaleComputerInfo = Get-ADComputer -Filter '(LastLogonTimestamp -lt $SemiStale) -and (LastLogonTimestamp -gt $Stale) -and (Enabled -eq $True) -and (Name -notlike "HealthMailbox*") -and (Description -notlike "DNI*")' -Properties LastLogonTimestamp, Description, Title | Format-Table Name, @{N = "LastLogonTimestamp"; E = { [datetime]::FromFileTime($_.LastLogonTimestamp) } }, Description, Title -AutoSize
-		If ($adStaleComputerInfo) {
-			Write-Host
-			Write-Output "Stale Computer accounts that haven't logged on within the last 180 days:"
-			$adStaleComputerInfo | Format-Table -AutoSize
-		}
-		Else {
-			Write-Host
-			Write-Output "No Stale Computer accounts found that haven't logged on within the last 180 days."
-		}
-		If ($adSemiStaleComputerInfo) {
-			Write-Output "Semi-Stale Computer accounts that haven't logged on within the last 30 days (but have within 180 days):"
-			$adSemiStaleComputerInfo | Format-Table -AutoSize
-		}
-		Else {
-			Write-Host
-			Write-Output "No Semi-Stale Computer accounts found that haven't logged on within the last 30 days (but have within 180 days)."
-		}
-	}
+    # check to see whether Get-AdComputer is available
+    If (Get-Command ActiveDirectory\Get-AdComputer -ErrorAction SilentlyContinue) {
+        $Stale = [DateTime]::Today.AddDays(-180)
+        $SemiStale = [DateTime]::Today.AddDays(-30)
+        $adStaleComputerInfo = Get-ADComputer -Filter '(LastLogonTimestamp -lt $Stale)' -Properties LastLogonTimestamp, Description, Title | Format-Table Name, @{N = "LastLogonTimestamp"; E = { [datetime]::FromFileTime($_.LastLogonTimestamp) } }, Description, Title -AutoSize
+        $adSemiStaleComputerInfo = Get-ADComputer -Filter '(LastLogonTimestamp -lt $SemiStale) -and (LastLogonTimestamp -gt $Stale) -and (Enabled -eq $True) -and (Name -notlike "HealthMailbox*") -and (Description -notlike "DNI*")' -Properties LastLogonTimestamp, Description, Title | Format-Table Name, @{N = "LastLogonTimestamp"; E = { [datetime]::FromFileTime($_.LastLogonTimestamp) } }, Description, Title -AutoSize
+        If ($adStaleComputerInfo) {
+            Write-Host
+            Write-Output "Stale Computer accounts that haven't logged on within the last 180 days:"
+            $adStaleComputerInfo | Format-Table -AutoSize
+        }
+        Else {
+            Write-Host
+            Write-Output "No Stale Computer accounts found that haven't logged on within the last 180 days."
+        }
+        If ($adSemiStaleComputerInfo) {
+            Write-Output "Semi-Stale Computer accounts that haven't logged on within the last 30 days (but have within 180 days):"
+            $adSemiStaleComputerInfo | Format-Table -AutoSize
+        }
+        Else {
+            Write-Host
+            Write-Output "No Semi-Stale Computer accounts found that haven't logged on within the last 30 days (but have within 180 days)."
+        }
+    }
  else {
-		# cannot continue, Get-AdComputer is not available
-		Write-Host "`n [!] This command must be run on a system with Active Directory Powershell Modules (i.e. a domain controller)`n"
-	}
+        # cannot continue, Get-AdComputer is not available
+        Write-Host "`n [!] This command must be run on a system with Active Directory Powershell Modules (i.e. a domain controller)`n"
+    }
 }
 
 Function Get-ADUserPassExpirations {
-	<#
-	.SYNOPSIS
-		Retrieves a list of (enabled) Active Directory Users and shows their password expiration times.
-	#>
+    <#
+    .SYNOPSIS
+        Retrieves a list of (enabled) Active Directory Users and shows their password expiration times.
+    #>
 
-	# check the name of the parent process.  If it's LogMeIn, we can't use the Out-GridView UI
-	$parentProcessName = (Get-Process -Id ((Get-WmiObject Win32_Process -Filter "processid='$PID'").ParentProcessId)).Name
+    # check the name of the parent process.  If it's LogMeIn, we can't use the Out-GridView UI
+    $parentProcessName = (Get-Process -Id ((Get-WmiObject Win32_Process -Filter "processid='$PID'").ParentProcessId)).Name
 
-	# check to see whether Get-AdUser is available
-	If (Get-Command ActiveDirectory\Get-AdUser -ErrorAction SilentlyContinue) {
+    # check to see whether Get-AdUser is available
+    If (Get-Command ActiveDirectory\Get-AdUser -ErrorAction SilentlyContinue) {
 
-		$adUserInfo = Get-ADUser -Filter { Enabled -eq $True -and PasswordNeverExpires -eq $False } `
-			–Properties "DisplayName", "userPrincipalName", "msDS-UserPasswordExpiryTimeComputed" | `
-			Select-Object -Property "Displayname", "userPrincipalName", @{Name = "ExpiryDate"; Expression = { [datetime]::FromFileTime($_."msDS-UserPasswordExpiryTimeComputed") } }
+        $adUserInfo = Get-ADUser -Filter { Enabled -eq $True -and PasswordNeverExpires -eq $False } `
+            –Properties "DisplayName", "userPrincipalName", "msDS-UserPasswordExpiryTimeComputed" | `
+            Select-Object -Property "Displayname", "userPrincipalName", @{Name = "ExpiryDate"; Expression = { [datetime]::FromFileTime($_."msDS-UserPasswordExpiryTimeComputed") } }
 
-		# if the parent process of this powershell instance is not explorer.exe, output to PowerShell table.
-		If ($parentProcessName -ne "explorer") {
-			$adUserInfo | Format-Table -AutoSize
-		}
-		Else {
-			# otherwise, grid view UI
-			$adUserInfo | Out-GridView -Title "ATG Powershell --> User Password Expirations"
-		}
+        # if the parent process of this powershell instance is not explorer.exe, output to PowerShell table.
+        If ($parentProcessName -ne "explorer") {
+            $adUserInfo | Format-Table -AutoSize
+        }
+        Else {
+            # otherwise, grid view UI
+            $adUserInfo | Out-GridView -Title "ATG Powershell --> User Password Expirations"
+        }
 
-	}
+    }
  else {
-		# cannot continue, Get-AdUser is not available
-		Write-Host "`n [!] This command must be run on a system with Active Directory Powershell Modules (i.e. a domain controller)`n"
-	}
+        # cannot continue, Get-AdUser is not available
+        Write-Host "`n [!] This command must be run on a system with Active Directory Powershell Modules (i.e. a domain controller)`n"
+    }
 }
 
 Function Get-ATGPS {
-	param
-	(
-		[Parameter(Mandatory = $false)]
-		[switch] $Force
-	)
-	If ($Force) {
-		Write-Host "-Force specified. Force loading latest functions."
-		Start-Job -ScriptBlock { Invoke-WebRequest http://download.ambitionsgroup.com/Scripts/Update-ATGPS.txt -UseBasicParsing | Invoke-Expression } | Receive-Job -AutoRemoveJob -Wait
-		$DestinationFiles | ForEach-Object {
-			If (Test-Path $_ -ErrorAction SilentlyContinue) {
-				Import-Module $_ -Global -Force
-			}
-		}
-	}
+    param
+    (
+        [Parameter(Mandatory = $false)]
+        [switch] $Force
+    )
+    If ($Force) {
+        Write-Host "-Force specified. Force loading latest functions."
+        Start-Job -ScriptBlock { Invoke-WebRequest http://download.ambitionsgroup.com/Scripts/Update-ATGPS.txt -UseBasicParsing | Invoke-Expression } | Receive-Job -AutoRemoveJob -Wait
+        $DestinationFiles | ForEach-Object {
+            If (Test-Path $_ -ErrorAction SilentlyContinue) {
+                Import-Module $_ -Global -Force
+            }
+        }
+    }
 
-	If (Get-Module -Name "ATG-PS*" -ErrorAction SilentlyContinue) {
-		# List imported functions from ATGPS
-		Write-Host ====================================================
-		Write-Host "The below functions are now loaded and ready to use:"
-		Write-Host ====================================================
-		Get-Command -Module "ATG-PS*" | Format-Wide -Column 3
-		Write-Host ====================================================
-		Write-Host "Type: 'Help <function name> -Detailed' for more info"
-		Write-Host ====================================================
-	}
+    If (Get-Module -Name "ATG-PS*" -ErrorAction SilentlyContinue) {
+        # List imported functions from ATGPS
+        Write-Host ====================================================
+        Write-Host "The below functions are now loaded and ready to use:"
+        Write-Host ====================================================
+        Get-Command -Module "ATG-PS*" | Format-Wide -Column 3
+        Write-Host ====================================================
+        Write-Host "Type: 'Help <function name> -Detailed' for more info"
+        Write-Host ====================================================
+    }
  Else {
-		$progressPreference = 'silentlyContinue'
-		iwr tinyurl.com/get-atgps -UseBasicParsing | iex
-		# List imported functions from ATGPS
-		Write-Host ====================================================
-		Write-Host "The below functions are now loaded and ready to use:"
-		Write-Host ====================================================
-		Get-Command -Module "ATG-PS*" | Format-Wide -Column 3
-		Write-Host ====================================================
-		Write-Host "Type: 'Help <function name> -Detailed' for more info"
-		Write-Host ====================================================
-	}
+        $progressPreference = 'silentlyContinue'
+        iwr tinyurl.com/get-atgps -UseBasicParsing | iex
+        # List imported functions from ATGPS
+        Write-Host ====================================================
+        Write-Host "The below functions are now loaded and ready to use:"
+        Write-Host ====================================================
+        Get-Command -Module "ATG-PS*" | Format-Wide -Column 3
+        Write-Host ====================================================
+        Write-Host "Type: 'Help <function name> -Detailed' for more info"
+        Write-Host ====================================================
+    }
 }
 
 Function Get-BitLockerKey {
-	param
-	(
-		[Parameter(Mandatory = $false)]
-		[string]$Computer
-	)
-	#$Computer = "OPTIPLEX7040-20"
-	$Computers = Get-ADComputer -Filter 'ObjectClass -eq "computer"'
-	$AllComputers = @()
-	#$strToReport = new-object psobject
-	$Computers | Foreach-object {
-		#$Computer = $_.name
-		#Check if the Computer Object exists
-		$Computer_Object = Get-ADComputer -Filter { cn -eq $_.name } -Property msTPM-OwnerInformation, msTPM-TpmInformationForComputer
-		If ($Computer_Object -eq $null) {
-			Write-Host "Error..."
-		}
-		#Check if the computer object has had a BitLocker Recovery Password
-		$Bitlocker_Object = Get-ADObject -Filter { objectclass -eq 'msFVE-RecoveryInformation' } -SearchBase $Computer_Object.DistinguishedName -Properties 'msFVE-RecoveryPassword' | Select-Object -Last 1
-		If ($Bitlocker_Object.'msFVE-RecoveryPassword') {
-			$BitLocker_Key = $BitLocker_Object.'msFVE-RecoveryPassword'
+    param
+    (
+        [Parameter(Mandatory = $false)]
+        [string]$Computer
+    )
+    #$Computer = "OPTIPLEX7040-20"
+    $Computers = Get-ADComputer -Filter 'ObjectClass -eq "computer"'
+    $AllComputers = @()
+    #$strToReport = new-object psobject
+    $Computers | Foreach-object {
+        #$Computer = $_.name
+        #Check if the Computer Object exists
+        $Computer_Object = Get-ADComputer -Filter { cn -eq $_.name } -Property msTPM-OwnerInformation, msTPM-TpmInformationForComputer
+        If ($Computer_Object -eq $null) {
+            Write-Host "Error..."
+        }
+        #Check if the computer object has had a BitLocker Recovery Password
+        $Bitlocker_Object = Get-ADObject -Filter { objectclass -eq 'msFVE-RecoveryInformation' } -SearchBase $Computer_Object.DistinguishedName -Properties 'msFVE-RecoveryPassword' | Select-Object -Last 1
+        If ($Bitlocker_Object.'msFVE-RecoveryPassword') {
+            $BitLocker_Key = $BitLocker_Object.'msFVE-RecoveryPassword'
 
-			#$strToReport = $_.name,$BitLocker_Key
-			$strToReport = [PSCustomObject]@{
-				Computer     = $_.name
-				BitLockerKey = $BitLocker_Key
-			}
-			$AllComputers += $strToReport
-			#Display Output
-			#Write-Host $strToReport
+            #$strToReport = $_.name,$BitLocker_Key
+            $strToReport = [PSCustomObject]@{
+                Computer     = $_.name
+                BitLockerKey = $BitLocker_Key
+            }
+            $AllComputers += $strToReport
+            #Display Output
+            #Write-Host $strToReport
 
-			#Save to Report
-			#$strToReport | Out-File C:\temp\Report.txt -append
-		}
-		Else {
-			$BitLocker_Key = "None"
-			#$strToReport = $_.name,$BitLocker_Key
-			$strToReport = [PSCustomObject]@{
-				Computer     = $_.name
-				BitLockerKey = $BitLocker_Key
-			}
-			$AllComputers += $strToReport
-			#Write-Host $strToReport
-		}
-	}
-	If ($Computer) {
-		If ($AllComputers.Computer -NotContains $Computer) {
-			Write-Host "The computer specified was not found."
-		}
-		Else {
-			$ComputerInfo = new-object psobject
-			$ComputerInfo = $AllComputers | Where-Object -Property Computer -eq -Value $Computer
-			$ComputerInfo | Format-List
-			If ($ComputerInfo.BitlockerKey -eq "None") {
-				Write-Host "There is no bitlocker key for this compuer."
-			}
-			Else {
+            #Save to Report
+            #$strToReport | Out-File C:\temp\Report.txt -append
+        }
+        Else {
+            $BitLocker_Key = "None"
+            #$strToReport = $_.name,$BitLocker_Key
+            $strToReport = [PSCustomObject]@{
+                Computer     = $_.name
+                BitLockerKey = $BitLocker_Key
+            }
+            $AllComputers += $strToReport
+            #Write-Host $strToReport
+        }
+    }
+    If ($Computer) {
+        If ($AllComputers.Computer -NotContains $Computer) {
+            Write-Host "The computer specified was not found."
+        }
+        Else {
+            $ComputerInfo = new-object psobject
+            $ComputerInfo = $AllComputers | Where-Object -Property Computer -eq -Value $Computer
+            $ComputerInfo | Format-List
+            If ($ComputerInfo.BitlockerKey -eq "None") {
+                Write-Host "There is no bitlocker key for this compuer."
+            }
+            Else {
 
-				Write-Host "The bitlocker key has been copied to the clipboard.`n"
-				$ComputerInfo.BitlockerKey | Clip
-			}
-		}
-	}
+                Write-Host "The bitlocker key has been copied to the clipboard.`n"
+                $ComputerInfo.BitlockerKey | Clip
+            }
+        }
+    }
  Else {
-		$AllComputers
-	}
+        $AllComputers
+    }
 
-	<#
-	.SYNOPSIS
-		Searches for and retrieves a BitLocker recovery key for the specified computer(s) in Active Directory.
-	.PARAMETER Computer
-		[Optional] Specify the name of the computer to retrieve the BitLockerKey for. Will copy the key to the clipboard if specified.
-	.EXAMPLE
-		Get-BitLockerKey -Computer "ACG-Desktop23"
-	#>
+    <#
+    .SYNOPSIS
+        Searches for and retrieves a BitLocker recovery key for the specified computer(s) in Active Directory.
+    .PARAMETER Computer
+        [Optional] Specify the name of the computer to retrieve the BitLockerKey for. Will copy the key to the clipboard if specified.
+    .EXAMPLE
+        Get-BitLockerKey -Computer "ACG-Desktop23"
+    #>
 }
 
 Function Global:Get-DellWarranty {
-	Param(
-		[Switch] $Brand,
-		[Parameter(ParameterSetName = "seta",
-			Position = 0)]
-		[Switch] $Local,
-		[Parameter(
-			ParameterSetName = "setb",
-			Mandatory = $false,
-			ValueFromPipelineByPropertyName = $true,
-			ValueFromPipeline = $true,
-			Position = 1)]
-		[String[]] $ServiceTags,
-		[Parameter(ParameterSetName = "setc")]
-		[Switch] $Paste,
-		[Switch] $Show,
-		[Switch] $CopyToClipBoard
-	)
-	#$ServiceTags = $Null
-	If ((Test-Path "$env:appdata\Microsoft\Windows\PowerShell\DellKey.txt") -ne $true) {
-		Write-Host "Autentication Needed. Please refer to https://ambitions.itglue.com/806129/docs/10204492" -ForegroundColor White -BackgroundColor Red
-		Break
-	}
-	If ((Test-Path "$env:appdata\Microsoft\Windows\PowerShell\DellSec.txt") -ne $true) {
-		Write-Host "Autentication Needed. Please refer to https://ambitions.itglue.com/806129/docs/10204492" -ForegroundColor White -BackgroundColor Red
-		Break
-	}
-	$FinalObj = @()
-	If (-not $ServiceTags) {
-		If ($Paste) {
-			Write-Host -ForegroundColor Yellow "Paste or enter a list of service tags, one per line.`n`nIf copying from Excel: After you paste here, click into Excel then press ESC a couple of times.`nThen press enter 2x to continue:"
-			$ServiceTags = @()
-			While ($a = read-host) {
-				$ServiceTags += $a
-			}
-			#$ServiceTags = @($List.split("``n"))
-			$Local = $False
-		}
-		Else {
-			$Local = $True
-		}
-	}
+    Param(
+        [Switch] $Brand,
+        [Parameter(ParameterSetName = "seta",
+            Position = 0)]
+        [Switch] $Local,
+        [Parameter(
+            ParameterSetName = "setb",
+            Mandatory = $false,
+            ValueFromPipelineByPropertyName = $true,
+            ValueFromPipeline = $true,
+            Position = 1)]
+        [String[]] $ServiceTags,
+        [Parameter(ParameterSetName = "setc")]
+        [Switch] $Paste,
+        [Switch] $Show,
+        [Switch] $CopyToClipBoard
+    )
+    #$ServiceTags = $Null
+    If ((Test-Path "$env:appdata\Microsoft\Windows\PowerShell\DellKey.txt") -ne $true) {
+        Write-Host "Autentication Needed. Please refer to https://ambitions.itglue.com/806129/docs/10204492" -ForegroundColor White -BackgroundColor Red
+        Break
+    }
+    If ((Test-Path "$env:appdata\Microsoft\Windows\PowerShell\DellSec.txt") -ne $true) {
+        Write-Host "Autentication Needed. Please refer to https://ambitions.itglue.com/806129/docs/10204492" -ForegroundColor White -BackgroundColor Red
+        Break
+    }
+    $FinalObj = @()
+    If (-not $ServiceTags) {
+        If ($Paste) {
+            Write-Host -ForegroundColor Yellow "Paste or enter a list of service tags, one per line.`n`nIf copying from Excel: After you paste here, click into Excel then press ESC a couple of times.`nThen press enter 2x to continue:"
+            $ServiceTags = @()
+            While ($a = read-host) {
+                $ServiceTags += $a
+            }
+            #$ServiceTags = @($List.split("``n"))
+            $Local = $False
+        }
+        Else {
+            $Local = $True
+        }
+    }
 
-	If ($Local) {
-		$ServiceTags = ((Get-WmiObject -Class "Win32_Bios").SerialNumber)
-	}
-	Write-Host "Getting Warranties for $($ServiceTags.Count) Service Tag(s)."
-	Foreach ($ServiceTag in $ServiceTags) {
-		If ($Show) { Write-Host "Processing $ServiceTag" }
-		#If ($ServiceTag -eq $(Get-WmiObject -Class "Win32_Bios").SerialNumber) { $Show = $true }
-		$ApiKey = Get-Content "$env:appdata\Microsoft\Windows\PowerShell\DellKey.txt"
-		$ApiSecret = Get-Content "$env:appdata\Microsoft\Windows\PowerShell\DellSec.txt"
-		[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-		$Auth = Invoke-WebRequest "https://apigtwb2c.us.dell.com/auth/oauth/v2/token?client_id=${ApiKey}&client_secret=${ApiSecret}&grant_type=client_credentials" -Method Post
-		$AuthSplit = $Auth.Content -split ('"')
-		$AuthKey = $AuthSplit[3]
+    If ($Local) {
+        $ServiceTags = ((Get-WmiObject -Class "Win32_Bios").SerialNumber)
+    }
+    Write-Host "Getting Warranties for $($ServiceTags.Count) Service Tag(s)."
+    Foreach ($ServiceTag in $ServiceTags) {
+        If ($Show) { Write-Host "Processing $ServiceTag" }
+        #If ($ServiceTag -eq $(Get-WmiObject -Class "Win32_Bios").SerialNumber) { $Show = $true }
+        $ApiKey = Get-Content "$env:appdata\Microsoft\Windows\PowerShell\DellKey.txt"
+        $ApiSecret = Get-Content "$env:appdata\Microsoft\Windows\PowerShell\DellSec.txt"
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $Auth = Invoke-WebRequest "https://apigtwb2c.us.dell.com/auth/oauth/v2/token?client_id=${ApiKey}&client_secret=${ApiSecret}&grant_type=client_credentials" -Method Post
+        $AuthSplit = $Auth.Content -split ('"')
+        $AuthKey = $AuthSplit[3]
 
-		#$ServiceTag = $(Get-WmiObject -Class "Win32_Bios").SerialNumber
+        #$ServiceTag = $(Get-WmiObject -Class "Win32_Bios").SerialNumber
 
-		$body = "?servicetags=" + $ServiceTag + "&Method=Get"
+        $body = "?servicetags=" + $ServiceTag + "&Method=Get"
 
-		$response = Invoke-WebRequest -uri https://apigtwb2c.us.dell.com/PROD/sbil/eapi/v5/asset-entitlements${body} -Headers @{"Authorization" = "bearer ${AuthKey}"; "Accept" = "application/json" }
-		$content = $response.Content | ConvertFrom-Json
+        $response = Invoke-WebRequest -uri https://apigtwb2c.us.dell.com/PROD/sbil/eapi/v5/asset-entitlements${body} -Headers @{"Authorization" = "bearer ${AuthKey}"; "Accept" = "application/json" }
+        $content = $response.Content | ConvertFrom-Json
 
-		#Sort, then parse the first (start) and last (end) warranty entitlement
-		$sortedEntitlements = $content.entitlements | Sort-Object endDate #Dell doesn't list in order. This sorts so the latest entitlement is last.
-		$WarrantyEndDateRaw = (($sortedEntitlements.endDate | Select-Object -Last 1).split("T"))[0]
-		$WarrantyEndDate = [datetime]::ParseExact($WarrantyEndDateRaw, "yyyy-MM-dd", $null)
-		$WarrantyStartDateRaw = (($sortedEntitlements.startDate | Select-Object -First 1).split("T"))[0]
-		$WarrantyStartDate = [datetime]::ParseExact($WarrantyStartDateRaw, "yyyy-MM-dd", $null)
-		$WarrantyLevel = ($sortedEntitlements.serviceLevelDescription | Select-Object -Last 1)
-		$ShipDateRaw = (($content.shipDate).split("T"))[0]
-		$ShipDate = [datetime]::ParseExact($ShipDateRaw, "yyyy-MM-dd", $null)
+        #Sort, then parse the first (start) and last (end) warranty entitlement
+        $sortedEntitlements = $content.entitlements | Sort-Object endDate #Dell doesn't list in order. This sorts so the latest entitlement is last.
+        $WarrantyEndDateRaw = (($sortedEntitlements.endDate | Select-Object -Last 1).split("T"))[0]
+        $WarrantyEndDate = [datetime]::ParseExact($WarrantyEndDateRaw, "yyyy-MM-dd", $null)
+        $WarrantyStartDateRaw = (($sortedEntitlements.startDate | Select-Object -First 1).split("T"))[0]
+        $WarrantyStartDate = [datetime]::ParseExact($WarrantyStartDateRaw, "yyyy-MM-dd", $null)
+        $WarrantyLevel = ($sortedEntitlements.serviceLevelDescription | Select-Object -Last 1)
+        $ShipDateRaw = (($content.shipDate).split("T"))[0]
+        $ShipDate = [datetime]::ParseExact($ShipDateRaw, "yyyy-MM-dd", $null)
 
-		If ($content.systemDescription) {
-			$Model = $content.systemDescription
-		}
-		Else {
-			$Model = $content.productLineDescription #Sometimes Dell blanks the systemDescription. systemDescription likely has the data
-		}
+        If ($content.systemDescription) {
+            $Model = $content.systemDescription
+        }
+        Else {
+            $Model = $content.productLineDescription #Sometimes Dell blanks the systemDescription. systemDescription likely has the data
+        }
 
-		$Today = get-date
-		If ($Today -ge $WarrantyEndDate) {
-			#Write-Host "`nWarranty has expired for $ServiceTag ($Model) " -ForegroundColor White -BackgroundColor Red
-			$WarrantyExpired = "Expired" #Variable useful for mass export
-		}
-		Else {
-			$WarrantyExpired = "Not Expired"
-		}
-		#Returns data as a PSObject which can be used for batch/scripting purposes
-		$Obj = New-Object psobject
-		$Obj | Add-Member -Type NoteProperty -Name 'ServiceTag' -Value $ServiceTag
-		$Obj | Add-Member -Type NoteProperty -Name 'Model' -Value $Model
-		$Obj | Add-Member -Type NoteProperty -Name 'OriginalShipDate' -Value $ShipDate
-		$Obj | Add-Member -Type NoteProperty -Name 'WarrantyStartDate' -Value $WarrantyStartDate
-		$Obj | Add-Member -Type NoteProperty -Name 'WarrantyEndDate' -Value $WarrantyEndDate
-		$Obj | Add-Member -Type NoteProperty -Name 'WarrantyExpired' -Value $WarrantyExpired
-		$Obj | Add-Member -Type NoteProperty -Name 'WarrantySupportLevel' -Value $WarrantyLevel
-		$FinalObj += $Obj
-	}
-	If ($Show) {
-		$FinalObj | Format-Table -AutoSize
-	}
-	If ($CopyToClipBoard) {
-		$Path = $Env:Temp + '\' + [guid]::NewGuid().ToString() + '.csv'
-		$FinalObj | Export-CSV -Delimiter "`t" -NoTypeInformation -Path $Path
-		Get-Content -Path $Path | Set-Clipboard
-		Remove-Item -Path $Path -Force
-		Write-Host "Results have been copied to the clipboard."
-	}
-	Clear-Variable Show, FinalObj, Path, CopyToClipBoard -Force -ErrorAction SilentlyContinue
+        $Today = get-date
+        If ($Today -ge $WarrantyEndDate) {
+            #Write-Host "`nWarranty has expired for $ServiceTag ($Model) " -ForegroundColor White -BackgroundColor Red
+            $WarrantyExpired = "Expired" #Variable useful for mass export
+        }
+        Else {
+            $WarrantyExpired = "Not Expired"
+        }
+        #Returns data as a PSObject which can be used for batch/scripting purposes
+        $Obj = New-Object psobject
+        $Obj | Add-Member -Type NoteProperty -Name 'ServiceTag' -Value $ServiceTag
+        $Obj | Add-Member -Type NoteProperty -Name 'Model' -Value $Model
+        $Obj | Add-Member -Type NoteProperty -Name 'OriginalShipDate' -Value $ShipDate
+        $Obj | Add-Member -Type NoteProperty -Name 'WarrantyStartDate' -Value $WarrantyStartDate
+        $Obj | Add-Member -Type NoteProperty -Name 'WarrantyEndDate' -Value $WarrantyEndDate
+        $Obj | Add-Member -Type NoteProperty -Name 'WarrantyExpired' -Value $WarrantyExpired
+        $Obj | Add-Member -Type NoteProperty -Name 'WarrantySupportLevel' -Value $WarrantyLevel
+        $FinalObj += $Obj
+    }
+    If ($Show) {
+        $FinalObj | Format-Table -AutoSize
+    }
+    If ($CopyToClipBoard) {
+        $Path = $Env:Temp + '\' + [guid]::NewGuid().ToString() + '.csv'
+        $FinalObj | Export-CSV -Delimiter "`t" -NoTypeInformation -Path $Path
+        Get-Content -Path $Path | Set-Clipboard
+        Remove-Item -Path $Path -Force
+        Write-Host "Results have been copied to the clipboard."
+    }
+    Clear-Variable Show, FinalObj, Path, CopyToClipBoard -Force -ErrorAction SilentlyContinue
 }
 
 Function Get-DiskUsage($Path = ".") {
-	Write-Host -ForegroundColor Cyan "  (large folders may take long to calculate...)"
-	Get-ChildItem $path | ForEach-Object {
-		$file = $_
-		Get-ChildItem -r $_.FullName |
-		Measure-Object -property length -sum -ErrorAction SilentlyContinue |
-		Select-Object @{Name = "Name"; Expression = { $file } },
-		@{Name = "Space Used (MB)"; Expression = { ([math]::Round(($_.Sum / 1024 / 1024), 2)) } }
-	} | Format-Table -AutoSize
+    Write-Host -ForegroundColor Cyan "  (large folders may take long to calculate...)"
+    Get-ChildItem $path | ForEach-Object {
+        $file = $_
+        Get-ChildItem -r $_.FullName |
+        Measure-Object -property length -sum -ErrorAction SilentlyContinue |
+        Select-Object @{Name = "Name"; Expression = { $file } },
+        @{Name = "Space Used (MB)"; Expression = { ([math]::Round(($_.Sum / 1024 / 1024), 2)) } }
+    } | Format-Table -AutoSize
 
-	<#
-	.SYNOPSIS
-		Either in the current directory or the given path, find all child items
-		and calculate their cumulative size. Output the name of the folder
-		and the space used in Megabytes. If this function is loaded by normal
-		means for this repository, it will be available by its assigned alias 'du'.
-	.PARAMETER Path
-		[Optional] Path to the folder to calculate size of child items.
-	.EXAMPLE
-		Get-DiskUsage "C:\Users"
-	.EXAMPLE
-		Get-DiskUsage $env:OneDrive\Documents
-	#>
+    <#
+    .SYNOPSIS
+        Either in the current directory or the given path, find all child items
+        and calculate their cumulative size. Output the name of the folder
+        and the space used in Megabytes. If this function is loaded by normal
+        means for this repository, it will be available by its assigned alias 'du'.
+    .PARAMETER Path
+        [Optional] Path to the folder to calculate size of child items.
+    .EXAMPLE
+        Get-DiskUsage "C:\Users"
+    .EXAMPLE
+        Get-DiskUsage $env:OneDrive\Documents
+    #>
 }
 Set-Alias -Name du -Value Get-DiskUsage
 
 Function Get-DomainInfo {
-	<#
-	.SYNOPSIS
-		Obtains useful information about the domain a computer is connected to.
-	#>
-	Write-Host "Obtaining Domain Info..."
-	$ComputerInfo = Get-ComputerInfo
-	If ($ComputerInfo.CsDomainRole -ne "StandaloneWorkstation") {
-		$Domain = ($ComputerInfo).CSDomain
-		Write-Host "`nDomain: "$Domain
-		$DomainControllerIP = (Resolve-DnsName $Domain).IpAddress
-		Write-Host "`nDomain Controller(s):"
-		$DomainControllerIP | % {
-			Write-Host "IP: $_ | FQDN: $((Resolve-DnsName $_).NameHost) | Pingable: $(Test-NetConnection -ComputerName $_ -InformationLevel Quiet) "
-		}
-		Write-Host "`nLocal Network Info:"
-		Get-IpConfig
-	}
+    <#
+    .SYNOPSIS
+        Obtains useful information about the domain a computer is connected to.
+    #>
+    Write-Host "Obtaining Domain Info..."
+    $ComputerInfo = Get-ComputerInfo
+    If ($ComputerInfo.CsDomainRole -ne "StandaloneWorkstation") {
+        $Domain = ($ComputerInfo).CSDomain
+        Write-Host "`nDomain: "$Domain
+        $DomainControllerIP = (Resolve-DnsName $Domain).IpAddress
+        Write-Host "`nDomain Controller(s):"
+        $DomainControllerIP | % {
+            Write-Host "IP: $_ | FQDN: $((Resolve-DnsName $_).NameHost) | Pingable: $(Test-NetConnection -ComputerName $_ -InformationLevel Quiet) "
+        }
+        Write-Host "`nLocal Network Info:"
+        Get-IpConfig
+    }
  Else {
-		Write-Host "`nComputer is not joined to a domain. Showing network info instead."
-		Get-IpConfig
-	}
+        Write-Host "`nComputer is not joined to a domain. Showing network info instead."
+        Get-IpConfig
+    }
 }
 
 Function Get-ThunderBolt {
-	$Thunderbolt = Get-WmiObject Win32_SystemDriver | Where-Object -Property DisplayName -Like "*Thunder*"
-	If ($Thunderbolt) {
-		Write-Host "The following ThunderBolt controllers have been detected:"
-		$Thunderbolt
-	}
+    $Thunderbolt = Get-WmiObject Win32_SystemDriver | Where-Object -Property DisplayName -Like "*Thunder*"
+    If ($Thunderbolt) {
+        Write-Host "The following ThunderBolt controllers have been detected:"
+        $Thunderbolt
+    }
  Else {
-		Write-Host "No Thunderbolt Controllers have been detected"
-	}
+        Write-Host "No Thunderbolt Controllers have been detected"
+    }
 }
 
 Function Get-InternetHealth {
-	######### Absolute monitoring values ##########
-	$maxpacketloss = 2 #how much % packetloss until we alert.
-	$MinimumDownloadSpeed = 100 #What is the minimum expected download speed in Mbit/ps
-	$MinimumUploadSpeed = 20 #What is the minimum expected upload speed in Mbit/ps
-	$MaxJitter = 30
-	######### End absolute monitoring values ######
+    ######### Absolute monitoring values ##########
+    $maxpacketloss = 2 #how much % packetloss until we alert.
+    $MinimumDownloadSpeed = 100 #What is the minimum expected download speed in Mbit/ps
+    $MinimumUploadSpeed = 20 #What is the minimum expected upload speed in Mbit/ps
+    $MaxJitter = 30
+    ######### End absolute monitoring values ######
 
-	#Replace the Download URL to where you've uploaded the ZIP file yourself. We will only download this file once.
-	#Latest version can be found at: https://www.speedtest.net/nl/apps/cli
-	$DownloadURL = "https://install.speedtest.net/app/cli/ookla-speedtest-1.0.0-win64.zip"
-	$DownloadLocation = "$($Env:ProgramData)\SpeedtestCLI"
-	$SpeedTestExe = Join-Path -Path $DownloadLocation -ChildPath "\speedtest.exe"
-	Try {
-		If (!$(Test-Path $SpeedTestExe)) {
-			Write-Host "Preparing Internet Health Test."
-			New-Item $DownloadLocation -ItemType Directory -force
-			Invoke-WebRequest -Uri $DownloadURL -OutFile "$($DownloadLocation)\speedtest.zip"
-			Expand-Archive "$($DownloadLocation)\speedtest.zip" -DestinationPath $DownloadLocation -Force
-		}
-	}
+    #Replace the Download URL to where you've uploaded the ZIP file yourself. We will only download this file once.
+    #Latest version can be found at: https://www.speedtest.net/nl/apps/cli
+    $DownloadURL = "https://install.speedtest.net/app/cli/ookla-speedtest-1.0.0-win64.zip"
+    $DownloadLocation = "$($Env:ProgramData)\SpeedtestCLI"
+    $SpeedTestExe = Join-Path -Path $DownloadLocation -ChildPath "\speedtest.exe"
+    Try {
+        If (!$(Test-Path $SpeedTestExe)) {
+            Write-Host "Preparing Internet Health Test."
+            New-Item $DownloadLocation -ItemType Directory -force
+            Invoke-WebRequest -Uri $DownloadURL -OutFile "$($DownloadLocation)\speedtest.zip"
+            Expand-Archive "$($DownloadLocation)\speedtest.zip" -DestinationPath $DownloadLocation -Force
+        }
+    }
  Catch {
-		Write-Host "The download and extraction of SpeedtestCLI failed. Error: $($_.Exception.Message)"
-		#exit 1
-		Return
-	}
-	$PreviousResults = If (test-path "$($DownloadLocation)\LastResults.txt") { get-content "$($DownloadLocation)\LastResults.txt" | ConvertFrom-Json }
-	Write-Host "Running Internet Health Test."
-	$SpeedtestResults = & $SpeedTestExe --format=json --accept-license --accept-gdpr
-	$SpeedtestResults | Out-File "$($DownloadLocation)\LastResults.txt" -Force
-	$SpeedtestResults = $SpeedtestResults | ConvertFrom-Json
+        Write-Host "The download and extraction of SpeedtestCLI failed. Error: $($_.Exception.Message)"
+        #exit 1
+        Return
+    }
+    $PreviousResults = If (test-path "$($DownloadLocation)\LastResults.txt") { get-content "$($DownloadLocation)\LastResults.txt" | ConvertFrom-Json }
+    Write-Host "Running Internet Health Test."
+    $SpeedtestResults = & $SpeedTestExe --format=json --accept-license --accept-gdpr
+    $SpeedtestResults | Out-File "$($DownloadLocation)\LastResults.txt" -Force
+    $SpeedtestResults = $SpeedtestResults | ConvertFrom-Json
 
-	#creating object
-	[PSCustomObject]$SpeedtestObj = @{
-		downloadspeed = [math]::Round($SpeedtestResults.download.bandwidth / 1000000 * 8, 2)
-		uploadspeed   = [math]::Round($SpeedtestResults.upload.bandwidth / 1000000 * 8, 2)
-		packetloss    = [math]::Round($SpeedtestResults.packetLoss)
-		isp           = $SpeedtestResults.isp
-		ExternalIP    = $SpeedtestResults.interface.externalIp
-		InternalIP    = $SpeedtestResults.interface.internalIp
-		UsedServer    = $SpeedtestResults.server.host
-		ResultsURL    = $SpeedtestResults.result.url
-		Jitter        = [math]::Round($SpeedtestResults.ping.jitter)
-		Latency       = [math]::Round($SpeedtestResults.ping.latency)
-	}
-	$SpeedtestHealth = @()
-	#Comparing against previous result. Alerting is download or upload differs more than 20%.
-	If ($PreviousResults) {
-		Write-Host "Comparing against previous results."
-		If ($PreviousResults.download.bandwidth / $SpeedtestResults.download.bandwidth * 100 -le 80) { $SpeedtestHealth += "Download speed difference is more than 20%" } Else { $SpeedtestHealth += "Download speed appears stable" }
-		If ($PreviousResults.upload.bandwidth / $SpeedtestResults.upload.bandwidth * 100 -le 80) { $SpeedtestHealth += "Upload speed difference is more than 20%" } Else { $SpeedtestHealth += "Upload speed appears stable" }
-	}
+    #creating object
+    [PSCustomObject]$SpeedtestObj = @{
+        downloadspeed = [math]::Round($SpeedtestResults.download.bandwidth / 1000000 * 8, 2)
+        uploadspeed   = [math]::Round($SpeedtestResults.upload.bandwidth / 1000000 * 8, 2)
+        packetloss    = [math]::Round($SpeedtestResults.packetLoss)
+        isp           = $SpeedtestResults.isp
+        ExternalIP    = $SpeedtestResults.interface.externalIp
+        InternalIP    = $SpeedtestResults.interface.internalIp
+        UsedServer    = $SpeedtestResults.server.host
+        ResultsURL    = $SpeedtestResults.result.url
+        Jitter        = [math]::Round($SpeedtestResults.ping.jitter)
+        Latency       = [math]::Round($SpeedtestResults.ping.latency)
+    }
+    $SpeedtestHealth = @()
+    #Comparing against previous result. Alerting is download or upload differs more than 20%.
+    If ($PreviousResults) {
+        Write-Host "Comparing against previous results."
+        If ($PreviousResults.download.bandwidth / $SpeedtestResults.download.bandwidth * 100 -le 80) { $SpeedtestHealth += "Download speed difference is more than 20%" } Else { $SpeedtestHealth += "Download speed appears stable" }
+        If ($PreviousResults.upload.bandwidth / $SpeedtestResults.upload.bandwidth * 100 -le 80) { $SpeedtestHealth += "Upload speed difference is more than 20%" } Else { $SpeedtestHealth += "Upload speed appears stable" }
+    }
 
-	#Comparing against preset variables.
-	Write-Host "Analyzing Results"
-	If ($SpeedtestObj.downloadspeed -lt $MinimumDownloadSpeed) { $SpeedtestHealth += "Download speed is lower than $MinimumDownloadSpeed Mbit/ps" ; $HealthIssue = $True } Else { $SpeedtestHealth += "Download speed is acceptable" }
-	If ($SpeedtestObj.uploadspeed -lt $MinimumUploadSpeed) { $SpeedtestHealth += "Upload speed is lower than $MinimumUploadSpeed Mbit/ps"  ; $HealthIssue = $True }Else { $SpeedtestHealth += "Upload speed is acceptable" }
-	If ($SpeedtestObj.packetloss -gt $MaxPacketLoss) { $SpeedtestHealth += "Packetloss is higher than $maxpacketloss%"  ; $HealthIssue = $True } Else { $SpeedtestHealth += "Packet Loss is acceptable" }
-	If ($SpeedtestObj.Jitter -gt $MaxJitter) { $SpeedtestHealth += "Jitter is higher than $MaxJitter%"  ; $HealthIssue = $True } Else { $SpeedtestHealth += "Jitter is acceptable" }
+    #Comparing against preset variables.
+    Write-Host "Analyzing Results"
+    If ($SpeedtestObj.downloadspeed -lt $MinimumDownloadSpeed) { $SpeedtestHealth += "Download speed is lower than $MinimumDownloadSpeed Mbit/ps" ; $HealthIssue = $True } Else { $SpeedtestHealth += "Download speed is acceptable" }
+    If ($SpeedtestObj.uploadspeed -lt $MinimumUploadSpeed) { $SpeedtestHealth += "Upload speed is lower than $MinimumUploadSpeed Mbit/ps"  ; $HealthIssue = $True }Else { $SpeedtestHealth += "Upload speed is acceptable" }
+    If ($SpeedtestObj.packetloss -gt $MaxPacketLoss) { $SpeedtestHealth += "Packetloss is higher than $maxpacketloss%"  ; $HealthIssue = $True } Else { $SpeedtestHealth += "Packet Loss is acceptable" }
+    If ($SpeedtestObj.Jitter -gt $MaxJitter) { $SpeedtestHealth += "Jitter is higher than $MaxJitter%"  ; $HealthIssue = $True } Else { $SpeedtestHealth += "Jitter is acceptable" }
 
-	Write-Host "Internet Health Test Results:"
-	$SpeedtestObj | Format-Table -AutoSize -HideTableHeaders
-	Write-Host "Internet Health Summary:"
-	If ($HealthIssue) { Write-Host -ForegroundColor Yellow -BackgroundColor Black "There appears to be issues!" } Else { Write-Host -ForegroundColor Green -BackgroundColor Black "All tests results are optimal!" }
-	$SpeedtestHealth
+    Write-Host "Internet Health Test Results:"
+    $SpeedtestObj | Format-Table -AutoSize -HideTableHeaders
+    Write-Host "Internet Health Summary:"
+    If ($HealthIssue) { Write-Host -ForegroundColor Yellow -BackgroundColor Black "There appears to be issues!" } Else { Write-Host -ForegroundColor Green -BackgroundColor Black "All tests results are optimal!" }
+    $SpeedtestHealth
 }
 
 Function Get-IPConfig {
-	<#
-	.DESCRIPTION
-		Get-IPConfig attempts to extract only useful information from network adapters and display it in an easy to reay way.
-		This is only IPv4 for now.
-	#>
+    <#
+    .DESCRIPTION
+        Get-IPConfig attempts to extract only useful information from network adapters and display it in an easy to reay way.
+        This is only IPv4 for now.
+    #>
 
-	Get-netipaddress -AddressFamily IPv4 -PrefixOrigin Dhcp, Manual | Sort InterfaceIndex | Format-Table -AutoSize -Property `
-		InterfaceAlias, `
-	@{Name = 'Domain' ; Expression = { $($_ | Get-NetIPConfiguration).NetProfile.Name } }, `
-	@{Name = 'Status' ; Expression = { $($_ | Get-NetIPConfiguration).NetAdapter.Status } }, `
-	@{Name = 'IP Address' ; Expression = { $($_.IPAddress + "/" + $_.PrefixLength) } }, `
-	@{Name = 'DefaultGateway' ; Expression = { $($_ | Get-NetIPConfiguration).IPv4DefaultGateway.NextHop } }, `
-	@{Name = 'DNS Server(s)' ; Expression = { $(($_ | Get-NetIPConfiguration).DNSServer | Where-Object -Property AddressFamily -eq 2).ServerAddresses } }
+    Get-netipaddress -AddressFamily IPv4 -PrefixOrigin Dhcp, Manual | Sort InterfaceIndex | Format-Table -AutoSize -Property `
+        InterfaceAlias, `
+    @{Name = 'Domain' ; Expression = { $($_ | Get-NetIPConfiguration).NetProfile.Name } }, `
+    @{Name = 'Status' ; Expression = { $($_ | Get-NetIPConfiguration).NetAdapter.Status } }, `
+    @{Name = 'IP Address' ; Expression = { $($_.IPAddress + "/" + $_.PrefixLength) } }, `
+    @{Name = 'DefaultGateway' ; Expression = { $($_ | Get-NetIPConfiguration).IPv4DefaultGateway.NextHop } }, `
+    @{Name = 'DNS Server(s)' ; Expression = { $(($_ | Get-NetIPConfiguration).DNSServer | Where-Object -Property AddressFamily -eq 2).ServerAddresses } }
 }
 
 Function Get-ListeningPorts {
-	<#
+    <#
 
-	.SYNOPSIS
-		Checks for processes that are listening on an open port. Useful for troubleshooting firewall issues.
-		For svchost.exe processes, identifies the associated service with the listening port.
+    .SYNOPSIS
+        Checks for processes that are listening on an open port. Useful for troubleshooting firewall issues.
+        For svchost.exe processes, identifies the associated service with the listening port.
 
-	 .EXAMPLE
-		Get-ListeningPorts
+     .EXAMPLE
+        Get-ListeningPorts
 
-	.EXAMPLE
-		Get-ListeningPorts -IncludeIp6
+    .EXAMPLE
+        Get-ListeningPorts -IncludeIp6
 
-	.PARAMETER IncludeIp6
-		Include this switch to include the IPv6 adapter addresses that have listening ports
+    .PARAMETER IncludeIp6
+        Include this switch to include the IPv6 adapter addresses that have listening ports
 
-	.LINK
-		https://azega.org/list-open-ports-using-powershell/
+    .LINK
+        https://azega.org/list-open-ports-using-powershell/
 
-	#>
+    #>
 
-	Param(
-		[Parameter(Mandatory = $false)]
-		[Switch]$IncludeIp6
-	)
+    Param(
+        [Parameter(Mandatory = $false)]
+        [Switch]$IncludeIp6
+    )
 
-	$IpAddresses = (Get-NetIPAddress).IPAddress | Where-Object { $_ -notmatch "::" }
-	$IpAddresses += "0.0.0.0"
+    $IpAddresses = (Get-NetIPAddress).IPAddress | Where-Object { $_ -notmatch "::" }
+    $IpAddresses += "0.0.0.0"
 
-	If ($IncludeIp6) { $IpAddresses += "::" }
+    If ($IncludeIp6) { $IpAddresses += "::" }
 
-	Get-NetTcpConnection | Where-Object { ($_.State -eq "Listen") -and ( $IpAddresses -contains $_.LocalAddress) } | `
-		Select-Object LocalAddress,
-	LocalPort,
-	@{Name = "Process Name"; Expression = { (Get-Process -Id $_.OwningProcess).ProcessName } },
-	@{Name = "Service Name"; Expression = { If ((Get-Process -Id $_.OwningProcess).ProcessName -eq "svchost") {
-				$p = $_.OwningProcess
-						  (Get-WmiObject Win32_Service | Where-Object { $_.ProcessId -eq $p }).Name
-			}
-			Else { $null } }
-	},
-	State | Sort LocalPort | Format-Table
+    Get-NetTcpConnection | Where-Object { ($_.State -eq "Listen") -and ( $IpAddresses -contains $_.LocalAddress) } | `
+        Select-Object LocalAddress,
+    LocalPort,
+    @{Name = "Process Name"; Expression = { (Get-Process -Id $_.OwningProcess).ProcessName } },
+    @{Name = "Service Name"; Expression = { If ((Get-Process -Id $_.OwningProcess).ProcessName -eq "svchost") {
+                $p = $_.OwningProcess
+                          (Get-WmiObject Win32_Service | Where-Object { $_.ProcessId -eq $p }).Name
+            }
+            Else { $null } }
+    },
+    State | Sort LocalPort | Format-Table
 }
 
 Function Get-LoginHistory {
-	<#
+    <#
 
-	.SYNOPSIS
-		This script reads the event log "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational" from
-		multiple servers and outputs the human-readable results to a CSV/Table. This data is not filterable in the
-		native Windows Event Viewer.
+    .SYNOPSIS
+        This script reads the event log "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational" from
+        multiple servers and outputs the human-readable results to a CSV/Table. This data is not filterable in the
+        native Windows Event Viewer.
 
-		Version: November 9, 2016
+        Version: November 9, 2016
 
 
-	.SYNOPSIS
-		This script reads the event log "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational" from
-		multiple servers and outputs the human-readable results to a CSV/Table.  This data is not filterable in
-		the native Windows Event Viewer.
+    .SYNOPSIS
+        This script reads the event log "Microsoft-Windows-TerminalServices-LocalSessionManager/Operational" from
+        multiple servers and outputs the human-readable results to a CSV/Table.  This data is not filterable in
+        the native Windows Event Viewer.
 
-		NOTE: Despite this log's name, it includes both RDP logins as well as regular console logins1.
+        NOTE: Despite this log's name, it includes both RDP logins as well as regular console logins1.
 
-		Author:
-		Mike Crowley
-		https://BaselineTechnologies.com
+        Author:
+        Mike Crowley
+        https://BaselineTechnologies.com
 
-	 .EXAMPLE
+     .EXAMPLE
 
-		Get-LoginHistory -ServersToQuery Server1, Server2 -StartTime "November 1"
+        Get-LoginHistory -ServersToQuery Server1, Server2 -StartTime "November 1"
 
-	.LINK
-		https://MikeCrowley.us/tag/powershell
+    .LINK
+        https://MikeCrowley.us/tag/powershell
 
-	#>
+    #>
 
-	Param(
-		[array]$ServersToQuery = (hostname),
-		[datetime]$StartTime = "January 1, 1970"
-	)
+    Param(
+        [array]$ServersToQuery = (hostname),
+        [datetime]$StartTime = "January 1, 1970"
+    )
 
-	Foreach ($Server in $ServersToQuery) {
+    Foreach ($Server in $ServersToQuery) {
 
-		$LogFilter = @{
-			LogName   = 'Microsoft-Windows-TerminalServices-LocalSessionManager/Operational'
-			ID        = 21, 23, 24, 25
-			StartTime = $StartTime
-		}
+        $LogFilter = @{
+            LogName   = 'Microsoft-Windows-TerminalServices-LocalSessionManager/Operational'
+            ID        = 21, 23, 24, 25
+            StartTime = $StartTime
+        }
 
-		$AllEntries = Get-WinEvent -FilterHashtable $LogFilter -ComputerName $Server
+        $AllEntries = Get-WinEvent -FilterHashtable $LogFilter -ComputerName $Server
 
-		$AllEntries | ForEach-Object {
-			$entry = [xml]$_.ToXml()
-			[array]$Output += New-Object PSObject -Property @{
-				TimeCreated = $_.TimeCreated
-				User        = $entry.Event.UserData.EventXML.User
-				IPAddress   = $entry.Event.UserData.EventXML.Address
-				EventID     = $entry.Event.System.EventID
-				ServerName  = $Server
-			}
-		}
-	}
+        $AllEntries | ForEach-Object {
+            $entry = [xml]$_.ToXml()
+            [array]$Output += New-Object PSObject -Property @{
+                TimeCreated = $_.TimeCreated
+                User        = $entry.Event.UserData.EventXML.User
+                IPAddress   = $entry.Event.UserData.EventXML.Address
+                EventID     = $entry.Event.System.EventID
+                ServerName  = $Server
+            }
+        }
+    }
 
-	$FilteredOutput += $Output | Select-Object TimeCreated, User, ServerName, IPAddress, @{Name = 'Action'; Expression = {
-			if ($_.EventID -eq '21') { "Logon" }
-			if ($_.EventID -eq '22') { "Shell Start" }
-			if ($_.EventID -eq '23') { "Logoff" }
-			if ($_.EventID -eq '24') { "Disconnected" }
-			if ($_.EventID -eq '25') { "Reconnection" }
-		}
-	}
+    $FilteredOutput += $Output | Select-Object TimeCreated, User, ServerName, IPAddress, @{Name = 'Action'; Expression = {
+            if ($_.EventID -eq '21') { "Logon" }
+            if ($_.EventID -eq '22') { "Shell Start" }
+            if ($_.EventID -eq '23') { "Logoff" }
+            if ($_.EventID -eq '24') { "Disconnected" }
+            if ($_.EventID -eq '25') { "Reconnection" }
+        }
+    }
 
-	$FilteredOutput | Sort-Object -Property TimeCreated | Format-Table -AutoSize
+    $FilteredOutput | Sort-Object -Property TimeCreated | Format-Table -AutoSize
 }
 
 Function Get-SharedMailboxRestoreRequest {
-	Get-MailboxRestoreRequest | Get-MailboxRestoreRequestStatistics -IncludeReport | FT TargetAlias, Status, StatusDetail, PercentComplete, DataConsistencyScore -AutoSize
-	<#
-	.SYNOPSIS
-		Shows the status of current or recently run Mailbox Restore Requests. Must be connected to Exchange Online to Run.
-		Used in conjunction with the Convert-ToSharedMailbox command.
-	#>
+    Get-MailboxRestoreRequest | Get-MailboxRestoreRequestStatistics -IncludeReport | FT TargetAlias, Status, StatusDetail, PercentComplete, DataConsistencyScore -AutoSize
+    <#
+    .SYNOPSIS
+        Shows the status of current or recently run Mailbox Restore Requests. Must be connected to Exchange Online to Run.
+        Used in conjunction with the Convert-ToSharedMailbox command.
+    #>
 }
 
 Function Get-SonicwallInterfaceIP {
-	param(
-		[Parameter(Mandatory = $True,
-			ParameterSetName = 'Direct')]
-		[Parameter(Mandatory = $True,
-			ParameterSetName = 'ToFile')]
-		[string]$SonicWallAddress,
+    param(
+        [Parameter(Mandatory = $True,
+            ParameterSetName = 'Direct')]
+        [Parameter(Mandatory = $True,
+            ParameterSetName = 'ToFile')]
+        [string]$SonicWallAddress,
 
-		[Parameter(Mandatory = $True,
-			ParameterSetName = 'Direct')]
-		[Parameter(Mandatory = $True,
-			ParameterSetName = 'ToFile')]
-		[string]$Username,
+        [Parameter(Mandatory = $True,
+            ParameterSetName = 'Direct')]
+        [Parameter(Mandatory = $True,
+            ParameterSetName = 'ToFile')]
+        [string]$Username,
 
-		[Parameter(Mandatory = $True,
-			ParameterSetName = 'Direct')]
-		[Parameter(Mandatory = $True,
-			ParameterSetName = 'ToFile')]
-		[string]$Password,
+        [Parameter(Mandatory = $True,
+            ParameterSetName = 'Direct')]
+        [Parameter(Mandatory = $True,
+            ParameterSetName = 'ToFile')]
+        [string]$Password,
 
-		[Parameter(Mandatory = $False,
-			ParameterSetName = 'Direct')]
-		[Parameter(Mandatory = $False,
-			ParameterSetName = 'ToFile')]
-		[int]$Port = '22',
+        [Parameter(Mandatory = $False,
+            ParameterSetName = 'Direct')]
+        [Parameter(Mandatory = $False,
+            ParameterSetName = 'ToFile')]
+        [int]$Port = '22',
 
-		[Parameter(Mandatory = $True,
-			ParameterSetName = 'Direct')]
-		[Parameter(Mandatory = $True,
-			ParameterSetName = 'ToFile')]
-		[string]$Interface,
+        [Parameter(Mandatory = $True,
+            ParameterSetName = 'Direct')]
+        [Parameter(Mandatory = $True,
+            ParameterSetName = 'ToFile')]
+        [string]$Interface,
 
-		[Parameter(Mandatory = $True,
-			ParameterSetName = 'FromFile')]
-		[System.IO.FileInfo]$FromFile,
+        [Parameter(Mandatory = $True,
+            ParameterSetName = 'FromFile')]
+        [System.IO.FileInfo]$FromFile,
 
-		[Parameter(Mandatory = $True,
-			ParameterSetName = 'ToFile')]
-		[System.IO.FileInfo]$ToFile,
+        [Parameter(Mandatory = $True,
+            ParameterSetName = 'ToFile')]
+        [System.IO.FileInfo]$ToFile,
 
-		[Parameter(Mandatory = $False,
-			ParameterSetName = 'Direct')]
-		[Parameter(Mandatory = $False,
-			ParameterSetName = 'FromFile')]
-		[Parameter(Mandatory = $False,
-			ParameterSetName = 'ToFile')]
-		[System.IO.FileInfo]$SetDnsMadeEasyFile
-	)
+        [Parameter(Mandatory = $False,
+            ParameterSetName = 'Direct')]
+        [Parameter(Mandatory = $False,
+            ParameterSetName = 'FromFile')]
+        [Parameter(Mandatory = $False,
+            ParameterSetName = 'ToFile')]
+        [System.IO.FileInfo]$SetDnsMadeEasyFile
+    )
 
-	#Work with settings file.
-	If ($FromFile) {
-		$encryptedstring = Get-Content -Path $FromFile
-		$securestring = $encryptedstring | ConvertTo-SecureString
-		$Marshal = [System.Runtime.InteropServices.Marshal]
-		$Bstr = $Marshal::SecureStringToBSTR($securestring)
-		$string = $Marshal::PtrToStringAuto($Bstr)
-		$string | Invoke-Expression
-		$Marshal::ZeroFreeBSTR($Bstr)
-	}
+    #Work with settings file.
+    If ($FromFile) {
+        $encryptedstring = Get-Content -Path $FromFile
+        $securestring = $encryptedstring | ConvertTo-SecureString
+        $Marshal = [System.Runtime.InteropServices.Marshal]
+        $Bstr = $Marshal::SecureStringToBSTR($securestring)
+        $string = $Marshal::PtrToStringAuto($Bstr)
+        $string | Invoke-Expression
+        $Marshal::ZeroFreeBSTR($Bstr)
+    }
  Else {
-		If ($ToFile) {
-			$ParamArray = @(
-				$('[string]$SonicWallAddress = "' + $SonicWallAddress + '"')
-				$('[string]$Username = "' + $Username + '"')
-				$('[string]$Password = "' + $Password + '"')
-				$('[string]$Interface = "' + $Interface + '"')
-				$('[int]$Port = "' + $Port + '"')
-			)
-			If ($SetDnsMadeEasyFile) { $ParamArray += $('[System.IO.FileInfo]$SetDnsMadeEasyFile = "' + $SetDnsMadeEasyFile + '"') }
-			$securestring = $ParamArray | Out-String | ConvertTo-SecureString -AsPlainText -Force
-			$encryptedstring = $securestring | ConvertFrom-SecureString
-			$encryptedstring | Set-Content -Path $ToFile -Force
-		}
-	}
+        If ($ToFile) {
+            $ParamArray = @(
+                $('[string]$SonicWallAddress = "' + $SonicWallAddress + '"')
+                $('[string]$Username = "' + $Username + '"')
+                $('[string]$Password = "' + $Password + '"')
+                $('[string]$Interface = "' + $Interface + '"')
+                $('[int]$Port = "' + $Port + '"')
+            )
+            If ($SetDnsMadeEasyFile) { $ParamArray += $('[System.IO.FileInfo]$SetDnsMadeEasyFile = "' + $SetDnsMadeEasyFile + '"') }
+            $securestring = $ParamArray | Out-String | ConvertTo-SecureString -AsPlainText -Force
+            $encryptedstring = $securestring | ConvertFrom-SecureString
+            $encryptedstring | Set-Content -Path $ToFile -Force
+        }
+    }
 
-	If (-Not ($ToFile)) {
-		# Check if our module loaded properly
-		If (-not (Get-Module -ListAvailable -Name Posh-SSH)) {
-			# Install the module automatically
-			Install-Module -Name Posh-SSH
-		}
+    If (-Not ($ToFile)) {
+        # Check if our module loaded properly
+        If (-not (Get-Module -ListAvailable -Name Posh-SSH)) {
+            # Install the module automatically
+            Install-Module -Name Posh-SSH
+        }
 
-		# Includes
-		Import-Module Posh-SSH
+        # Includes
+        Import-Module Posh-SSH
 
-		#Configure the command
-		[string]$Command = "show interface $Interface IP"
+        #Configure the command
+        [string]$Command = "show interface $Interface IP"
 
-		# Generate credentials object for authentication
-		$nopasswd = $Password | ConvertTo-SecureString -AsPlainText -Force
-		$Credential = New-Object System.Management.Automation.PSCredential ($Username, $nopasswd)
-		$Session = New-SSHSession -Computername $SonicWallAddress -Credential $Credential -Acceptkey -Port $Port -OutVariable Session
+        # Generate credentials object for authentication
+        $nopasswd = $Password | ConvertTo-SecureString -AsPlainText -Force
+        $Credential = New-Object System.Management.Automation.PSCredential ($Username, $nopasswd)
+        $Session = New-SSHSession -Computername $SonicWallAddress -Credential $Credential -Acceptkey -Port $Port -OutVariable Session
 
-		$stream = New-SSHShellStream -SSHSession $Session
-		$stream.WriteLine($Command)
-		Start-Sleep 1
-		# Store the output of the command
-		$Output = $stream.Read()
+        $stream = New-SSHShellStream -SSHSession $Session
+        $stream.WriteLine($Command)
+        Start-Sleep 1
+        # Store the output of the command
+        $Output = $stream.Read()
 
-		# Remove the session after we're done
-		Remove-SSHSession -Name $Session | Out-Null
+        # Remove the session after we're done
+        Remove-SSHSession -Name $Session | Out-Null
 
-		# return the actual output
-		#Write-Host $Output.Trim();
+        # return the actual output
+        #Write-Host $Output.Trim();
 
-		# Automatically update the fingerprint for the given host.
-		Remove-SSHTrustedHost $SonicWallAddress | Out-Null
+        # Automatically update the fingerprint for the given host.
+        Remove-SSHTrustedHost $SonicWallAddress | Out-Null
 
-		$IP = ($Output.tostring().split("`n").trim() | Select-String -SimpleMatch "IP Address").Line.split(":").Trim()[-1]
-		$IP
+        $IP = ($Output.tostring().split("`n").trim() | Select-String -SimpleMatch "IP Address").Line.split(":").Trim()[-1]
+        $IP
 
-		If ($SetDnsMadeEasyFile) {
-			Set-DnsMadeEasyDDNS -FromFile $SetDnsMadeEasyFile -IPAddress $IP
-		}
-	}
+        If ($SetDnsMadeEasyFile) {
+            Set-DnsMadeEasyDDNS -FromFile $SetDnsMadeEasyFile -IPAddress $IP
+        }
+    }
 }
 
 Function Get-UserMailboxAccess {
-	param
-	(
-		[Parameter(Mandatory = $True)]
-		[string]$User
-	)
+    param
+    (
+        [Parameter(Mandatory = $True)]
+        [string]$User
+    )
 
-	$progressPreference = 'Continue'
-	Write-Progress -Activity "Validating user: $User"
-	$ValidatedUser = Get-EXOMailbox -Identity $User -ErrorAction SilentlyContinue
-	If (-not $ValidatedUser) {
-		Do {
-			#Retry the User
-			$User = Read-Host "Entry `"$User`" didn't work. Check your spelling and try again or type QUIT to stop:`n"
-			If ($User -match "QUIT") { Break }
-			$ValidatedUser = Get-EXOMailbox -Identity $User -ErrorAction SilentlyContinue
-			#Active User Check
-			If ($ValidatedUser) {
-				Write-Host "Entry `"$User`" has been validated!"
-			}
-		} While (-not $ValidatedUser)
-		$User = $ValidatedUser.Identity
-		Write-Host $User
-	}
+    $progressPreference = 'Continue'
+    Write-Progress -Activity "Validating user: $User"
+    $ValidatedUser = Get-EXOMailbox -Identity $User -ErrorAction SilentlyContinue
+    If (-not $ValidatedUser) {
+        Do {
+            #Retry the User
+            $User = Read-Host "Entry `"$User`" didn't work. Check your spelling and try again or type QUIT to stop:`n"
+            If ($User -match "QUIT") { Break }
+            $ValidatedUser = Get-EXOMailbox -Identity $User -ErrorAction SilentlyContinue
+            #Active User Check
+            If ($ValidatedUser) {
+                Write-Host "Entry `"$User`" has been validated!"
+            }
+        } While (-not $ValidatedUser)
+        $User = $ValidatedUser.Identity
+        Write-Host $User
+    }
  Else { $User = $ValidatedUser.Identity }
 
-	Write-Progress -Activity "Collecting list of mailboxes"
-	$Mailboxes = Get-ExoMailbox -ResultSize Unlimited
+    Write-Progress -Activity "Collecting list of mailboxes"
+    $Mailboxes = Get-ExoMailbox -ResultSize Unlimited
 
-	Write-Progress -Activity "Gathering mailbox access permissions"
-	$Access = $Mailboxes | Get-MailboxPermission -User $User
+    Write-Progress -Activity "Gathering mailbox access permissions"
+    $Access = $Mailboxes | Get-MailboxPermission -User $User
 
-	Write-Progress -Activity "Gathering 'Send As' permissions"
-	$SendAs = $Mailboxes | Get-RecipientPermission -Trustee $User
+    Write-Progress -Activity "Gathering 'Send As' permissions"
+    $SendAs = $Mailboxes | Get-RecipientPermission -Trustee $User
 
-	Write-Progress -Activity "Gathering 'Send On Behalf' permissions"
-	$SendOnBehalf = $Mailboxes | ? { $_.GrantSendOnBehalfTo -match $User }
+    Write-Progress -Activity "Gathering 'Send On Behalf' permissions"
+    $SendOnBehalf = $Mailboxes | ? { $_.GrantSendOnBehalfTo -match $User }
 
-	Write-Progress -Activity * -Completed
+    Write-Progress -Activity * -Completed
 
-	Write-Host "-----Results for $User-----"
-	If ($Access) {
-		Write-Host "$User has mailbox access to:"
-		Write-Host -ForegroundColor Yellow "$(($Access | FT Identity,AccessRights -HideTableHeaders | Out-String).Trim())"
-	}
+    Write-Host "-----Results for $User-----"
+    If ($Access) {
+        Write-Host "$User has mailbox access to:"
+        Write-Host -ForegroundColor Yellow "$(($Access | FT Identity,AccessRights -HideTableHeaders | Out-String).Trim())"
+    }
  Else {
-		Write-Host "$User does not have direct access to any other mailboxes."
-	}
+        Write-Host "$User does not have direct access to any other mailboxes."
+    }
 
-	If ($SendAs) {
-		Write-Host "$User has 'Send As' permissions for:"
-		Write-Host -ForegroundColor Yellow "$($SendAs.Identity)"
-	}
+    If ($SendAs) {
+        Write-Host "$User has 'Send As' permissions for:"
+        Write-Host -ForegroundColor Yellow "$($SendAs.Identity)"
+    }
  Else {
-		Write-Host "$User does not have Send As access to any other mailboxes."
-	}
+        Write-Host "$User does not have Send As access to any other mailboxes."
+    }
 
-	If ($SendOnBehalf) {
-		Write-Host "$User has 'Send As' permissions for:"
-		Write-Host -ForegroundColor Yellow "$($SendOnBehalf.Identity)"
-	}
+    If ($SendOnBehalf) {
+        Write-Host "$User has 'Send As' permissions for:"
+        Write-Host -ForegroundColor Yellow "$($SendOnBehalf.Identity)"
+    }
  Else {
-		Write-Host "$User does not have Send On Behalf access to any other mailboxes."
-	}
+        Write-Host "$User does not have Send On Behalf access to any other mailboxes."
+    }
 
-	<#
-	.DESCRIPTION
-		Check's what permissions a user has over other mailboxes including Direct Access, Send As, and Send on Behalf.
-	.PARAMETER User
-		[Require] Specify the alias or name of the person to check.
-	.EXAMPLE
-		[Command]: Get-UserMailboxAccess -User Marcus
+    <#
+    .DESCRIPTION
+        Check's what permissions a user has over other mailboxes including Direct Access, Send As, and Send on Behalf.
+    .PARAMETER User
+        [Require] Specify the alias or name of the person to check.
+    .EXAMPLE
+        [Command]: Get-UserMailboxAccess -User Marcus
 
-		-----Results for Marcus Rael-----
-		Marcus Rael does not have direct access to any other mailboxes.
-		Marcus Rael does not have Send As access to any other mailboxes.
-		Marcus Rael does not have Send On Behalf access to any other mailboxes.
-	.EXAMPLE
-		[Command]: Get-UserMailboxAccess -User Marcus
+        -----Results for Marcus Rael-----
+        Marcus Rael does not have direct access to any other mailboxes.
+        Marcus Rael does not have Send As access to any other mailboxes.
+        Marcus Rael does not have Send On Behalf access to any other mailboxes.
+    .EXAMPLE
+        [Command]: Get-UserMailboxAccess -User Marcus
 
-		-----Results for Chelsea Sandoval-----
-		Chelsea Sandoval has mailbox access to:
-		Brian S. Colon    {FullAccess}
-		Christopher Ryan  {FullAccess}
-		David Roman       {FullAccess}
-		Faxes             {FullAccess}
-		FirmTasks         {FullAccess}
-		Jordon George     {FullAccess}
-		Randy Autio       {FullAccess}
-		Simmone Contreras {FullAccess}
-		Chelsea Sandoval does not have Send As access to any other mailboxes.
-		Chelsea Sandoval does not have Send On Behalf access to any other mailboxes.
-	#>
+        -----Results for Chelsea Sandoval-----
+        Chelsea Sandoval has mailbox access to:
+        Brian S. Colon    {FullAccess}
+        Christopher Ryan  {FullAccess}
+        David Roman       {FullAccess}
+        Faxes             {FullAccess}
+        FirmTasks         {FullAccess}
+        Jordon George     {FullAccess}
+        Randy Autio       {FullAccess}
+        Simmone Contreras {FullAccess}
+        Chelsea Sandoval does not have Send As access to any other mailboxes.
+        Chelsea Sandoval does not have Send On Behalf access to any other mailboxes.
+    #>
 }
 
 Function Get-UserProfileSpace {
-	$Profiles = (Get-CimInstance win32_userprofile | ? { $_.Special -eq $False })
-	#$Profiles | Select -Property LocalPath, @{Name = 'Last Activity' ; Expression = {(Get-Item ($_.LocalPath + "\AppData\Local")).LastWriteTime}} | Sort-Object "Last Activity"
-	$ActiveProfiles = @()
-	$FolderSizes = @{}
-	#$FinalExport.add('HostName','User','Desktop(MB)','Documents(MB)','Pictures(MB)'}
-	$StaleLimit = (Get-date).AddDays(-90)
-	$ProfilePaths = $Profiles.LocalPath
-	$global:Desktop = 0
-	$global:Documents = 0
-	$global:Pictures = 0
-	$global:BigObject = $()
+    $Profiles = (Get-CimInstance win32_userprofile | ? { $_.Special -eq $False })
+    #$Profiles | Select -Property LocalPath, @{Name = 'Last Activity' ; Expression = {(Get-Item ($_.LocalPath + "\AppData\Local")).LastWriteTime}} | Sort-Object "Last Activity"
+    $ActiveProfiles = @()
+    $FolderSizes = @{}
+    #$FinalExport.add('HostName','User','Desktop(MB)','Documents(MB)','Pictures(MB)'}
+    $StaleLimit = (Get-date).AddDays(-90)
+    $ProfilePaths = $Profiles.LocalPath
+    $global:Desktop = 0
+    $global:Documents = 0
+    $global:Pictures = 0
+    $global:BigObject = $()
 
-	ForEach ($ProfilePath in $ProfilePaths) {
-		#$ProfilePath = "C:\Users\rshoemaker"
-		$LastActivity = If (Test-Path -Path $($ProfilePath + "\AppData") -ErrorAction SilentlyContinue) {
-			(Get-ChildItem -Path $($ProfilePath + "\AppData") | Sort LastWriteTime -Descending)[0].LastWriteTime
-		}
-		Else { Return 0 }
-		If ($LastActivity -gt $StaleLimit) {
-			#Write-Host $ProfilePath is recent with an activity date of $LastActivity
-			$ActiveProfiles += $ProfilePath
-		}
-		Else {
-			#Write-Host $ProfilePath is old with an activity date of $LastActivity
-		}
-	}
-	#Write-Host $($ActiveProfiles.Count) active profiles found.
-	#$ActiveProfiles
+    ForEach ($ProfilePath in $ProfilePaths) {
+        #$ProfilePath = "C:\Users\rshoemaker"
+        $LastActivity = If (Test-Path -Path $($ProfilePath + "\AppData") -ErrorAction SilentlyContinue) {
+            (Get-ChildItem -Path $($ProfilePath + "\AppData") | Sort LastWriteTime -Descending)[0].LastWriteTime
+        }
+        Else { Return 0 }
+        If ($LastActivity -gt $StaleLimit) {
+            #Write-Host $ProfilePath is recent with an activity date of $LastActivity
+            $ActiveProfiles += $ProfilePath
+        }
+        Else {
+            #Write-Host $ProfilePath is old with an activity date of $LastActivity
+        }
+    }
+    #Write-Host $($ActiveProfiles.Count) active profiles found.
+    #$ActiveProfiles
 
-	If ($ActiveProfiles) {
-		Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-		Install-Module -Name PSFolderSize -Repository PSGallery -Force
-		ForEach ($ActiveProfile in $ActiveProfiles) {
-			[Decimal]$FolderSizeSum = 0.00
-			#Write-Host $($ActiveProfile | split-path -leaf)
-			$Folders = @("Desktop", "Documents", "Pictures")
-			$FolderSizes = [PSCustomObject]@{}
-			ForEach ($Folder in $Folders) {
-				If (Test-Path -Path $($ActiveProfile + "\" + "$Folder")) {
-					$GetSize = (Get-FolderSize -Path $ActiveProfile -FolderName $Folder).SizeMB
-					If ($GetSize.Count -gt 1) {
-						[Decimal]$Size = $($GetSize)[0] | Out-String
-					}
-					Else {
-						[Decimal]$Size = $($GetSize) | Out-String
-					}
-					#Write-Host `t$Folder $Size
-					Set-Variable -Name $Folder -Value $Size -Force
-				}
-				Else {
-					Set-Variable -Name $Folder -Value 0 -Force
-				}
+    If ($ActiveProfiles) {
+        Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+        Install-Module -Name PSFolderSize -Repository PSGallery -Force
+        ForEach ($ActiveProfile in $ActiveProfiles) {
+            [Decimal]$FolderSizeSum = 0.00
+            #Write-Host $($ActiveProfile | split-path -leaf)
+            $Folders = @("Desktop", "Documents", "Pictures")
+            $FolderSizes = [PSCustomObject]@{}
+            ForEach ($Folder in $Folders) {
+                If (Test-Path -Path $($ActiveProfile + "\" + "$Folder")) {
+                    $GetSize = (Get-FolderSize -Path $ActiveProfile -FolderName $Folder).SizeMB
+                    If ($GetSize.Count -gt 1) {
+                        [Decimal]$Size = $($GetSize)[0] | Out-String
+                    }
+                    Else {
+                        [Decimal]$Size = $($GetSize) | Out-String
+                    }
+                    #Write-Host `t$Folder $Size
+                    Set-Variable -Name $Folder -Value $Size -Force
+                }
+                Else {
+                    Set-Variable -Name $Folder -Value 0 -Force
+                }
 
-			} #ForEach ($Folder in $Folders)
-			$FolderSizes = [PSCustomObject]@{
-				"User"      = $($ActiveProfile | split-path -leaf).ToLower()
-				"Host"      = $env:computername
-				"Date"      = $(Get-Date -Format "yyyyMMdd")
+            } #ForEach ($Folder in $Folders)
+            $FolderSizes = [PSCustomObject]@{
+                "User"      = $($ActiveProfile | split-path -leaf).ToLower()
+                "Host"      = $env:computername
+                "Date"      = $(Get-Date -Format "yyyyMMdd")
 
-				"Desktop"   = $Desktop
-				"Documents" = $Documents
-				"Pictures"  = $Pictures
-				"Total"     = $Desktop + $Documents + $Pictures
-			}
-			#$FolderSizes
-			If ($BigObject.Count -eq 0) {
-				$BigObject = ($FolderSizes | ConvertTo-Csv -NoTypeInformation)
-			}
-			Else {
-				$BigObject += ($FolderSizes | ConvertTo-Csv -NoTypeInformation)[-1]
-			}
-			$global:Desktop = 0
-			$global:Documents = 0
-			$global:Pictures = 0
-		} #ForEach ($ActiveProfile in $ProfilePaths)
-	} #If (ActiveProfiles)
+                "Desktop"   = $Desktop
+                "Documents" = $Documents
+                "Pictures"  = $Pictures
+                "Total"     = $Desktop + $Documents + $Pictures
+            }
+            #$FolderSizes
+            If ($BigObject.Count -eq 0) {
+                $BigObject = ($FolderSizes | ConvertTo-Csv -NoTypeInformation)
+            }
+            Else {
+                $BigObject += ($FolderSizes | ConvertTo-Csv -NoTypeInformation)[-1]
+            }
+            $global:Desktop = 0
+            $global:Documents = 0
+            $global:Pictures = 0
+        } #ForEach ($ActiveProfile in $ProfilePaths)
+    } #If (ActiveProfiles)
 
-	Return $BigObject
+    Return $BigObject
 }
 
 Function Get-VSSWriter {
-	[CmdletBinding()]
+    [CmdletBinding()]
 
-	Param (
-		[ValidateSet('Stable', 'Failed', 'Waiting for completion')]
-		[String]
-		$Status
-	) #Param
+    Param (
+        [ValidateSet('Stable', 'Failed', 'Waiting for completion')]
+        [String]
+        $Status
+    ) #Param
 
-	BEGIN { Write-Verbose "BEGIN: Get-KPVSSWriter" } #BEGIN
+    BEGIN { Write-Verbose "BEGIN: Get-KPVSSWriter" } #BEGIN
 
-	PROCESS {
-		#Command to retrieve all writers, and split them into groups
-		Write-Verbose "Retrieving VSS Writers"
-		VSSAdmin list writers |
-		Select-String -Pattern 'Writer name:' -Context 0, 4 |
-		ForEach-Object {
+    PROCESS {
+        #Command to retrieve all writers, and split them into groups
+        Write-Verbose "Retrieving VSS Writers"
+        VSSAdmin list writers |
+        Select-String -Pattern 'Writer name:' -Context 0, 4 |
+        ForEach-Object {
 
-			#Removing clutter
-			Write-Verbose "Removing clutter "
-			$Name = $_.Line -replace "^(.*?): " -replace "'"
-			$Id = $_.Context.PostContext[0] -replace "^(.*?): "
-			$InstanceId = $_.Context.PostContext[1] -replace "^(.*?): "
-			$State = $_.Context.PostContext[2] -replace "^(.*?): "
-			$LastError = $_.Context.PostContext[3] -replace "^(.*?): "
+            #Removing clutter
+            Write-Verbose "Removing clutter "
+            $Name = $_.Line -replace "^(.*?): " -replace "'"
+            $Id = $_.Context.PostContext[0] -replace "^(.*?): "
+            $InstanceId = $_.Context.PostContext[1] -replace "^(.*?): "
+            $State = $_.Context.PostContext[2] -replace "^(.*?): "
+            $LastError = $_.Context.PostContext[3] -replace "^(.*?): "
 
-			#Create object
-			Write-Verbose "Creating object"
-			foreach ($Prop in $_) {
-				$Obj = [pscustomobject]@{
-					Name       = $Name
-					Id         = $Id
-					InstanceId = $InstanceId
-					State      = $State
-					LastError  = $LastError
-				}
-			}#foreach
-			#Change output based on Status provided
-			If ($PSBoundParameters.ContainsKey('Status')) {
-				Write-Verbose "Filtering out the results"
-				$Obj | Where-Object { $_.State -like "*$Status" }
-			} #if
-			else {
-				$Obj
-			} #else
-		}#foreach-object
-	} #PROCESS
-	END { } #END
+            #Create object
+            Write-Verbose "Creating object"
+            foreach ($Prop in $_) {
+                $Obj = [pscustomobject]@{
+                    Name       = $Name
+                    Id         = $Id
+                    InstanceId = $InstanceId
+                    State      = $State
+                    LastError  = $LastError
+                }
+            }#foreach
+            #Change output based on Status provided
+            If ($PSBoundParameters.ContainsKey('Status')) {
+                Write-Verbose "Filtering out the results"
+                $Obj | Where-Object { $_.State -like "*$Status" }
+            } #if
+            else {
+                $Obj
+            } #else
+        }#foreach-object
+    } #PROCESS
+    END { } #END
 }

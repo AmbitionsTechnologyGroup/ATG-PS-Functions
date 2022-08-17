@@ -1,18 +1,18 @@
 Function Restore-LastUser {
-	$RegKey = "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI"
-	$RegKeyPS = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI"
-	$RegFile = "C:\Ambitions\LastLoggedOnUser.reg"
-	$InitUser = (Get-ItemProperty $RegKeyPS).LastLoggedOnUser
+    $RegKey = "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI"
+    $RegKeyPS = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI"
+    $RegFile = "C:\Ambitions\LastLoggedOnUser.reg"
+    $InitUser = (Get-ItemProperty $RegKeyPS).LastLoggedOnUser
 
-	If (Test-Path -Path $RegFile){
-		$User = (Select-String -Path $RegFile -Pattern '"LastLoggedOnUser"' -SimpleMatch).Line
-		Write-Host "Restoring:`n$User"
-		REG IMPORT $RegFile
-		$NewUser = (Get-ItemProperty $RegKeyPS).LastLoggedOnUser
-		Write-Host "Last Logged On User has been restored from $InitUser to $NewUser"
-		Write-Host "Refreshing the Logon Screen."
-		Get-Process -Name LogonUI -ErrorAction SilentlyContinue | Stop-Process -Force
-	} Else {
-		Write-Host "Error: No backup exists. Try the command Backup-LastUser to create a backup."
-	}
+    If (Test-Path -Path $RegFile){
+        $User = (Select-String -Path $RegFile -Pattern '"LastLoggedOnUser"' -SimpleMatch).Line
+        Write-Host "Restoring:`n$User"
+        REG IMPORT $RegFile
+        $NewUser = (Get-ItemProperty $RegKeyPS).LastLoggedOnUser
+        Write-Host "Last Logged On User has been restored from $InitUser to $NewUser"
+        Write-Host "Refreshing the Logon Screen."
+        Get-Process -Name LogonUI -ErrorAction SilentlyContinue | Stop-Process -Force
+    } Else {
+        Write-Host "Error: No backup exists. Try the command Backup-LastUser to create a backup."
+    }
 }

@@ -1,198 +1,198 @@
 Function Convert-ToSharedMailbox {
-	param
-		(
-			[Parameter(Mandatory=$false)]
-			[string]$DateLeft,
+    param
+        (
+            [Parameter(Mandatory=$false)]
+            [string]$DateLeft,
 
-			[Parameter(Mandatory=$false)]
-			[string]$Alias,
+            [Parameter(Mandatory=$false)]
+            [string]$Alias,
 
-			[Parameter(Mandatory=$false)]
-			[string]$GiveAccessTo,
+            [Parameter(Mandatory=$false)]
+            [string]$GiveAccessTo,
 
-			[Parameter(Mandatory=$false)]
-			[ValidateSet('FullAccess','ReadPermission')]
-			[string]$GiveAccessPermission,
+            [Parameter(Mandatory=$false)]
+            [ValidateSet('FullAccess','ReadPermission')]
+            [string]$GiveAccessPermission,
 
-			[Parameter(Mandatory=$false)]
-			[string]$DirectEmailTo,
+            [Parameter(Mandatory=$false)]
+            [string]$DirectEmailTo,
 
-			[Parameter(Mandatory=$false)]
-			[switch]$NoAccess = $False,
+            [Parameter(Mandatory=$false)]
+            [switch]$NoAccess = $False,
 
-			[Parameter(Mandatory=$false)]
-			[switch]$NoReply = $False
-		)
+            [Parameter(Mandatory=$false)]
+            [switch]$NoReply = $False
+        )
 
-	If (-not $DateLeft) {$DateLeft = Read-Host "Please enter the date this person left in DDMMMYYY format, i.e. 01JAN2001"}
-	If (-not $Alias) {$Alias = Read-Host "Please enter the persons alias, the part of their email before the @ sign."}
-	$DeletedMailbox = Get-EXOMailbox -SoftDeletedMailbox -Identity $Alias -ErrorAction SilentlyContinue
-	If (-not $DeletedMailbox) {
-		Do {
-			#Active User Check
-			If ($(Get-EXOMailbox -Identity $Alias -ErrorAction SilentlyContinue)) {
-				Write-Host "That mailbox appears to be for an active user."
-				$Response = Read-Host -Prompt "Do you want to forcefully delete the user and proceed? (y/N)"
-				If (-not $Response) {$Response = "else"}
-				If ($Response -like "y*") {
-					Write-Host "Forcefully deleting the mailbox for $($DeletedMailbox.DisplayName)."
-					Write-Host "Please ensure sync is disabled for the user."
-					Remove-Mailbox -Identity $Alias
-				} Else { Break }
-			}
-			#Retry the alias
-			$Alias = Read-Host "That alias didn't work. Enter another one or type QUIT to stop:`n"
-			If ($Alias -match "QUIT") {Break}
-			$DeletedMailbox = Get-EXOMailbox -SoftDeletedMailbox -Identity $Alias -ErrorAction SilentlyContinue
-		} While (-not $DeletedMailbox)
-	}
+    If (-not $DateLeft) {$DateLeft = Read-Host "Please enter the date this person left in DDMMMYYY format, i.e. 01JAN2001"}
+    If (-not $Alias) {$Alias = Read-Host "Please enter the persons alias, the part of their email before the @ sign."}
+    $DeletedMailbox = Get-EXOMailbox -SoftDeletedMailbox -Identity $Alias -ErrorAction SilentlyContinue
+    If (-not $DeletedMailbox) {
+        Do {
+            #Active User Check
+            If ($(Get-EXOMailbox -Identity $Alias -ErrorAction SilentlyContinue)) {
+                Write-Host "That mailbox appears to be for an active user."
+                $Response = Read-Host -Prompt "Do you want to forcefully delete the user and proceed? (y/N)"
+                If (-not $Response) {$Response = "else"}
+                If ($Response -like "y*") {
+                    Write-Host "Forcefully deleting the mailbox for $($DeletedMailbox.DisplayName)."
+                    Write-Host "Please ensure sync is disabled for the user."
+                    Remove-Mailbox -Identity $Alias
+                } Else { Break }
+            }
+            #Retry the alias
+            $Alias = Read-Host "That alias didn't work. Enter another one or type QUIT to stop:`n"
+            If ($Alias -match "QUIT") {Break}
+            $DeletedMailbox = Get-EXOMailbox -SoftDeletedMailbox -Identity $Alias -ErrorAction SilentlyContinue
+        } While (-not $DeletedMailbox)
+    }
 
-	If ($DeletedMailbox) {
-		$Name = $DeletedMailbox.DisplayName
-		$DeletedMailboxSize = ($DeletedMailbox | Get-MailboxStatistics -IncludeSoftDeletedRecipients).TotalItemSize.Value
-		Write-Host "Deleted mailbox for $Name found. It is $DeletedMailboxSize"
-		If ([int64]($DeletedMailboxSize -replace '.+\(|bytes\)') -gt "50GB") {
-			Write-Warning -Message "$Name has a mailbox larger then 50GB, the restored shared mailbox needs to be assigned an Office 365 Enterprise E3 or E5 license."
-			Write-Host -NoNewLine 'Press any key to acknowledge and continue...';
-			$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
-		}
-		$SmtpAddress = $DeletedMailbox.PrimarySmtpAddress
-		Write-Host "Creating Shared Mailbox."
-		New-Mailbox -Name "SHARED $Name LEFT $DateLeft" -Alias $Alias -PrimarySmtpAddress $SmtpAddress -Shared
-		Write-Host "Waiting 30 seconds for mailbox to fully initialize."
-		Sleep -Seconds 30
-		$NewSharedMailbox = Get-EXOMailbox -Identity $Alias
-		$NewSharedMailbox | Select DisplayName, RecipientTypeDetails
-		Write-Host "Hiding the mailbox from address lists."
-		$NewSharedMailbox | Set-Mailbox -HiddenFromAddressListsEnabled:$true -MaxSendSize 150MB -MaxReceiveSize 150MB
-		
-		Write-Host "Restoring deleted mailbox to new shared mailbox."
-		$RestoreName = $Alias + "_" + $(Get-Date -uFormat %T_%d%b%Y)
-		New-MailboxRestoreRequest -Name $RestoreName -SourceMailbox $DeletedMailbox.GUID.GUID -TargetMailbox $NewSharedMailbox.GUID.GUID -AllowLegacyDNMismatch -ConflictResolutionOption ForceCopy -AssociatedMessagesCopyOption DoNotCopy
-		Write-Host "Retrieving Restore Status"
-		Get-SharedMailboxRestoreRequest
-		Write-Host -ForegroundColor Yellow -BackgroundColor Black "Run Get-SharedMailboxRestoreRequest to see the progress of the restore."
+    If ($DeletedMailbox) {
+        $Name = $DeletedMailbox.DisplayName
+        $DeletedMailboxSize = ($DeletedMailbox | Get-MailboxStatistics -IncludeSoftDeletedRecipients).TotalItemSize.Value
+        Write-Host "Deleted mailbox for $Name found. It is $DeletedMailboxSize"
+        If ([int64]($DeletedMailboxSize -replace '.+\(|bytes\)') -gt "50GB") {
+            Write-Warning -Message "$Name has a mailbox larger then 50GB, the restored shared mailbox needs to be assigned an Office 365 Enterprise E3 or E5 license."
+            Write-Host -NoNewLine 'Press any key to acknowledge and continue...';
+            $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
+        }
+        $SmtpAddress = $DeletedMailbox.PrimarySmtpAddress
+        Write-Host "Creating Shared Mailbox."
+        New-Mailbox -Name "SHARED $Name LEFT $DateLeft" -Alias $Alias -PrimarySmtpAddress $SmtpAddress -Shared
+        Write-Host "Waiting 30 seconds for mailbox to fully initialize."
+        Sleep -Seconds 30
+        $NewSharedMailbox = Get-EXOMailbox -Identity $Alias
+        $NewSharedMailbox | Select DisplayName, RecipientTypeDetails
+        Write-Host "Hiding the mailbox from address lists."
+        $NewSharedMailbox | Set-Mailbox -HiddenFromAddressListsEnabled:$true -MaxSendSize 150MB -MaxReceiveSize 150MB
+        
+        Write-Host "Restoring deleted mailbox to new shared mailbox."
+        $RestoreName = $Alias + "_" + $(Get-Date -uFormat %T_%d%b%Y)
+        New-MailboxRestoreRequest -Name $RestoreName -SourceMailbox $DeletedMailbox.GUID.GUID -TargetMailbox $NewSharedMailbox.GUID.GUID -AllowLegacyDNMismatch -ConflictResolutionOption ForceCopy -AssociatedMessagesCopyOption DoNotCopy
+        Write-Host "Retrieving Restore Status"
+        Get-SharedMailboxRestoreRequest
+        Write-Host -ForegroundColor Yellow -BackgroundColor Black "Run Get-SharedMailboxRestoreRequest to see the progress of the restore."
 
-		#Mailbox Permissions
-		If(-not $NoAccess) {
-			Do {
-				If ($GiveAccessPermission) {
-					$Permission = $GiveAccessPermission
-				} Else {
-					$Response = Read-Host -Prompt "Do you want to add any permissions to the shared mailbox? (Y/n)"
-					If (-not $Response) {$Response = "y"}
-					If ($Response -like "y*") {
-					$Rights = "FullAccess","ReadPermission","QUIT"
-					$Rights | Select-Object @{N='Index'; E={$Rights.IndexOf($_)}}, @{N='Permission'; E={$_}} | Out-Host -Paging -ErrorAction SilentlyContinue
-					$Permission = Read-Host "Please enter the number of the permission you wish to assign."
-					$Permission = $Rights[$Permission]
-					}
-				}
-				If ($Permission -ne "QUIT" -and $Response -notlike "n*") {
-					If ($GiveAccessTo) {
-						$AddUser = $GiveAccessTo
-					} Else {
-						$AddUser = Read-Host "Alias of the user to grant access"
-					}
-					If (-not $(Get-EXOMailbox -Identity $AddUser)) {
-						Do {
-							$AddUser = Read-Host "That alias didn't work. Enter another one or type QUIT to stop:`n"
-							If ($AddUser -match "QUIT") {Break}
-						} While (-not $(Get-EXOMailbox -Identity $AddUser))
-					}
-					Write-Host "Giving $AddUser $Permission to the mailbox."
-					$NewSharedMailbox | Add-MailboxPermission -User $AddUser -AccessRights $Permission -InheritanceType All -Verbose
-					$NewSharedMailbox | Get-MailboxPermission | FT
-					If ($GiveAccessPermission) {$Response = "no"}
-				} Else { Break }
-			} While ($Response -notlike "n*")
-		}
+        #Mailbox Permissions
+        If(-not $NoAccess) {
+            Do {
+                If ($GiveAccessPermission) {
+                    $Permission = $GiveAccessPermission
+                } Else {
+                    $Response = Read-Host -Prompt "Do you want to add any permissions to the shared mailbox? (Y/n)"
+                    If (-not $Response) {$Response = "y"}
+                    If ($Response -like "y*") {
+                    $Rights = "FullAccess","ReadPermission","QUIT"
+                    $Rights | Select-Object @{N='Index'; E={$Rights.IndexOf($_)}}, @{N='Permission'; E={$_}} | Out-Host -Paging -ErrorAction SilentlyContinue
+                    $Permission = Read-Host "Please enter the number of the permission you wish to assign."
+                    $Permission = $Rights[$Permission]
+                    }
+                }
+                If ($Permission -ne "QUIT" -and $Response -notlike "n*") {
+                    If ($GiveAccessTo) {
+                        $AddUser = $GiveAccessTo
+                    } Else {
+                        $AddUser = Read-Host "Alias of the user to grant access"
+                    }
+                    If (-not $(Get-EXOMailbox -Identity $AddUser)) {
+                        Do {
+                            $AddUser = Read-Host "That alias didn't work. Enter another one or type QUIT to stop:`n"
+                            If ($AddUser -match "QUIT") {Break}
+                        } While (-not $(Get-EXOMailbox -Identity $AddUser))
+                    }
+                    Write-Host "Giving $AddUser $Permission to the mailbox."
+                    $NewSharedMailbox | Add-MailboxPermission -User $AddUser -AccessRights $Permission -InheritanceType All -Verbose
+                    $NewSharedMailbox | Get-MailboxPermission | FT
+                    If ($GiveAccessPermission) {$Response = "no"}
+                } Else { Break }
+            } While ($Response -notlike "n*")
+        }
 
-		#AutoReply
-		If(-not $NoReply) {
-			If ($DirectEmailTo) {
-				$ReplyTo = $DirectEmailTo
-			} Else {
-				$Response = Read-Host -Prompt "Do you want to an auto reply? (Y/n)"
-				If (-not $Response) {$Response = "y"}
-				If ($Response -like "y*") {
-					$ReplyTo = Read-Host "Alias of the user to direct emails to"
-					If (-not $(Get-EXOMailbox -Identity $ReplyTo)) {
-						Do {
-							$ReplyTo = Read-Host "That alias didn't work. Enter another one or type QUIT to stop:`n"
-							If ($ReplyTo -match "QUIT") {Break}
-						} While (-not $(Get-EXOMailbox -Identity $ReplyTo))
-					}
-					$ReplyTo = Get-EXOMailbox -Identity $ReplyTo
-					$ReplyToName = $ReplyTo.DisplayName
-					$ReplyToEmail = $ReplyTo.PrimarySmtpAddress
-					$NewSharedMailbox | Set-MailboxAutoReplyConfiguration –InternalMessage "$Name is no longer with the organization. Please direct communications to $ReplyToName at $ReplyToEmail" –ExternalMessage "$Name is no longer with the organization. Please direct communications to $ReplyToName at $ReplyToEmail" -Verbose
-					$NewSharedMailbox | Set-MailboxAutoReplyConfiguration -AutoReplyState enabled
-					$NewSharedMailbox | Get-MailboxAutoReplyConfiguration | Select Identity, AutoReplyState, ExternalMessage | FL
-					Clear-Variable -Name ReplyTo -Force -ErrorAction SilentlyContinue
-					Clear-Variable -Name ReplyToName -Force -ErrorAction SilentlyContinue
-					Clear-Variable -Name ReplyToEmail -Force -ErrorAction SilentlyContinue
-				}
-			}
-		}
+        #AutoReply
+        If(-not $NoReply) {
+            If ($DirectEmailTo) {
+                $ReplyTo = $DirectEmailTo
+            } Else {
+                $Response = Read-Host -Prompt "Do you want to an auto reply? (Y/n)"
+                If (-not $Response) {$Response = "y"}
+                If ($Response -like "y*") {
+                    $ReplyTo = Read-Host "Alias of the user to direct emails to"
+                    If (-not $(Get-EXOMailbox -Identity $ReplyTo)) {
+                        Do {
+                            $ReplyTo = Read-Host "That alias didn't work. Enter another one or type QUIT to stop:`n"
+                            If ($ReplyTo -match "QUIT") {Break}
+                        } While (-not $(Get-EXOMailbox -Identity $ReplyTo))
+                    }
+                    $ReplyTo = Get-EXOMailbox -Identity $ReplyTo
+                    $ReplyToName = $ReplyTo.DisplayName
+                    $ReplyToEmail = $ReplyTo.PrimarySmtpAddress
+                    $NewSharedMailbox | Set-MailboxAutoReplyConfiguration –InternalMessage "$Name is no longer with the organization. Please direct communications to $ReplyToName at $ReplyToEmail" –ExternalMessage "$Name is no longer with the organization. Please direct communications to $ReplyToName at $ReplyToEmail" -Verbose
+                    $NewSharedMailbox | Set-MailboxAutoReplyConfiguration -AutoReplyState enabled
+                    $NewSharedMailbox | Get-MailboxAutoReplyConfiguration | Select Identity, AutoReplyState, ExternalMessage | FL
+                    Clear-Variable -Name ReplyTo -Force -ErrorAction SilentlyContinue
+                    Clear-Variable -Name ReplyToName -Force -ErrorAction SilentlyContinue
+                    Clear-Variable -Name ReplyToEmail -Force -ErrorAction SilentlyContinue
+                }
+            }
+        }
 
-		# Forward Email
-		If(-not $NoForward) {
-			If ($DirectEmailTo) {
-				$ForwardTo = $DirectEmailTo
-			} Else {
-				$Response = Read-Host -Prompt "Do you want to forward emails? (Y/n)"
-				If (-not $Response) {$Response = "y"}
-				If ($Response -like "y*") {
-					$ForwardTo = Read-Host "Alias of the user to forward emails to"
-					If (-not $(Get-EXOMailbox -Identity $ForwardTo)) {
-						Do {
-							$ForwardTo = Read-Host "That alias didn't work. Enter another one or type QUIT to stop:`n"
-							If ($ForwardTo -match "QUIT") {Break}
-						} While (-not $(Get-EXOMailbox -Identity $ForwardTo))
-					}
-					$ForwardTo = Get-EXOMailbox -Identity $ForwardTo
-					$ForwardToName = $ForwardTo.DisplayName
-					$ForwardToEmail = $ForwardTo.PrimarySmtpAddress
-					$NewSharedMailbox | Set-Mailbox -DeliverToMailboxAndForward $true -ForwardingSMTPAddress $ForwardToEmail
-					$NewSharedMailbox | Format-List ForwardingSMTPAddress,DeliverToMailboxandForward
-					Clear-Variable -Name ForwardTo -Force -ErrorAction SilentlyContinue
-					Clear-Variable -Name ForwardToName -Force -ErrorAction SilentlyContinue
-					Clear-Variable -Name ForwardToEmail -Force -ErrorAction SilentlyContinue
-				}
-			}
-		}
-	}
-	Clear-Variable -Name NewSharedMailbox -Force -ErrorAction SilentlyContinue
-	$(
-	Write-Host -NoNewLine "Obtaining progress, which can be repeated with the "
-	Write-Host -ForegroundColor Yellow -NoNewLine "Get-SharedMailboxRestoreRequest"
-	Write-Host " command."
-	)
-	Get-SharedMailboxRestoreRequest
+        # Forward Email
+        If(-not $NoForward) {
+            If ($DirectEmailTo) {
+                $ForwardTo = $DirectEmailTo
+            } Else {
+                $Response = Read-Host -Prompt "Do you want to forward emails? (Y/n)"
+                If (-not $Response) {$Response = "y"}
+                If ($Response -like "y*") {
+                    $ForwardTo = Read-Host "Alias of the user to forward emails to"
+                    If (-not $(Get-EXOMailbox -Identity $ForwardTo)) {
+                        Do {
+                            $ForwardTo = Read-Host "That alias didn't work. Enter another one or type QUIT to stop:`n"
+                            If ($ForwardTo -match "QUIT") {Break}
+                        } While (-not $(Get-EXOMailbox -Identity $ForwardTo))
+                    }
+                    $ForwardTo = Get-EXOMailbox -Identity $ForwardTo
+                    $ForwardToName = $ForwardTo.DisplayName
+                    $ForwardToEmail = $ForwardTo.PrimarySmtpAddress
+                    $NewSharedMailbox | Set-Mailbox -DeliverToMailboxAndForward $true -ForwardingSMTPAddress $ForwardToEmail
+                    $NewSharedMailbox | Format-List ForwardingSMTPAddress,DeliverToMailboxandForward
+                    Clear-Variable -Name ForwardTo -Force -ErrorAction SilentlyContinue
+                    Clear-Variable -Name ForwardToName -Force -ErrorAction SilentlyContinue
+                    Clear-Variable -Name ForwardToEmail -Force -ErrorAction SilentlyContinue
+                }
+            }
+        }
+    }
+    Clear-Variable -Name NewSharedMailbox -Force -ErrorAction SilentlyContinue
+    $(
+    Write-Host -NoNewLine "Obtaining progress, which can be repeated with the "
+    Write-Host -ForegroundColor Yellow -NoNewLine "Get-SharedMailboxRestoreRequest"
+    Write-Host " command."
+    )
+    Get-SharedMailboxRestoreRequest
 
 <#
-	.SYNOPSIS
-		Takes a deleted user, and converts their email to a shared mailbox. Can add permissions and an autoreply.
-	.PARAMETER Alias
-		Please enter the persons alias, the part of their email before the @ sign.
-	.PARAMETER DateLeft
-		Please enter the date this person left in DDMMMYYY format, i.e. 01JAN2001
-	.PARAMETER GiveAccessTo
-		Please enter the alias of the person who needs access to the shared mailbox. Leave blank to be prompted for multiple names.
-	.PARAMETER GiveAccessPermission
-		Please enter the permission level to give. Acceptible values are 'FullAccess' and 'ReadPermission'.
-	.PARAMETER DirectEmailTo
-		Please enter the alias of the person who people should be directed to in the auto reply.
-	.PARAMETER NoAccess
-		Add this switch if you do not want to be prompted for giving access.
-	.PARAMETER NoReply
-		Add this switch if you do not want to be prompted for setting up an autoreply.
-	.EXAMPLE
-		Convert-ToSharedMailbox -DateLeft "30SEP2021" -Alias cscippio
-	.EXAMPLE
-		Convert-ToSharedMailbox -DateLeft DEC2021 -Alias kelli -GiveAccessTo javila -GiveAccessPermission ReadPermission -DirectEmailTo javila
-	.EXAMPLE
-		Convert-ToSharedMailbox -DateLeft DEC2021 -Alias rich -NoAccess -NoReply
-	#>
+    .SYNOPSIS
+        Takes a deleted user, and converts their email to a shared mailbox. Can add permissions and an autoreply.
+    .PARAMETER Alias
+        Please enter the persons alias, the part of their email before the @ sign.
+    .PARAMETER DateLeft
+        Please enter the date this person left in DDMMMYYY format, i.e. 01JAN2001
+    .PARAMETER GiveAccessTo
+        Please enter the alias of the person who needs access to the shared mailbox. Leave blank to be prompted for multiple names.
+    .PARAMETER GiveAccessPermission
+        Please enter the permission level to give. Acceptible values are 'FullAccess' and 'ReadPermission'.
+    .PARAMETER DirectEmailTo
+        Please enter the alias of the person who people should be directed to in the auto reply.
+    .PARAMETER NoAccess
+        Add this switch if you do not want to be prompted for giving access.
+    .PARAMETER NoReply
+        Add this switch if you do not want to be prompted for setting up an autoreply.
+    .EXAMPLE
+        Convert-ToSharedMailbox -DateLeft "30SEP2021" -Alias cscippio
+    .EXAMPLE
+        Convert-ToSharedMailbox -DateLeft DEC2021 -Alias kelli -GiveAccessTo javila -GiveAccessPermission ReadPermission -DirectEmailTo javila
+    .EXAMPLE
+        Convert-ToSharedMailbox -DateLeft DEC2021 -Alias rich -NoAccess -NoReply
+    #>
 }

@@ -1,32 +1,32 @@
 Function Disconnect-AllUsers {
 <#
-	.SYNOPSIS
-		Logs off all users from a machine.
+    .SYNOPSIS
+        Logs off all users from a machine.
 #>
-	(quser) -replace ">"," " -replace "\s+","," -replace "IDLE,TIME","IDLE TIME" -replace "LOGON,TIME","LOGON TIME" | ConvertFrom-Csv -Delimiter "," | foreach {
-		logoff ($_.ID)
-	}
+    (quser) -replace ">"," " -replace "\s+","," -replace "IDLE,TIME","IDLE TIME" -replace "LOGON,TIME","LOGON TIME" | ConvertFrom-Csv -Delimiter "," | foreach {
+        logoff ($_.ID)
+    }
 }
 
 Function Disconnect-NetExtender {
 
-	If (([string]::IsNullOrWhiteSpace($DC)) -or (-not (Test-Connection -comp $DC -quiet))) {
-		If (!(Test-Path -LiteralPath 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe')) {
-			Write-Host "This command only works if you have Sonicwall NetExtender installed."
-		}
-		Write-host "Initiating VPN disconnection"
-		& 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe' disconnect
-		& 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe' disconnect
-	}
+    If (([string]::IsNullOrWhiteSpace($DC)) -or (-not (Test-Connection -comp $DC -quiet))) {
+        If (!(Test-Path -LiteralPath 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe')) {
+            Write-Host "This command only works if you have Sonicwall NetExtender installed."
+        }
+        Write-host "Initiating VPN disconnection"
+        & 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe' disconnect
+        & 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe' disconnect
+    }
 <#
-	.SYNOPSIS
-		Disconnects an existing SSLVPN connection to a site using Sonicwall NetExtender
-	.EXAMPLE
-		Disconnect-NetExtender
-		This example disconnects from the VPN session.
+    .SYNOPSIS
+        Disconnects an existing SSLVPN connection to a site using Sonicwall NetExtender
+    .EXAMPLE
+        Disconnect-NetExtender
+        This example disconnects from the VPN session.
 #>
 }
 
 Function Disconnect-O365Exchange {
-	Disconnect-ExchangeOnline -Confirm:$false
+    Disconnect-ExchangeOnline -Confirm:$false
 }

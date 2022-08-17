@@ -1,11 +1,11 @@
 Function Rename-ClientComputer {
-	Write-Host "Rename Computer"
-		$title = 'Rename Computer'
-		$msg = 'Enter the client shortcode (e.g. AAIHB) or Dept code'
-		$SerialNumber = (Get-WmiObject win32_bios).SerialNumber
-		#Message box prompts onscreen for input
-		[void][Reflection.Assembly]::LoadWithPartialName('Microsoft.VisualBasic')
-		$ClientCode = [Microsoft.VisualBasic.Interaction]::InputBox($msg, $title)
-		Rename-Computer ($ClientCode + "-" + $SerialNumber) -Force
-	Write-Host "End of Rename Computer"
+    Write-Host "Rename Computer"
+        $title = 'Rename Computer'
+        $msg = 'Enter the client shortcode (e.g. AAIHB) or Dept code'
+        $SerialNumber = (Get-WmiObject win32_bios).SerialNumber
+        #Message box prompts onscreen for input
+        [void][Reflection.Assembly]::LoadWithPartialName('Microsoft.VisualBasic')
+        $ClientCode = [Microsoft.VisualBasic.Interaction]::InputBox($msg, $title)
+        Rename-Computer ($ClientCode + "-" + $SerialNumber) -Force
+    Write-Host "End of Rename Computer"
 }

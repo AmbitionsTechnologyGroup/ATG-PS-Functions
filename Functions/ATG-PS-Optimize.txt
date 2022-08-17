@@ -1,146 +1,146 @@
 Function Optimize-Powershell {
-	$Commands = @()
-		$Commands = @'
+    $Commands = @()
+        $Commands = @'
 
-		Function prompt {
-				$date = Get-Date
-				$time = $date.GetDateTimeFormats()[10]
-				$curdir = $ExecutionContext.SessionState.Path.CurrentLocation #.Path.Split('\')[-1]
-				If ($curdir.Length -eq 0) {$curdir = $ExecutionContext.SessionState.Drive.Current.Name+':\'}
-				Write-Host
-				Write-Host ''$env:USERNAME'@'$env:COMPUTERNAME' |' -NoNewLine -BackgroundColor Black -ForegroundColor Yellow
-				Write-Host ' DIR:'$curdir' |' -NoNewLine -BackgroundColor Black -ForegroundColor Yellow
-				Write-Host ''$time' ' -BackgroundColor Black -ForegroundColor Yellow
-				'[Command]: '
-			}
-			If ((Get-PSRepository -Name "PSGallery").InstallationPolicy -eq "Untrusted") {
-				Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted -ErrorAction SilentlyContinue
-			}
-			If (!(Get-Module -Name AdvancedHistory -ListAvailable)) {
-				Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue
-				Install-Module AdvancedHistory -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-			}
-				Import-Module AdvancedHistory -Force
-				Try {
-					Enable-AdvancedHistory -Unique
-				} Catch {
-					#Oh well
-				}
+        Function prompt {
+                $date = Get-Date
+                $time = $date.GetDateTimeFormats()[10]
+                $curdir = $ExecutionContext.SessionState.Path.CurrentLocation #.Path.Split('\')[-1]
+                If ($curdir.Length -eq 0) {$curdir = $ExecutionContext.SessionState.Drive.Current.Name+':\'}
+                Write-Host
+                Write-Host ''$env:USERNAME'@'$env:COMPUTERNAME' |' -NoNewLine -BackgroundColor Black -ForegroundColor Yellow
+                Write-Host ' DIR:'$curdir' |' -NoNewLine -BackgroundColor Black -ForegroundColor Yellow
+                Write-Host ''$time' ' -BackgroundColor Black -ForegroundColor Yellow
+                '[Command]: '
+            }
+            If ((Get-PSRepository -Name "PSGallery").InstallationPolicy -eq "Untrusted") {
+                Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted -ErrorAction SilentlyContinue
+            }
+            If (!(Get-Module -Name AdvancedHistory -ListAvailable)) {
+                Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue
+                Install-Module AdvancedHistory -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+            }
+                Import-Module AdvancedHistory -Force
+                Try {
+                    Enable-AdvancedHistory -Unique
+                } Catch {
+                    #Oh well
+                }
 
-			If (!(Get-Module -Name PSReadline -ListAvailable)) {
-				If ($Providers -NotContains "Nuget") {
-					Install-PackageProvider -Name NuGet -Force -ErrorAction SilentlyContinue
-				}
-				Install-Module PSReadline -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-			}
-				Import-Module PSReadline -Force
-				Try {
-					Set-PSReadLineOption -PredictionSource HistoryAndPlugin -ErrorAction Stop
-				} Catch {
-					Try {
-						Set-PSReadLineOption -PredictionSource History
-					} Catch {
-						Set-PSReadLineOption -PredictionSource None
-					}
-				}
+            If (!(Get-Module -Name PSReadline -ListAvailable)) {
+                If ($Providers -NotContains "Nuget") {
+                    Install-PackageProvider -Name NuGet -Force -ErrorAction SilentlyContinue
+                }
+                Install-Module PSReadline -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+            }
+                Import-Module PSReadline -Force
+                Try {
+                    Set-PSReadLineOption -PredictionSource HistoryAndPlugin -ErrorAction Stop
+                } Catch {
+                    Try {
+                        Set-PSReadLineOption -PredictionSource History
+                    } Catch {
+                        Set-PSReadLineOption -PredictionSource None
+                    }
+                }
 
 
-			If ($PSScriptRoot -notlike "C:\Program Files (x86)\ITSPlatform\tmp\scripting\*") {
-				iwr tinyurl.com/get-atgps -useb | iex
-				Expand-Terminal
-				cls
-				Write-Host "`n`nWelcome, I await your command...`n`n"
-			} Else {
-				#This is running from Continuum!
-			}
+            If ($PSScriptRoot -notlike "C:\Program Files (x86)\ITSPlatform\tmp\scripting\*") {
+                iwr tinyurl.com/get-atgps -useb | iex
+                Expand-Terminal
+                cls
+                Write-Host "`n`nWelcome, I await your command...`n`n"
+            } Else {
+                #This is running from Continuum!
+            }
 '@
 
-	$WinVer = [System.Environment]::OSVersion.Version.Major
+    $WinVer = [System.Environment]::OSVersion.Version.Major
 
-	If ($WinVer -ge 10) {
+    If ($WinVer -ge 10) {
 
-		If((Test-Path -LiteralPath "HKCU:\Console") -ne $true) {  New-Item "HKCU:\Console" -force -ea SilentlyContinue }
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CurrentPage' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'PopupColors' -Value 245 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'InsertMode' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'QuickEdit' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ScreenBufferSize' -Value 7864440 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'WindowSize' -Value 3932280 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FontSize' -Value 917504 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FontFamily' -Value 54 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FontWeight' -Value 400 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FaceName' -Value 'Lucida Console' -PropertyType String -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CursorSize' -Value 25 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'HistoryBufferSize' -Value 25 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'NumberOfHistoryBuffers' -Value 4 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'HistoryNoDup' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'LineWrap' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FilterOnPaste' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CtrlKeyShortcutsDisabled' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'LineSelection' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'WindowAlpha' -Value 255 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ForceV2' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ExtendedEditKey' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CursorType' -Value 3 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CursorColor' -Value -1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'InterceptCopyPaste' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'TerminalScrolling' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'DefaultForeground' -Value -1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'DefaultBackground' -Value -1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'WindowPosition' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-		#Write-Output "Windows 10"
-	} Else {
+        If((Test-Path -LiteralPath "HKCU:\Console") -ne $true) {  New-Item "HKCU:\Console" -force -ea SilentlyContinue }
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CurrentPage' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'PopupColors' -Value 245 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'InsertMode' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'QuickEdit' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ScreenBufferSize' -Value 7864440 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'WindowSize' -Value 3932280 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FontSize' -Value 917504 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FontFamily' -Value 54 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FontWeight' -Value 400 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FaceName' -Value 'Lucida Console' -PropertyType String -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CursorSize' -Value 25 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'HistoryBufferSize' -Value 25 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'NumberOfHistoryBuffers' -Value 4 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'HistoryNoDup' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'LineWrap' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FilterOnPaste' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CtrlKeyShortcutsDisabled' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'LineSelection' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'WindowAlpha' -Value 255 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ForceV2' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ExtendedEditKey' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CursorType' -Value 3 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CursorColor' -Value -1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'InterceptCopyPaste' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'TerminalScrolling' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'DefaultForeground' -Value -1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'DefaultBackground' -Value -1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'WindowPosition' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+        #Write-Output "Windows 10"
+    } Else {
 
-		if((Test-Path -LiteralPath "HKCU:\Console") -ne $true) {  New-Item "HKCU:\Console" -force -ea SilentlyContinue }
-	if((Test-Path -LiteralPath "HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe") -ne $true) {  New-Item "HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe" -force -ea SilentlyContinue };
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CurrentPage' -Value 2 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ForceV2' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ExtendedEditKey' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'PopupColors' -Value 245 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'InsertMode' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'QuickEdit' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ScreenBufferSize' -Value 327680120 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'WindowSize' -Value 3932280 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FontSize' -Value 786432 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FontFamily' -Value 54 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FontWeight' -Value 400 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FaceName' -Value 'Lucida Console' -PropertyType String -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CursorSize' -Value 25 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'HistoryBufferSize' -Value 25 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'NumberOfHistoryBuffers' -Value 4 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'HistoryNoDup' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'LineWrap' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FilterOnPaste' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CtrlKeyShortcutsDisabled' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'LineSelection' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'WindowAlpha' -Value 255 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CursorType' -Value 3 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CursorColor' -Value -1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'InterceptCopyPaste' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'TerminalScrolling' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'DefaultForeground' -Value -1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'DefaultBackground' -Value -1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'WindowPosition' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'ScreenBufferSize' -Value 671088790 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'FaceName' -Value 'Lucida Console' -PropertyType String -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'HistoryNoDup' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'WindowSize' -Value 3932310 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'FontSize' -Value 786439 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
-	Write-Output "Not Windows 10"
-	}
+        if((Test-Path -LiteralPath "HKCU:\Console") -ne $true) {  New-Item "HKCU:\Console" -force -ea SilentlyContinue }
+    if((Test-Path -LiteralPath "HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe") -ne $true) {  New-Item "HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe" -force -ea SilentlyContinue };
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CurrentPage' -Value 2 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ForceV2' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ExtendedEditKey' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'PopupColors' -Value 245 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'InsertMode' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'QuickEdit' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'ScreenBufferSize' -Value 327680120 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'WindowSize' -Value 3932280 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FontSize' -Value 786432 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FontFamily' -Value 54 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FontWeight' -Value 400 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FaceName' -Value 'Lucida Console' -PropertyType String -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CursorSize' -Value 25 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'HistoryBufferSize' -Value 25 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'NumberOfHistoryBuffers' -Value 4 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'HistoryNoDup' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'LineWrap' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'FilterOnPaste' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CtrlKeyShortcutsDisabled' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'LineSelection' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'WindowAlpha' -Value 255 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CursorType' -Value 3 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'CursorColor' -Value -1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'InterceptCopyPaste' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'TerminalScrolling' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'DefaultForeground' -Value -1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'DefaultBackground' -Value -1 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console' -Name 'WindowPosition' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'ScreenBufferSize' -Value 671088790 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'FaceName' -Value 'Lucida Console' -PropertyType String -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'HistoryNoDup' -Value 0 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'WindowSize' -Value 3932310 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    New-ItemProperty -LiteralPath 'HKCU:\Console\%SystemRoot%_System32_WindowsPowerShell_v1.0_powershell.exe' -Name 'FontSize' -Value 786439 -PropertyType DWord -Force -ea SilentlyContinue | Out-Null
+    Write-Output "Not Windows 10"
+    }
 
-	If (-not (Test-Path $PROFILE -EA SilentlyContinue)) {
-		New-Item -Type File -Force $PROFILE
-	} Else {
-		Remove-Item -Path $PROFILE -Force -EA SilentlyContinue
-		New-Item -Type File -Force $PROFILE
-	}
+    If (-not (Test-Path $PROFILE -EA SilentlyContinue)) {
+        New-Item -Type File -Force $PROFILE
+    } Else {
+        Remove-Item -Path $PROFILE -Force -EA SilentlyContinue
+        New-Item -Type File -Force $PROFILE
+    }
 
-	$Commands | Out-File -FilePath $Profile -Force
+    $Commands | Out-File -FilePath $Profile -Force
 
-	If ($PSVersionTable.PSEdition -like "Desktop") {
-		Start-Process C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -ArgumentList "-NoExit -Mta"
-	} Else {
-		Start-Process 'C:\Program Files\PowerShell\pwsh.exe' -ArgumentList "-NoExit -Mta"
-	}
+    If ($PSVersionTable.PSEdition -like "Desktop") {
+        Start-Process C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -ArgumentList "-NoExit -Mta"
+    } Else {
+        Start-Process 'C:\Program Files\PowerShell\pwsh.exe' -ArgumentList "-NoExit -Mta"
+    }
 }
