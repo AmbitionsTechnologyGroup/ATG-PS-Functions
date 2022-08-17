@@ -1,240 +1,240 @@
 Function Connect-O365AzureAD {
-	If (-not (Get-Command Connect-AzureAD -ErrorAction SilentlyContinue)) {
-			Write-Host "Installing the Azure AD module"
-			Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-			Install-Module -Name AzureAD -AllowClobber -Force
-			$ModVer = (Get-Command Connect-AzureAD).Version
-			If ($ModVer) {
-				Write-Host "Azure AD module version $ModVer has been installed."
-			} Else {
-				Write-Host "Azure AD module failed to install."
-				Break
-			}
-		} Else {
-			$Readhost = 'N'
-			$Readhost = Read-Host "Do you want to check for module updates? This should be done periodically. `n(y/N)"
-			Switch ($ReadHost)
-			{
-				Y {
-					$ModVer = (Get-Command Connect-AzureAD).Version
-					$AvailableModVer = (Find-Module AzureAD -Repository PSGallery).Version
-					If ($ModVer -ne $AvailableModVer) {
-						Write-host "AzureAD has an update from $ModVer to $AvailableModVer.`nInstalling the update."
-						Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-						Install-Module -Name AzureAD -AllowClobber -Force
-					} Else {
-						Write-host "AzureAD is already up to date at version $AvailableModVer."
-					}
-				}
-				N { Write-Host "Skipping update check." }
-				Default { Write-Host "Skipping update check." }
-			}
-		}
+    If (-not (Get-Command Connect-AzureAD -ErrorAction SilentlyContinue)) {
+            Write-Host "Installing the Azure AD module"
+            Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+            Install-Module -Name AzureAD -AllowClobber -Force
+            $ModVer = (Get-Command Connect-AzureAD).Version
+            If ($ModVer) {
+                Write-Host "Azure AD module version $ModVer has been installed."
+            } Else {
+                Write-Host "Azure AD module failed to install."
+                Break
+            }
+        } Else {
+            $Readhost = 'N'
+            $Readhost = Read-Host "Do you want to check for module updates? This should be done periodically. `n(y/N)"
+            Switch ($ReadHost)
+            {
+                Y {
+                    $ModVer = (Get-Command Connect-AzureAD).Version
+                    $AvailableModVer = (Find-Module AzureAD -Repository PSGallery).Version
+                    If ($ModVer -ne $AvailableModVer) {
+                        Write-host "AzureAD has an update from $ModVer to $AvailableModVer.`nInstalling the update."
+                        Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+                        Install-Module -Name AzureAD -AllowClobber -Force
+                    } Else {
+                        Write-host "AzureAD is already up to date at version $AvailableModVer."
+                    }
+                }
+                N { Write-Host "Skipping update check." }
+                Default { Write-Host "Skipping update check." }
+            }
+        }
 
-			Connect-AzureAD
+            Connect-AzureAD
 
 
-	Write-Host -ForegroundColor White -BackgroundColor DarkRed @"
-		Be sure to disconnect the remote PowerShell session when you're finished.
-		If you close the Windows PowerShell window without disconnecting the session,
-		you could use up all the remote PowerShell sessions available to you,
-		and you'll need to wait for the sessions to expire.
-		To disconnect the remote PowerShell session, run the following command.
+    Write-Host -ForegroundColor White -BackgroundColor DarkRed @"
+        Be sure to disconnect the remote PowerShell session when you're finished.
+        If you close the Windows PowerShell window without disconnecting the session,
+        you could use up all the remote PowerShell sessions available to you,
+        and you'll need to wait for the sessions to expire.
+        To disconnect the remote PowerShell session, run the following command.
 
-		Disconnect-AzureAD
+        Disconnect-AzureAD
 "@
 
 <#
-	.SYNOPSIS
-		Initiates an Office 365 Azure AD connection.
+    .SYNOPSIS
+        Initiates an Office 365 Azure AD connection.
 
-	.LINK
-		https://docs.microsoft.com/en-us/microsoft-365/enterprise/connect-to-microsoft-365-powershell?view=o365-worldwide
+    .LINK
+        https://docs.microsoft.com/en-us/microsoft-365/enterprise/connect-to-microsoft-365-powershell?view=o365-worldwide
 
-	.EXAMPLE
-		Connect-O365AzureAD
-		Yup, that's it!
+    .EXAMPLE
+        Connect-O365AzureAD
+        Yup, that's it!
 #>
 }
 
 Function Connect-NetExtender {
-	param
-	(
-		[Parameter(Mandatory=$False)]
-		[string]$DC,
+    param
+    (
+        [Parameter(Mandatory=$False)]
+        [string]$DC,
 
-		[Parameter(Mandatory=$true)]
-		[string]$VPNuri,
+        [Parameter(Mandatory=$true)]
+        [string]$VPNuri,
 
-		[Parameter(Mandatory=$true)]
-		[string]$VPNuser,
+        [Parameter(Mandatory=$true)]
+        [string]$VPNuser,
 
-		[Parameter(Mandatory=$true)]
-		[string]$VPNpassword,
+        [Parameter(Mandatory=$true)]
+        [string]$VPNpassword,
 
-		[Parameter(Mandatory=$true)]
-		[string]$VPNdomain
-	)
+        [Parameter(Mandatory=$true)]
+        [string]$VPNdomain
+    )
 
-	If (([string]::IsNullOrWhiteSpace($DC)) -or (-not (Test-Connection -comp $DC -quiet))) {
-		If (!(Test-Path -LiteralPath 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe')) {
-			Install-NetExtender
-		}
-		Write-host "Initiating VPN connection"
-		echo y | & 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe' connect -s $VPNuri -u $VPNuser -p $VPNpassword -d $VPNdomain
-	}
+    If (([string]::IsNullOrWhiteSpace($DC)) -or (-not (Test-Connection -comp $DC -quiet))) {
+        If (!(Test-Path -LiteralPath 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe')) {
+            Install-NetExtender
+        }
+        Write-host "Initiating VPN connection"
+        echo y | & 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe' connect -s $VPNuri -u $VPNuser -p $VPNpassword -d $VPNdomain
+    }
 <#
-	.SYNOPSIS
-		Initiates an SSLVPN connection to a site using Sonicwall NetExtender
-	.PARAMETER DC
-		(Optional) A domain controller whose connection to can be tested to see if the vpn connection is needed. Example -DC "tsdc"
-	.PARAMETER VPNuri
-		The connection URL and port. Example -VPNuri "vpn.ambitinsgroup.com:4433"
-	.PARAMETER VPNuser
-		The vpn enable user to be used. Example -VPNuser "vpnuser"
-	.PARAMETER VPNpassword
-		The vpn user's password to be used. Example -VPNpassword "s0m3Gr3@tPw"
-	.PARAMETER VPNdomain
-		The SSLVPN domain to be used, found in the sonicwall settings. Example -VPNdomain "LocalDomain"
-	.EXAMPLE
-		Connect-NetExtender -DC "TSDC" -VPNuri "vpn.ts.com:4433" -VPNuser "tsadmin" -VPNpassword "R@nD0m!" -VPNdomain "LocalDomain"
-		This example connects to the client Test Site, if such a client were to exist.
+    .SYNOPSIS
+        Initiates an SSLVPN connection to a site using Sonicwall NetExtender
+    .PARAMETER DC
+        (Optional) A domain controller whose connection to can be tested to see if the vpn connection is needed. Example -DC "tsdc"
+    .PARAMETER VPNuri
+        The connection URL and port. Example -VPNuri "vpn.ambitinsgroup.com:4433"
+    .PARAMETER VPNuser
+        The vpn enable user to be used. Example -VPNuser "vpnuser"
+    .PARAMETER VPNpassword
+        The vpn user's password to be used. Example -VPNpassword "s0m3Gr3@tPw"
+    .PARAMETER VPNdomain
+        The SSLVPN domain to be used, found in the sonicwall settings. Example -VPNdomain "LocalDomain"
+    .EXAMPLE
+        Connect-NetExtender -DC "TSDC" -VPNuri "vpn.ts.com:4433" -VPNuser "tsadmin" -VPNpassword "R@nD0m!" -VPNdomain "LocalDomain"
+        This example connects to the client Test Site, if such a client were to exist.
 #>
 }
 
 Function Connect-O365Exchange {
-		If (-not (Get-Command Connect-ExchangeOnline -ErrorAction SilentlyContinue)) {
-			Write-Host "Installing the Exchange Online Management module"
-			Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-			Install-Module -Name ExchangeOnlineManagement -AllowClobber -Force
-			$ModVer = (Get-Command Connect-ExchangeOnline).Version
-			If ($ModVer) {
-				Write-Host "Exchange Online Management module version $ModVer has been installed."
-			} Else {
-				Write-Host "Exchange Online Management module failed to install."
-				Break
-			}
-		} Else {
-			$Readhost = 'N'
-			$Readhost = Read-Host "Do you want to check for module updates? This should be done periodically. `n(y/N)"
-			Switch ($ReadHost)
-			{
-				Y {
-					$ModVer = (Get-Command Connect-ExchangeOnline).Version
-					$AvailableModVer = (Find-Module ExchangeOnlineManagement -Repository PSGallery).Version
-					If ($ModVer -ne $AvailableModVer) {
-						Write-host "ExchangeOnlineManagement has an update from $ModVer to $AvailableModVer.`nInstalling the update."
-						Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-						Install-Module -Name ExchangeOnlineManagement -AllowClobber -Force
-					} Else {
-						Write-host "ExchangeOnlineManagement is already up to date at version $AvailableModVer."
-					}
-				}
-				N { Write-Host "Skipping update check." }
-				Default { Write-Host "Skipping update check." }
-			}
-		}
+        If (-not (Get-Command Connect-ExchangeOnline -ErrorAction SilentlyContinue)) {
+            Write-Host "Installing the Exchange Online Management module"
+            Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+            Install-Module -Name ExchangeOnlineManagement -AllowClobber -Force
+            $ModVer = (Get-Command Connect-ExchangeOnline).Version
+            If ($ModVer) {
+                Write-Host "Exchange Online Management module version $ModVer has been installed."
+            } Else {
+                Write-Host "Exchange Online Management module failed to install."
+                Break
+            }
+        } Else {
+            $Readhost = 'N'
+            $Readhost = Read-Host "Do you want to check for module updates? This should be done periodically. `n(y/N)"
+            Switch ($ReadHost)
+            {
+                Y {
+                    $ModVer = (Get-Command Connect-ExchangeOnline).Version
+                    $AvailableModVer = (Find-Module ExchangeOnlineManagement -Repository PSGallery).Version
+                    If ($ModVer -ne $AvailableModVer) {
+                        Write-host "ExchangeOnlineManagement has an update from $ModVer to $AvailableModVer.`nInstalling the update."
+                        Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+                        Install-Module -Name ExchangeOnlineManagement -AllowClobber -Force
+                    } Else {
+                        Write-host "ExchangeOnlineManagement is already up to date at version $AvailableModVer."
+                    }
+                }
+                N { Write-Host "Skipping update check." }
+                Default { Write-Host "Skipping update check." }
+            }
+        }
 
-	If ($PSVersionTable.PSEdition -like "Desktop") {
-		Connect-ExchangeOnline -ShowBanner:$false
+    If ($PSVersionTable.PSEdition -like "Desktop") {
+        Connect-ExchangeOnline -ShowBanner:$false
 
-	} Else {
-		Write-Host -ForegroundColor Green -BackgroundColor DarkRed "Warning! You are using a CORE edition of Powershell. You will need to authenticate via a browser window."
-		Connect-ExchangeOnline -ShowBanner:$false -Device
-	}
+    } Else {
+        Write-Host -ForegroundColor Green -BackgroundColor DarkRed "Warning! You are using a CORE edition of Powershell. You will need to authenticate via a browser window."
+        Connect-ExchangeOnline -ShowBanner:$false -Device
+    }
 
-	Write-Host -ForegroundColor White -BackgroundColor DarkRed @"
-		Be sure to disconnect the remote PowerShell session when you're finished.
-		If you close the Windows PowerShell window without disconnecting the session,
-		you could use up all the remote PowerShell sessions available to you,
-		and you'll need to wait for the sessions to expire.
-		To disconnect the remote PowerShell session, run the following command.
+    Write-Host -ForegroundColor White -BackgroundColor DarkRed @"
+        Be sure to disconnect the remote PowerShell session when you're finished.
+        If you close the Windows PowerShell window without disconnecting the session,
+        you could use up all the remote PowerShell sessions available to you,
+        and you'll need to wait for the sessions to expire.
+        To disconnect the remote PowerShell session, run the following command.
 
-		Disconnect-O365Exchange
+        Disconnect-O365Exchange
 "@
 
 <#
-	.SYNOPSIS
-		Initiates an Office 365 Exchange connection that is compatible with MFA.
+    .SYNOPSIS
+        Initiates an Office 365 Exchange connection that is compatible with MFA.
 
-	.LINK
-		https://docs.microsoft.com/en-us/powershell/exchange/connect-to-exchange-online-powershell?view=exchange-ps
+    .LINK
+        https://docs.microsoft.com/en-us/powershell/exchange/connect-to-exchange-online-powershell?view=exchange-ps
 
-	.EXAMPLE
-		Connect-O365Exchange
-		Yup, that's it!
+    .EXAMPLE
+        Connect-O365Exchange
+        Yup, that's it!
 #>
 }
 
 Function Connect-Wifi {
-	param
-		(
-			[Parameter(Mandatory=$False)]
-			[string]$NetworkSSID,
+    param
+        (
+            [Parameter(Mandatory=$False)]
+            [string]$NetworkSSID,
 
-			[Parameter(Mandatory=$true)]
-			[string]$NetworkPassword,
+            [Parameter(Mandatory=$true)]
+            [string]$NetworkPassword,
 
-			[ValidateSet('WEP','WPA','WPA2','WPA2PSK')]
-			[Parameter(Mandatory=$False)]
-			[string]$Authentication = 'WPA2PSK',
+            [ValidateSet('WEP','WPA','WPA2','WPA2PSK')]
+            [Parameter(Mandatory=$False)]
+            [string]$Authentication = 'WPA2PSK',
 
-			[ValidateSet('AES','TKIP')]
-			[Parameter(Mandatory=$False)]
-			[string]$Encryption = 'AES'
-		)
+            [ValidateSet('AES','TKIP')]
+            [Parameter(Mandatory=$False)]
+            [string]$Encryption = 'AES'
+        )
 
-	# Create the WiFi profile, set the profile to auto connect
-	$WirelessProfile = @'
+    # Create the WiFi profile, set the profile to auto connect
+    $WirelessProfile = @'
 <WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
-	<name>{0}</name>
-	<SSIDConfig>
-		<SSID>
-			<name>{0}</name>
-		</SSID>
-	</SSIDConfig>
-	<connectionType>ESS</connectionType>
-	<connectionMode>auto</connectionMode>
-	<MSM>
-		<security>
-			<authEncryption>
-				<authentication>{2}</authentication>
-				<encryption>{3}</encryption>
-				<useOneX>false</useOneX>
-			</authEncryption>
-			<sharedKey>
-				<keyType>passPhrase</keyType>
-				<protected>false</protected>
-				<keyMaterial>{1}</keyMaterial>
-			</sharedKey>
-		</security>
-	</MSM>
+    <name>{0}</name>
+    <SSIDConfig>
+        <SSID>
+            <name>{0}</name>
+        </SSID>
+    </SSIDConfig>
+    <connectionType>ESS</connectionType>
+    <connectionMode>auto</connectionMode>
+    <MSM>
+        <security>
+            <authEncryption>
+                <authentication>{2}</authentication>
+                <encryption>{3}</encryption>
+                <useOneX>false</useOneX>
+            </authEncryption>
+            <sharedKey>
+                <keyType>passPhrase</keyType>
+                <protected>false</protected>
+                <keyMaterial>{1}</keyMaterial>
+            </sharedKey>
+        </security>
+    </MSM>
 </WLANProfile>
 '@ -f $NetworkSSID, $NetworkPassword, $Authentication, $Encryption
 
-	# Create the XML file locally
-	$random = Get-Random -Minimum 1111 -Maximum 99999999
-	$tempProfileXML = "$env:TEMP\tempProfile$random.xml"
-	$WirelessProfile | Out-File $tempProfileXML
+    # Create the XML file locally
+    $random = Get-Random -Minimum 1111 -Maximum 99999999
+    $tempProfileXML = "$env:TEMP\tempProfile$random.xml"
+    $WirelessProfile | Out-File $tempProfileXML
 
-	# Add the WiFi profile and connect
-	Start-Process netsh ('wlan add profile filename={0}' -f $tempProfileXML)
+    # Add the WiFi profile and connect
+    Start-Process netsh ('wlan add profile filename={0}' -f $tempProfileXML)
 
-	# Connect to the WiFi network - only if you need to
-	$WifiNetworks = (netsh wlan show network)
-	$NetworkSSIDSearch = '*' + $NetworkSSID + '*'
-	If ($WifiNetworks -like $NetworkSSIDSearch) {
-		Try {
-			Write-Host "Found SSID: $NetworkSSID `nAttempting to connect"
-			Start-Process netsh ('wlan connect name="{0}"' -f $NetworkSSID)
-			Start-Sleep 5
-			netsh interface show interface
-		}
-		Catch {
-			Remove-Item -Force $tempProfileXML
-		}
-	} Else {
-		Write-Host "Did not find SSID: $NetworkSSID `nConnection profile stored for later use."
-	}
-	Remove-Item -Force $tempProfileXML
+    # Connect to the WiFi network - only if you need to
+    $WifiNetworks = (netsh wlan show network)
+    $NetworkSSIDSearch = '*' + $NetworkSSID + '*'
+    If ($WifiNetworks -like $NetworkSSIDSearch) {
+        Try {
+            Write-Host "Found SSID: $NetworkSSID `nAttempting to connect"
+            Start-Process netsh ('wlan connect name="{0}"' -f $NetworkSSID)
+            Start-Sleep 5
+            netsh interface show interface
+        }
+        Catch {
+            Remove-Item -Force $tempProfileXML
+        }
+    } Else {
+        Write-Host "Did not find SSID: $NetworkSSID `nConnection profile stored for later use."
+    }
+    Remove-Item -Force $tempProfileXML
 }

@@ -1,30 +1,30 @@
 Function Join-Domain {
-		param
-	(
-		[Parameter(Mandatory=$true)]
-		[string]$Domain,
-		[Parameter(Mandatory=$true)]
-		[string]$Username,
-		[Parameter(Mandatory=$true)]
-		$Password
-	)
-	Write-Host "Join Domain"
-	$Password = $Password | ConvertTo-SecureString -asPlainText -Force
-	$Username = $Domain + "\" + $Username
-	$credential = New-Object System.Management.Automation.PSCredential($Username,$Password)
-	If (-not (Test-Connection $Domain -Quiet -Count 1)) {
-		Write-Host "$Domain is not accessible. Waiting up to 30 seconds for it to become available."
-		$Var = 30
-		Do {
-		Write-Host "Trying to reach $Domain for another $var seconds."
-		Start-Sleep -Seconds 1
-		$Var--
-		} until (($Var -eq 0) -or (Test-Connection $Domain -Quiet -Count 1))
-	}
-	If (Test-Connection $Domain -Count 1) {
-		Write-Host "$Domain is accessible."
-	} Else {
-		Write-Host "ERROR: $Domain is NOT accessible."
-	}
-	Add-Computer -DomainName $Domain -Credential $credential
+        param
+    (
+        [Parameter(Mandatory=$true)]
+        [string]$Domain,
+        [Parameter(Mandatory=$true)]
+        [string]$Username,
+        [Parameter(Mandatory=$true)]
+        $Password
+    )
+    Write-Host "Join Domain"
+    $Password = $Password | ConvertTo-SecureString -asPlainText -Force
+    $Username = $Domain + "\" + $Username
+    $credential = New-Object System.Management.Automation.PSCredential($Username,$Password)
+    If (-not (Test-Connection $Domain -Quiet -Count 1)) {
+        Write-Host "$Domain is not accessible. Waiting up to 30 seconds for it to become available."
+        $Var = 30
+        Do {
+        Write-Host "Trying to reach $Domain for another $var seconds."
+        Start-Sleep -Seconds 1
+        $Var--
+        } until (($Var -eq 0) -or (Test-Connection $Domain -Quiet -Count 1))
+    }
+    If (Test-Connection $Domain -Count 1) {
+        Write-Host "$Domain is accessible."
+    } Else {
+        Write-Host "ERROR: $Domain is NOT accessible."
+    }
+    Add-Computer -DomainName $Domain -Credential $credential
 }

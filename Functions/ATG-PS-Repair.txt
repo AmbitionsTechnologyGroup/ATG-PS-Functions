@@ -1,67 +1,67 @@
 Function Repair-O365AppIssues {
-	Write-Host "Please note this is an interactive tools, to be run from a user's session."
-	If (-not (Test-Path 'C:\Ambitions')) {New-Item -ItemType Directory -Force -Path C:\Ambitions\ | Out-Null}
-	(New-Object System.Net.WebClient).DownloadFile('https://aka.ms/SaRASetup', 'C:\Ambitions\SaraSetup.exe')
-	& C:\Ambitions\SaraSetup.exe
-	Write-Host "SaRA should now be installing, please wait a moment as it launces."
+    Write-Host "Please note this is an interactive tools, to be run from a user's session."
+    If (-not (Test-Path 'C:\Ambitions')) {New-Item -ItemType Directory -Force -Path C:\Ambitions\ | Out-Null}
+    (New-Object System.Net.WebClient).DownloadFile('https://aka.ms/SaRASetup', 'C:\Ambitions\SaraSetup.exe')
+    & C:\Ambitions\SaraSetup.exe
+    Write-Host "SaRA should now be installing, please wait a moment as it launces."
 <#
-	.SYNOPSIS
-		Downloads and runs the Microsoft Support and Recovery Assistant (SaRA) tool.
-		Please note this is an interactive tools, to be run from a user's session.
-	.LINK
-		https://www.thewindowsclub.com/microsoft-support-and-recovery-assistant
-	.LINK
-		https://www.microsoft.com/en-us/download/100607
+    .SYNOPSIS
+        Downloads and runs the Microsoft Support and Recovery Assistant (SaRA) tool.
+        Please note this is an interactive tools, to be run from a user's session.
+    .LINK
+        https://www.thewindowsclub.com/microsoft-support-and-recovery-assistant
+    .LINK
+        https://www.microsoft.com/en-us/download/100607
 #>
 }
 
 Function Repair-Windows {
-	$StartTime = (Get-Date)
-	(Get-Date).DateTime | Out-Host
-	Write-Host Repair-Volume -DriveLetter $Env:SystemDrive.SubString(0,1) -Scan
-	$chdksk = Repair-Volume -DriveLetter $Env:SystemDrive.SubString(0,1) -Scan
-	If ($chdksk -ne "NoErrorsFound") {Repair-Volume -DriveLetter $Env:SystemDrive.SubString(0,1) -SpotFix}
-	Write-Host Dism /Online /Cleanup-Image /StartComponentCleanup
-	Dism /Online /Cleanup-Image /StartComponentCleanup
-	Write-Host ...
-	(Get-Date).DateTime | Out-Host
-	Write-Host Dism /Online /Cleanup-Image /RestoreHealth
-	Dism /Online /Cleanup-Image /RestoreHealth
-	Write-Host ...
-	(Get-Date).DateTime | Out-Host
-	Write-Host SFC /scannow
-	SFC /scannow
-	(Get-Date).DateTime | Out-Host
-	$EndTime = (Get-Date) - $StartTime
-	Write-Host "This process took:"
-	$EndTime | FT | Out-Host
-	Write-Host "Run this function repeately until no errors show up. If this fails after 3 tries, upgrade or reinstall windows"
+    $StartTime = (Get-Date)
+    (Get-Date).DateTime | Out-Host
+    Write-Host Repair-Volume -DriveLetter $Env:SystemDrive.SubString(0,1) -Scan
+    $chdksk = Repair-Volume -DriveLetter $Env:SystemDrive.SubString(0,1) -Scan
+    If ($chdksk -ne "NoErrorsFound") {Repair-Volume -DriveLetter $Env:SystemDrive.SubString(0,1) -SpotFix}
+    Write-Host Dism /Online /Cleanup-Image /StartComponentCleanup
+    Dism /Online /Cleanup-Image /StartComponentCleanup
+    Write-Host ...
+    (Get-Date).DateTime | Out-Host
+    Write-Host Dism /Online /Cleanup-Image /RestoreHealth
+    Dism /Online /Cleanup-Image /RestoreHealth
+    Write-Host ...
+    (Get-Date).DateTime | Out-Host
+    Write-Host SFC /scannow
+    SFC /scannow
+    (Get-Date).DateTime | Out-Host
+    $EndTime = (Get-Date) - $StartTime
+    Write-Host "This process took:"
+    $EndTime | FT | Out-Host
+    Write-Host "Run this function repeately until no errors show up. If this fails after 3 tries, upgrade or reinstall windows"
 }
 
 Function Repair-Volumes {
 <#
-	.SYNOPSIS
-		Sequentially checks and repairs each volume.
+    .SYNOPSIS
+        Sequentially checks and repairs each volume.
 #>
-	$Drives = Get-Volume | Where-Object {
-		(($_.DriveType -eq "Fixed") -or ($_.DriveType -eq "3"))`
-		-and $(If ($_.OperationalStatus){$_.OperationalStatus -eq "OK"} Else {Return $True})`
-		-and !($_.FileSystem -Match "FAT")
-	}
-	ForEach ($Drive in $Drives){
-		If ($Drive.DriveLetter) {$Letter = ($Drive.DriveLetter).ToString()}
-		If ($Drive.FriendlyName) {$FN = $Drive.FriendlyName}
-		$ObjectId = $Drive.ObjectId
-		Write-Host -NoNewLine "Scanning Volume:"
-		$Drive | FT
-		$chkdsk = Repair-Volume -ObjectId $ObjectId -Scan
-		Write-Host $chkdsk
-		If ($chkdsk -ne "NoErrorsFound") {
-			Write-Host "Errors found on drive $Letter - $FN. Attempting to repair."
-			$Repair = Repair-Volume -ObjectId $ObjectId -SpotFix
-			Write-Host $Repair
-		}
-		Clear-Variable Letter,ObjectId,FN -ErrorAction SilentlyContinue
-		Write-Host -ForegroundColor Yellow "-_-_-_-_-_-_-_-_-_-_-_-_-"
-	}
+    $Drives = Get-Volume | Where-Object {
+        (($_.DriveType -eq "Fixed") -or ($_.DriveType -eq "3"))`
+        -and $(If ($_.OperationalStatus){$_.OperationalStatus -eq "OK"} Else {Return $True})`
+        -and !($_.FileSystem -Match "FAT")
+    }
+    ForEach ($Drive in $Drives){
+        If ($Drive.DriveLetter) {$Letter = ($Drive.DriveLetter).ToString()}
+        If ($Drive.FriendlyName) {$FN = $Drive.FriendlyName}
+        $ObjectId = $Drive.ObjectId
+        Write-Host -NoNewLine "Scanning Volume:"
+        $Drive | FT
+        $chkdsk = Repair-Volume -ObjectId $ObjectId -Scan
+        Write-Host $chkdsk
+        If ($chkdsk -ne "NoErrorsFound") {
+            Write-Host "Errors found on drive $Letter - $FN. Attempting to repair."
+            $Repair = Repair-Volume -ObjectId $ObjectId -SpotFix
+            Write-Host $Repair
+        }
+        Clear-Variable Letter,ObjectId,FN -ErrorAction SilentlyContinue
+        Write-Host -ForegroundColor Yellow "-_-_-_-_-_-_-_-_-_-_-_-_-"
+    }
 }

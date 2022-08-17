@@ -1,25 +1,25 @@
 Function Backup-LastUser {
-	$RegKey = "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI"
-	$RegFile = "C:\Ambitions\LastLoggedOnUser.reg"
-	Write-Host "Backuping up last logged on user"
-	reg export $RegKey $RegFile /y
-	Write-Host "Trimming export"
-	(Get-Content $RegFile)[0..10] | Out-File -FilePath $RegFile -Force
-	$User = (Select-String -Path $RegFile -Pattern '"LastLoggedOnUser"' -SimpleMatch).Line
-	Write-Host "$User has been backed up to $RegFile"
-	Write-Host "`nTry the command Restore-LastUser"
+    $RegKey = "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Authentication\LogonUI"
+    $RegFile = "C:\Ambitions\LastLoggedOnUser.reg"
+    Write-Host "Backuping up last logged on user"
+    reg export $RegKey $RegFile /y
+    Write-Host "Trimming export"
+    (Get-Content $RegFile)[0..10] | Out-File -FilePath $RegFile -Force
+    $User = (Select-String -Path $RegFile -Pattern '"LastLoggedOnUser"' -SimpleMatch).Line
+    Write-Host "$User has been backed up to $RegFile"
+    Write-Host "`nTry the command Restore-LastUser"
 <#
-	.SYNOPSIS
-		Backup-LastUser affects the user listed on the Windows Logon screen. If Sally is the last one that logged in, and she's use to just turning on her computer and entering her password because she's always the last one that used the computer, it'll really mess her up if you log in to fix something. Then she'll be entering her password on the admin account without ever looking to see that she needs to switch user back to herself.
-		Use the command "Backup-LastUser". This saves Sally as a registry key.
-		You login, do your stuff, then reboot or log out.
-		Use the command "Restore-LastUser". This will change the default user at the login screen from "ATGAdmin" back to "Sally" or whatever user was backed up.
-	.EXAMPLE
-		Backup-LastUser
-			Backuping up last logged on user
-			The operation completed successfully.
-			Trimming export
-			"LastLoggedOnUser"=".\\Sally" has been backed up to C:\Ambitions\LastLoggedOnUser.reg
-			Try the command Restore-LastUser
+    .SYNOPSIS
+        Backup-LastUser affects the user listed on the Windows Logon screen. If Sally is the last one that logged in, and she's use to just turning on her computer and entering her password because she's always the last one that used the computer, it'll really mess her up if you log in to fix something. Then she'll be entering her password on the admin account without ever looking to see that she needs to switch user back to herself.
+        Use the command "Backup-LastUser". This saves Sally as a registry key.
+        You login, do your stuff, then reboot or log out.
+        Use the command "Restore-LastUser". This will change the default user at the login screen from "ATGAdmin" back to "Sally" or whatever user was backed up.
+    .EXAMPLE
+        Backup-LastUser
+            Backuping up last logged on user
+            The operation completed successfully.
+            Trimming export
+            "LastLoggedOnUser"=".\\Sally" has been backed up to C:\Ambitions\LastLoggedOnUser.reg
+            Try the command Restore-LastUser
 #>
 }

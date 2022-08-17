@@ -1,196 +1,196 @@
 Function Set-AutoLogon ([String] $SiteCode) {
-	Write-Host "Set autologon"
-		#Registry path declaration
-		$RegPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
-		[String]$DefaultUsername = 'ATGLocal'
-		[String]$DefaultPassword = $SiteCode + 'T3mpP@ss'
-		#setting registry values
-		Set-ItemProperty $RegPath "AutoAdminLogon" -Value "1" -type String
-		Set-ItemProperty $RegPath "DefaultUsername" -Value $DefaultUsername -type String
-		Set-ItemProperty $RegPath "DefaultPassword" -Value $DefaultPassword -type String
-		Set-ItemProperty $RegPath "AutoLogonCount" -Value "1" -type DWord
-	Write-Host "End of Set autologon"
+    Write-Host "Set autologon"
+        #Registry path declaration
+        $RegPath = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\Winlogon"
+        [String]$DefaultUsername = 'ATGLocal'
+        [String]$DefaultPassword = $SiteCode + 'T3mpP@ss'
+        #setting registry values
+        Set-ItemProperty $RegPath "AutoAdminLogon" -Value "1" -type String
+        Set-ItemProperty $RegPath "DefaultUsername" -Value $DefaultUsername -type String
+        Set-ItemProperty $RegPath "DefaultPassword" -Value $DefaultPassword -type String
+        Set-ItemProperty $RegPath "AutoLogonCount" -Value "1" -type DWord
+    Write-Host "End of Set autologon"
 }
 
 Function Set-DailyReboot {
 <#
-	.SYNOPSIS
-		Creates a scheduled task to restart the computer daily at 3am, if no one is using the computer.
-		Helpful for maintaining updated and stability.
+    .SYNOPSIS
+        Creates a scheduled task to restart the computer daily at 3am, if no one is using the computer.
+        Helpful for maintaining updated and stability.
 #>
-	Write-Host "Schedule Daily Restart"
-		$Action = New-ScheduledTaskAction -Execute 'shutdown.exe' -Argument '-f -r -t 0'
-		$Trigger = New-ScheduledTaskTrigger -Daily -At 3am
-		$Idle = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration 00:30:00 -IdleWaitTimeout 02:00:00
-		$User = "NT AUTHORITY\SYSTEM"
-		Register-ScheduledTask -Action $action -Trigger $trigger -User $User -Settings $Idle -TaskName "Daily Restart" -Description "Daily restart" -Force | Out-Null
-		$NewDate = (Get-ScheduledTask -TaskName "Daily Restart").Triggers.StartBoundary.subString(0,16)
-	Write-Host "The next scheduled 'Daily Restart' task will happen at $([Datetime]::ParseExact($NewDate, 'yyyy-MM-ddTHH:mm', $null))"
+    Write-Host "Schedule Daily Restart"
+        $Action = New-ScheduledTaskAction -Execute 'shutdown.exe' -Argument '-f -r -t 0'
+        $Trigger = New-ScheduledTaskTrigger -Daily -At 3am
+        $Idle = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration 00:30:00 -IdleWaitTimeout 02:00:00
+        $User = "NT AUTHORITY\SYSTEM"
+        Register-ScheduledTask -Action $action -Trigger $trigger -User $User -Settings $Idle -TaskName "Daily Restart" -Description "Daily restart" -Force | Out-Null
+        $NewDate = (Get-ScheduledTask -TaskName "Daily Restart").Triggers.StartBoundary.subString(0,16)
+    Write-Host "The next scheduled 'Daily Restart' task will happen at $([Datetime]::ParseExact($NewDate, 'yyyy-MM-ddTHH:mm', $null))"
 }
 
 Function Set-DailyRebootDelay {
 <#
-	.SYNOPSIS
-		Delays the "Daily Restart" scheduled task by the specified numer of days
-	.PARAMETER Days
-		The number of days to delay the reboot
-	.EXAMPLE
-		'Set-DailyRebootDelay -Days 80' will delay nightly reboots for 80 days!
+    .SYNOPSIS
+        Delays the "Daily Restart" scheduled task by the specified numer of days
+    .PARAMETER Days
+        The number of days to delay the reboot
+    .EXAMPLE
+        'Set-DailyRebootDelay -Days 80' will delay nightly reboots for 80 days!
 #>
-	param
-	(
-		[Parameter(Mandatory=$true)]
-		[Int32]$Days
-	)
-	$DailyRebootTask = Get-ScheduledTask -TaskName "Daily Restart" -ErrorAction SilentlyContinue
-	If (! $DailyRebootTask) {
-		Set-DailyReboot
-	}
-	$DelayedStart = (Get-Date).AddDays($Days).ToString('yyyy-MM-dd') + "T03:00:00-06:00"
-	$Trigger = New-ScheduledTaskTrigger -Daily -At 3am
-	$Trigger.StartBoundary = $DelayedStart
-	$DailyRebootTask.Triggers = $Trigger
-	$DailyRebootTask | Set-ScheduledTask | Out-Null
-	$NewDate = (Get-ScheduledTask -TaskName "Daily Restart").Triggers.StartBoundary.subString(0,16)
-	Write-Host "The next scheduled 'Daily Restart' task will happen at $([Datetime]::ParseExact($NewDate, 'yyyy-MM-ddTHH:mm', $null))"
+    param
+    (
+        [Parameter(Mandatory=$true)]
+        [Int32]$Days
+    )
+    $DailyRebootTask = Get-ScheduledTask -TaskName "Daily Restart" -ErrorAction SilentlyContinue
+    If (! $DailyRebootTask) {
+        Set-DailyReboot
+    }
+    $DelayedStart = (Get-Date).AddDays($Days).ToString('yyyy-MM-dd') + "T03:00:00-06:00"
+    $Trigger = New-ScheduledTaskTrigger -Daily -At 3am
+    $Trigger.StartBoundary = $DelayedStart
+    $DailyRebootTask.Triggers = $Trigger
+    $DailyRebootTask | Set-ScheduledTask | Out-Null
+    $NewDate = (Get-ScheduledTask -TaskName "Daily Restart").Triggers.StartBoundary.subString(0,16)
+    Write-Host "The next scheduled 'Daily Restart' task will happen at $([Datetime]::ParseExact($NewDate, 'yyyy-MM-ddTHH:mm', $null))"
 }
 
 Function Set-DnsMadeEasyDDNS {
-	[CmdletBinding(DefaultParameterSetName = 'Direct')]
-	param
-	(
-		[Parameter(Mandatory=$True,
-			ParameterSetName = 'ToFile')]
-		[System.IO.FileInfo]$ToFile,
+    [CmdletBinding(DefaultParameterSetName = 'Direct')]
+    param
+    (
+        [Parameter(Mandatory=$True,
+            ParameterSetName = 'ToFile')]
+        [System.IO.FileInfo]$ToFile,
 
-		[Parameter(Mandatory=$True,
-			ParameterSetName = 'FromFile')]
-		[System.IO.FileInfo]$FromFile,
+        [Parameter(Mandatory=$True,
+            ParameterSetName = 'FromFile')]
+        [System.IO.FileInfo]$FromFile,
 
-		[Parameter(Mandatory=$True,
-			ParameterSetName = 'Direct')]
-		[Parameter(Mandatory=$True,
-			ParameterSetName = 'ToFile')]
-		[string]$Username,
+        [Parameter(Mandatory=$True,
+            ParameterSetName = 'Direct')]
+        [Parameter(Mandatory=$True,
+            ParameterSetName = 'ToFile')]
+        [string]$Username,
 
-		[Parameter(Mandatory=$True,
-			ParameterSetName = 'Direct')]
-		[Parameter(Mandatory=$True,
-			ParameterSetName = 'ToFile')]
-		[string]$Password,
+        [Parameter(Mandatory=$True,
+            ParameterSetName = 'Direct')]
+        [Parameter(Mandatory=$True,
+            ParameterSetName = 'ToFile')]
+        [string]$Password,
 
-		[Parameter(Mandatory=$True,
-			ParameterSetName = 'Direct')]
-		[Parameter(Mandatory=$True,
-			ParameterSetName = 'ToFile')]
-		[string]$RecordID,
+        [Parameter(Mandatory=$True,
+            ParameterSetName = 'Direct')]
+        [Parameter(Mandatory=$True,
+            ParameterSetName = 'ToFile')]
+        [string]$RecordID,
 
-		[Parameter(Mandatory=$False,
-			ParameterSetName = 'Direct')]
-		[Parameter(Mandatory=$False,
-			ParameterSetName = 'FromFile')]
-		[string]$IPAddress
-	)
+        [Parameter(Mandatory=$False,
+            ParameterSetName = 'Direct')]
+        [Parameter(Mandatory=$False,
+            ParameterSetName = 'FromFile')]
+        [string]$IPAddress
+    )
 
-	<#
-	.DESCRIPTION
-		This command updates a DnsMadeEasy Dynamic DNS entry. For easy re-use, all settings including the password can also be stored in an encrypted file and be reused.
-	.EXAMPLE
-		Set-DnsMadeEasyDDNS -Username "ambitions" -Password "kee89" -RecordID "2348"
-			Uses credentials to update a dns record with the detected public IP.
-	.EXAMPLE
-		Set-DnsMadeEasyDDNS -Username "ambitions" -Password "kee89" -RecordID "2348" -IPAddress "127.0.0.1"
-			Uses credentials to update a dns record with a predetermined key.
-	.EXAMPLE
-		Set-DnsMadeEasyDDNS -ToFile "C:\Ambitions\Scripts\DnsMadeEasyDDNS-4411mont.beyond-health.txt" -Username "ambitions" -Password "kee89" -RecordID "2348"
-			Stores all fo the needed settings in an encrypted file.
-	.EXAMPLE
-		Set-DnsMadeEasyDDNS -FromFile "C:\Ambitions\Scripts\DnsMadeEasyDDNS-4411mont.beyond-health.txt"
-			Retrieves all needed settings from an encrypted file.
-	.LINK
-		Documentation: https://dnsmadeeasy.com/technology/dynamic-dns
+    <#
+    .DESCRIPTION
+        This command updates a DnsMadeEasy Dynamic DNS entry. For easy re-use, all settings including the password can also be stored in an encrypted file and be reused.
+    .EXAMPLE
+        Set-DnsMadeEasyDDNS -Username "ambitions" -Password "kee89" -RecordID "2348"
+            Uses credentials to update a dns record with the detected public IP.
+    .EXAMPLE
+        Set-DnsMadeEasyDDNS -Username "ambitions" -Password "kee89" -RecordID "2348" -IPAddress "127.0.0.1"
+            Uses credentials to update a dns record with a predetermined key.
+    .EXAMPLE
+        Set-DnsMadeEasyDDNS -ToFile "C:\Ambitions\Scripts\DnsMadeEasyDDNS-4411mont.beyond-health.txt" -Username "ambitions" -Password "kee89" -RecordID "2348"
+            Stores all fo the needed settings in an encrypted file.
+    .EXAMPLE
+        Set-DnsMadeEasyDDNS -FromFile "C:\Ambitions\Scripts\DnsMadeEasyDDNS-4411mont.beyond-health.txt"
+            Retrieves all needed settings from an encrypted file.
+    .LINK
+        Documentation: https://dnsmadeeasy.com/technology/dynamic-dns
 
 #>
 
-	If ($FromFile) {
-		$encryptedstring = Get-Content -Path $FromFile
-		$securestring = $encryptedstring | ConvertTo-SecureString
-		$Marshal = [System.Runtime.InteropServices.Marshal]
-		$Bstr = $Marshal::SecureStringToBSTR($securestring)
-		$string = $Marshal::PtrToStringAuto($Bstr)
-		$FinalUrl = $string
-		$Marshal::ZeroFreeBSTR($Bstr)
-	} Else {
-		$BaseUrl = "https://cp.dnsmadeeasy.com/servlet/updateip?"
-		$FinalUrl = $Baseurl + `
-		"Username=" + $Username + `
-		"&password=" + $Password + `
-		"&id=" + $RecordID
-		If ($ToFile) {
-			$securestring = $FinalUrl | ConvertTo-SecureString -AsPlainText -Force
-			$encryptedstring = $securestring | ConvertFrom-SecureString
-			$encryptedstring | Set-Content -Path $ToFile -Force
-		}
-	}
+    If ($FromFile) {
+        $encryptedstring = Get-Content -Path $FromFile
+        $securestring = $encryptedstring | ConvertTo-SecureString
+        $Marshal = [System.Runtime.InteropServices.Marshal]
+        $Bstr = $Marshal::SecureStringToBSTR($securestring)
+        $string = $Marshal::PtrToStringAuto($Bstr)
+        $FinalUrl = $string
+        $Marshal::ZeroFreeBSTR($Bstr)
+    } Else {
+        $BaseUrl = "https://cp.dnsmadeeasy.com/servlet/updateip?"
+        $FinalUrl = $Baseurl + `
+        "Username=" + $Username + `
+        "&password=" + $Password + `
+        "&id=" + $RecordID
+        If ($ToFile) {
+            $securestring = $FinalUrl | ConvertTo-SecureString -AsPlainText -Force
+            $encryptedstring = $securestring | ConvertFrom-SecureString
+            $encryptedstring | Set-Content -Path $ToFile -Force
+        }
+    }
 
-	If (-not $ToFile) {
-		If (-Not $IPAddress) {
-			$IPAddress = (Invoke-WebRequest -Uri http://myip.dnsmadeeasy.com/ -UseBasicParsing).Content
-		}
-		$FinalUrl = $FinalUrl + "&ip=" + $IpAddress
+    If (-not $ToFile) {
+        If (-Not $IPAddress) {
+            $IPAddress = (Invoke-WebRequest -Uri http://myip.dnsmadeeasy.com/ -UseBasicParsing).Content
+        }
+        $FinalUrl = $FinalUrl + "&ip=" + $IpAddress
 
-		Write-Host $FinalUrl
-		(Invoke-WebRequest -Uri $FinalUrl -UseBasicParsing).Content
-	}
+        Write-Host $FinalUrl
+        (Invoke-WebRequest -Uri $FinalUrl -UseBasicParsing).Content
+    }
 }
 
 Function Set-MountainTime {
-	Write-Host "Setting local time zone to Mountain Time"
-	Set-TimeZone -Name "Mountain Standard Time"
-	net start W32Time
-	W32tm /resync /force
+    Write-Host "Setting local time zone to Mountain Time"
+    Set-TimeZone -Name "Mountain Standard Time"
+    net start W32Time
+    W32tm /resync /force
 }
 
 Function Set-NumLock {
-	Write-Host "Setting Numlock on keyboard as default"
-	Set-ItemProperty -Path 'Registry::HKU\.DEFAULT\Control Panel\Keyboard' -Name "InitialKeyboardIndicators" -Value "2" -Force -PassThru
+    Write-Host "Setting Numlock on keyboard as default"
+    Set-ItemProperty -Path 'Registry::HKU\.DEFAULT\Control Panel\Keyboard' -Name "InitialKeyboardIndicators" -Value "2" -Force -PassThru
 }
 
 Function Set-RunOnceScript {
-	param
-	(
-		[string]$Label,
-		[string]$Script
-	)
+    param
+    (
+        [string]$Label,
+        [string]$Script
+    )
 
-	$RunOnceValue = 'PowerShell.exe -ExecutionPolicy Bypass -File "' + $Script + '"'
-	Write-Host "Install After Reboot"
-	Set-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name $Label -Value $RunOnceValue
+    $RunOnceValue = 'PowerShell.exe -ExecutionPolicy Bypass -File "' + $Script + '"'
+    Write-Host "Install After Reboot"
+    Set-ItemProperty 'HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name $Label -Value $RunOnceValue
 }
 
 Function Set-ServerRebootScriptPassword {
-	If ($(whoami) -match 'system') {
-	$User = Get-Content -Path C:\Ambitions\scripts\server_reboot_user.txt
-	Write-Host "Enter the current password for the user $User"
-	$Password = Read-Host -AsSecureString
-	$Password | ConvertFrom-SecureString | Out-File "C:\Ambitions\Scripts\Server_Reboot_Cred.txt"
-	} Else {
-		Write-Error "You must run this command as the system user via ConnectWise Backstage or PSExec.exe."
-	}
+    If ($(whoami) -match 'system') {
+    $User = Get-Content -Path C:\Ambitions\scripts\server_reboot_user.txt
+    Write-Host "Enter the current password for the user $User"
+    $Password = Read-Host -AsSecureString
+    $Password | ConvertFrom-SecureString | Out-File "C:\Ambitions\Scripts\Server_Reboot_Cred.txt"
+    } Else {
+        Write-Error "You must run this command as the system user via ConnectWise Backstage or PSExec.exe."
+    }
 }
 
 Function Set-WeeklyReboot {
 <#
-	.SYNOPSIS
-		Creates a scheduled task to restart the computer Weekly on Sunday at 3am, if no one is using the computer.
-		Helpful for maintaining updated and stability.
+    .SYNOPSIS
+        Creates a scheduled task to restart the computer Weekly on Sunday at 3am, if no one is using the computer.
+        Helpful for maintaining updated and stability.
 #>
-	Write-Host "Schedule Weekly Restart"
-		$Action = New-ScheduledTaskAction -Execute 'shutdown.exe' -Argument '-f -r -t 0'
-		$Trigger = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek Sunday -At 3am
-		$Idle = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration 00:30:00 -IdleWaitTimeout 02:00:00
-		$User = "NT AUTHORITY\SYSTEM"
-		Register-ScheduledTask -Action $action -Trigger $trigger -User $User -Settings $Idle -TaskName "Weekly Restart" -Description "Weekly restart" -Force | Out-Null
-		$NewDate = (Get-ScheduledTask -TaskName "Weekly Restart").Triggers.StartBoundary.subString(0,16)
-	Write-Host "The next scheduled 'Weekly Restart' task will happen at $([Datetime]::ParseExact($NewDate, 'yyyy-MM-ddTHH:mm', $null))"
+    Write-Host "Schedule Weekly Restart"
+        $Action = New-ScheduledTaskAction -Execute 'shutdown.exe' -Argument '-f -r -t 0'
+        $Trigger = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek Sunday -At 3am
+        $Idle = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration 00:30:00 -IdleWaitTimeout 02:00:00
+        $User = "NT AUTHORITY\SYSTEM"
+        Register-ScheduledTask -Action $action -Trigger $trigger -User $User -Settings $Idle -TaskName "Weekly Restart" -Description "Weekly restart" -Force | Out-Null
+        $NewDate = (Get-ScheduledTask -TaskName "Weekly Restart").Triggers.StartBoundary.subString(0,16)
+    Write-Host "The next scheduled 'Weekly Restart' task will happen at $([Datetime]::ParseExact($NewDate, 'yyyy-MM-ddTHH:mm', $null))"
 }

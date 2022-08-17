@@ -1,28 +1,28 @@
 Function Disable-ATGLocalExpiration {
-	Write-Host "Set local ATGLocal account to never expire"
-		Set-LocalUser -Name "ATGLocal" -PasswordNeverExpires $True
+    Write-Host "Set local ATGLocal account to never expire"
+        Set-LocalUser -Name "ATGLocal" -PasswordNeverExpires $True
 }
 
 Function Disable-DailyReboot {
 <#
-	.SYNOPSIS
-		Permanently deletes the scheduled task named "Daily Restart"
+    .SYNOPSIS
+        Permanently deletes the scheduled task named "Daily Restart"
 #>
-	$DailyRebootTask = Get-ScheduledTask -TaskName "Daily Restart" -ErrorAction SilentlyContinue
-	If ($DailyRebootTask) {
-		$DailyRebootTask | Unregister-ScheduledTask -Confirm:$false
-	}
-	If (!(Get-ScheduledTask -TaskName "Daily Restart" -ErrorAction SilentlyContinue)) {
-		Write-Host "The task 'Daily Restart' has been successfully removed."
-	} Else {
-		Write-Host "The task 'Daily Restart' has NOT been successfully removed. Please investigate!"
-	}
+    $DailyRebootTask = Get-ScheduledTask -TaskName "Daily Restart" -ErrorAction SilentlyContinue
+    If ($DailyRebootTask) {
+        $DailyRebootTask | Unregister-ScheduledTask -Confirm:$false
+    }
+    If (!(Get-ScheduledTask -TaskName "Daily Restart" -ErrorAction SilentlyContinue)) {
+        Write-Host "The task 'Daily Restart' has been successfully removed."
+    } Else {
+        Write-Host "The task 'Daily Restart' has NOT been successfully removed. Please investigate!"
+    }
 }
 
 Function Disable-FastStartup {
-	Write-Host "Disable Windows Fast Startup"
-		REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Power" /v HiberbootEnabled /t REG_DWORD /d "0" /f
-		powercfg -h off
+    Write-Host "Disable Windows Fast Startup"
+        REG ADD "HKEY_LOCAL_MACHINE\SYSTEM\CurrentControlSet\Control\Session Manager\Power" /v HiberbootEnabled /t REG_DWORD /d "0" /f
+        powercfg -h off
 }
 
 Function Disable-Sleep {
@@ -38,9 +38,9 @@ Function Disable-Sleep {
    Run mylongrunningscript with Display idle timeout prevented and verbose messages
 #>
 
-	If (!(Test-Path "C:\ProgramData\chocolatey\lib\dontsleep.portable\tools\DontSleep_x64_p.exe")) {
-		If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
-		choco install dontsleep.portable -y
-	}
-	& C:\ProgramData\chocolatey\lib\dontsleep.portable\tools\DontSleep_x64_p.exe -bg please_sleep_mode=0 enable=1
+    If (!(Test-Path "C:\ProgramData\chocolatey\lib\dontsleep.portable\tools\DontSleep_x64_p.exe")) {
+        If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
+        choco install dontsleep.portable -y
+    }
+    & C:\ProgramData\chocolatey\lib\dontsleep.portable\tools\DontSleep_x64_p.exe -bg please_sleep_mode=0 enable=1
 }
