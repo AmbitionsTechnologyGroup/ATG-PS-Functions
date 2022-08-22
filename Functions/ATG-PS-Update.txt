@@ -29,7 +29,11 @@ Function Update-DellPackages {
 				If ($IPMIService -and $IPMIService -ne "Running") {Start-Service -Name IPMIDRV}
 				#Install the latest
 				Stop-Process -Name DellCommandUpdate -Force -ErrorAction SilentlyContinue
-				Choco upgrade dellcommandupdate -y --force -i --ignorechecksums
+				If (Get-Command winget -ErrorAction SilentlyContinue) {
+					winget install --id Dell.CommandUpdate -e -h
+				} Else {
+					Choco upgrade dellcommandupdate -y --force -i --ignorechecksums
+				}
 			}
 
 			Write-Host "Checking if 'Dell Command Update' is current."
