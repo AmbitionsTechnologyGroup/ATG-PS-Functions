@@ -1,421 +1,421 @@
 Function Update-DattoAgent {
-    Enable-SSL
-    $progressPreference = 'silentlyContinue'
-    Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Datto-Agent-Update/DattoAgentUpdate.txt -usebasicparsing | Invoke-Expression
+	Enable-SSL
+	$progressPreference = 'silentlyContinue'
+	Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Datto-Agent-Update/DattoAgentUpdate.txt -usebasicparsing | Invoke-Expression
 }
 
 Function Update-DellPackages {
-    <#
-    .SYNOPSIS
-        Uses the CLI version of Dell Command | Update to install any missing drivers/firmwares/Bios and update existing ones.
-        There are no parameters to use.
-    .LINK
-        https://www.dell.com/support/kbdoc/en-us/000177325/dell-command-update
-    .EXAMPLE
-        Update-DellPackages
-    #>
+	<#
+	.SYNOPSIS
+		Uses the CLI version of Dell Command | Update to install any missing drivers/firmwares/Bios and update existing ones.
+		There are no parameters to use.
+	.LINK
+		https://www.dell.com/support/kbdoc/en-us/000177325/dell-command-update
+	.EXAMPLE
+		Update-DellPackages
+	#>
 
-    Write-Host "Dell Updates"
-        $Manufact = (Get-CimInstance -Class Win32_ComputerSystem).Manufacturer
-        If ( $Manufact -like "*Dell*") {
-            #Install and update Chocolatey if Needed
-            If (Get-Command choco -errorAction SilentlyContinue) {
-                choco upgrade chocolatey -y
-            } Else { Install-Choco }
+	Write-Host "Dell Updates"
+		$Manufact = (Get-CimInstance -Class Win32_ComputerSystem).Manufacturer
+		If ( $Manufact -like "*Dell*") {
+			#Install and update Chocolatey if Needed
+			If (Get-Command choco -errorAction SilentlyContinue) {
+				choco upgrade chocolatey -y
+			} Else { Install-Choco }
 
-            Function Install-DCU {
-                #Starts the IPMI Service if needed
-                $IPMIService = (Get-Service -Name IPMIDRV -ErrorAction SilentlyContinue).Status
-                If ($IPMIService -and $IPMIService -ne "Running") {Start-Service -Name IPMIDRV}
-                #Install the latest
-                Stop-Process -Name DellCommandUpdate -Force -ErrorAction SilentlyContinue
-                Choco upgrade dellcommandupdate -y --force -i --ignorechecksums
-            }
+			Function Install-DCU {
+				#Starts the IPMI Service if needed
+				$IPMIService = (Get-Service -Name IPMIDRV -ErrorAction SilentlyContinue).Status
+				If ($IPMIService -and $IPMIService -ne "Running") {Start-Service -Name IPMIDRV}
+				#Install the latest
+				Stop-Process -Name DellCommandUpdate -Force -ErrorAction SilentlyContinue
+				Choco upgrade dellcommandupdate -y --force -i --ignorechecksums
+			}
 
-            Write-Host "Checking if 'Dell Command Update' is current."
-                #Remove any Windows 10 "Apps"
-                Get-ProvisionedAppPackage -Online -ErrorAction SilentlyContinue | Where-Object {$_.DisplayName -like "*Dell*Update*"} | Remove-ProvisionedAppPackage -Online
-                Get-AppxPackage "*Dell*Update*" -ErrorAction SilentlyContinue | Remove-AppxPackage
-                Get-Package "Dell*Windows 10" -ErrorAction SilentlyContinue | Uninstall-Package -AllVersions -Force
-                If (Get-AppxPackage *Dell*Update*){
-                    $apps = Get-ChildItem -Path HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall,HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall | Get-ItemProperty | Where-Object {$_.DisplayName -like "Dell*Update*" } | Select-Object -Property DisplayName, UninstallString
-                    ForEach ($ver in $apps) {
-                        If ($ver.UninstallString) {
-                            $uninst = $ver.UninstallString
-                            Write-Host Uninstalling: $ver.DisplayName
-                            Start-Process cmd -ArgumentList "/c $uninst /quiet /norestart" -NoNewWindow -Wait -PassThru
-                        }
-                    }
-                }
+			Write-Host "Checking if 'Dell Command Update' is current."
+				#Remove any Windows 10 "Apps"
+				Get-ProvisionedAppPackage -Online -ErrorAction SilentlyContinue | Where-Object {$_.DisplayName -like "*Dell*Update*"} | Remove-ProvisionedAppPackage -Online
+				Get-AppxPackage "*Dell*Update*" -ErrorAction SilentlyContinue | Remove-AppxPackage
+				Get-Package "Dell*Windows 10" -ErrorAction SilentlyContinue | Uninstall-Package -AllVersions -Force
+				If (Get-AppxPackage *Dell*Update*){
+					$apps = Get-ChildItem -Path HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall,HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall | Get-ItemProperty | Where-Object {$_.DisplayName -like "Dell*Update*" } | Select-Object -Property DisplayName, UninstallString
+					ForEach ($ver in $apps) {
+						If ($ver.UninstallString) {
+							$uninst = $ver.UninstallString
+							Write-Host Uninstalling: $ver.DisplayName
+							Start-Process cmd -ArgumentList "/c $uninst /quiet /norestart" -NoNewWindow -Wait -PassThru
+						}
+					}
+				}
 
-                #Compare version numbers of any remaining installed version.
-                $DCUInstalledVersion = (Get-Package -Provider Programs -IncludeWindowsInstaller -Name "Dell Command | Update" -ErrorAction SilentlyContinue).Version
-                $DCUAvailableVersion = choco list dellcommandupdate #Gets all results
-                $DCUAvailableVersion = ($DCUAvailableVersion | Select-String -Pattern "DellCommandUpdate " -SimpleMatch).Line #Isolates the desired result
-                $DCUAvailableVersion = $DCUAvailableVersion.split(" ",[System.StringSplitOptions]::RemoveEmptyEntries)[1] #Isolates the version number
+				#Compare version numbers of any remaining installed version.
+				$DCUInstalledVersion = (Get-Package -Provider Programs -IncludeWindowsInstaller -Name "Dell Command | Update" -ErrorAction SilentlyContinue).Version
+				$DCUAvailableVersion = choco list dellcommandupdate #Gets all results
+				$DCUAvailableVersion = ($DCUAvailableVersion | Select-String -Pattern "DellCommandUpdate " -SimpleMatch).Line #Isolates the desired result
+				$DCUAvailableVersion = $DCUAvailableVersion.split(" ",[System.StringSplitOptions]::RemoveEmptyEntries)[1] #Isolates the version number
 
-            If (-not $DCUInstalledVersion) {
-                Write-Host "'Dell Command Update' is not installed, installing now."
-                Install-DCU
+			If (-not $DCUInstalledVersion) {
+				Write-Host "'Dell Command Update' is not installed, installing now."
+				Install-DCU
 
-            }  ElseIf ($DCUInstalledVersion -ne $DCUAvailableVersion) {
-                Write-Host "'Dell Command Update' is not current. Updating from version $DCUInstalledVersion to $DCUAvailableVersion."
+			}  ElseIf ($DCUInstalledVersion -ne $DCUAvailableVersion) {
+				Write-Host "'Dell Command Update' is not current. Updating from version $DCUInstalledVersion to $DCUAvailableVersion."
 
-                #Remove any programs listed through "Add and remove programs"
-                $DCUInstalled = Get-WmiObject -Class Win32_Product | Where-Object {$_.Name -like "*Dell*Update*"}
-                If ($DCUInstalled) {
-                    $DCUInstalled.Uninstall()
-                }
-                Install-DCU
+				#Remove any programs listed through "Add and remove programs"
+				$DCUInstalled = Get-WmiObject -Class Win32_Product | Where-Object {$_.Name -like "*Dell*Update*"}
+				If ($DCUInstalled) {
+					$DCUInstalled.Uninstall()
+				}
+				Install-DCU
 
-            } ElseIf ($DCUInstalledVersion -eq $DCUAvailableVersion) {
-                Write-Host "'Dell Command Update' is current."
-            }
+			} ElseIf ($DCUInstalledVersion -eq $DCUAvailableVersion) {
+				Write-Host "'Dell Command Update' is current."
+			}
 
-            #Configure and run Dell Command Update
-            Stop-Process -Name DellCommandUpdate -Force -ErrorAction SilentlyContinue
-            $DCUx86 = Join-Path -Path ${env:ProgramFiles(x86)} -ChildPath "Dell\CommandUpdate\dcu-cli.exe"
-            $DCUx64 = Join-Path -Path $Env:ProgramFiles -ChildPath "Dell\CommandUpdate\dcu-cli.exe"
-            If (Test-Path $DCUx86) {
-                & $DCUx86 /configure -autoSuspendBitLocker=enable
-                & $DCUx86 /applyUpdates -reboot=disable
-            } ElseIf (Test-Path $DCUx64) {
-                & $DCUx64 /configure -autoSuspendBitLocker=enable
-                & $DCUx64 /applyUpdates -reboot=disable
-            } Else { Write-Error "Dell Command Update CLI not found."}
+			#Configure and run Dell Command Update
+			Stop-Process -Name DellCommandUpdate -Force -ErrorAction SilentlyContinue
+			$DCUx86 = Join-Path -Path ${env:ProgramFiles(x86)} -ChildPath "Dell\CommandUpdate\dcu-cli.exe"
+			$DCUx64 = Join-Path -Path $Env:ProgramFiles -ChildPath "Dell\CommandUpdate\dcu-cli.exe"
+			If (Test-Path $DCUx86) {
+				& $DCUx86 /configure -autoSuspendBitLocker=enable
+				& $DCUx86 /applyUpdates -reboot=disable
+			} ElseIf (Test-Path $DCUx64) {
+				& $DCUx64 /configure -autoSuspendBitLocker=enable
+				& $DCUx64 /applyUpdates -reboot=disable
+			} Else { Write-Error "Dell Command Update CLI not found."}
 
-        } Else { Write-Host "This is not a Dell Computer" }
-    Write-Host "`nEnd of Dell Updates"
+		} Else { Write-Host "This is not a Dell Computer" }
+	Write-Host "`nEnd of Dell Updates"
 }
 
 Function Update-DellServer {
-    Write-Host "Please note, this is a draft. Report errors to Ryan."
-    Write-Warning "Update-Everything will have a visible impact to any logged in users,`nas it will update drivers and reboot the computer.`nYou have 10 seconds to press CTRL+C to cancel this function."
-    $delay = 10
+	Write-Host "Please note, this is a draft. Report errors to Ryan."
+	Write-Warning "Update-Everything will have a visible impact to any logged in users,`nas it will update drivers and reboot the computer.`nYou have 10 seconds to press CTRL+C to cancel this function."
+	$delay = 10
 
-    while ($delay -ge 0)
-    {
-      Write-Host "$delay seconds left to cancel"
-      Start-Sleep 1
-      $delay --
-    }
-    $delay = $null
+	while ($delay -ge 0)
+	{
+	  Write-Host "$delay seconds left to cancel"
+	  Start-Sleep 1
+	  $delay --
+	}
+	$delay = $null
 
-    $URL = "https://dl.dell.com/FOLDER07525263M/1/Systems-Management_Application_5C2CW_WN64_1.9.2.0_A00.EXE"
-    $File = "C:\Ambitions\Dell System Update 1.9.2.exe"
-    $Hash = '2905a5c8717a9806f76fa88af340fd4747a45c5bd846849ec0bd336ece7f6cbe'
-    Function Get-DSUInstall {
-        Write-Host "Dell System Update is not installed, attempting to install."
-        Write-Host "Download the installer to $File"
-        (New-Object System.Net.WebClient).DownloadFile($URL,$File) #Download the URL to the File.
-                Write-Host "Download is complete, checking the integrity."
-    }
+	$URL = "https://dl.dell.com/FOLDER07525263M/1/Systems-Management_Application_5C2CW_WN64_1.9.2.0_A00.EXE"
+	$File = "C:\Ambitions\Dell System Update 1.9.2.exe"
+	$Hash = '2905a5c8717a9806f76fa88af340fd4747a45c5bd846849ec0bd336ece7f6cbe'
+	Function Get-DSUInstall {
+		Write-Host "Dell System Update is not installed, attempting to install."
+		Write-Host "Download the installer to $File"
+		(New-Object System.Net.WebClient).DownloadFile($URL,$File) #Download the URL to the File.
+				Write-Host "Download is complete, checking the integrity."
+	}
 
-    Function Test-DSUInstall {    IF ((Get-FileHash -Path $File -Algorithm SHA256).Hash -eq $Hash) {
-            Write-Host "It's a match!"
-        } Else {
-            Write-Host "Uh oh, there were issues downloading a non-corrupt file. Please attempt manually."
-            Write-Host "Download is available at https://www.dell.com/support/home/en-us/drivers/driversdetails?driverid=8ctk7"
-            Pause
-            Exit
-        }
-    }
+	Function Test-DSUInstall {    IF ((Get-FileHash -Path $File -Algorithm SHA256).Hash -eq $Hash) {
+			Write-Host "It's a match!"
+		} Else {
+			Write-Host "Uh oh, there were issues downloading a non-corrupt file. Please attempt manually."
+			Write-Host "Download is available at https://www.dell.com/support/home/en-us/drivers/driversdetails?driverid=8ctk7"
+			Pause
+			Exit
+		}
+	}
 
-    Function Install-DSU {
-        Write-Host "Attempting to install the program."
-        & $File /f /s /i | Wait-Process -ErrorAction SilentlyContinue
-    }
+	Function Install-DSU {
+		Write-Host "Attempting to install the program."
+		& $File /f /s /i | Wait-Process -ErrorAction SilentlyContinue
+	}
 
-    Write-Host "Dell System Updates"
-    $Manufact = (Get-CimInstance -Class Win32_ComputerSystem).Manufacturer
-    $OSVersion = (get-itemproperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name ProductName).ProductName
-    If( $Manufact -NotLike "*Dell*")
-    {
-        Write-Host "This is not a Dell Computer"
-        Pause
-        Exit
-    } Else {
-        If ( $OSVersion -NotLike "*Server*") {
-            Write-Host "This is not a Server."
-            Pause
-            Exit
-        } Else {
-            Write-Host "Checkin if DSU is installed"
-            If ((Get-WmiObject win32_product | Where-Object -Property Name -Like "*Dell EMC System Update*").Version -NotLike "1.9.2*") {
-                Write-Host "Dell System Update is either not installed or not version 1.9.2"
-                Get-DSUInstall
-                Test-DSUInstall
-                Install-DSU
-            } Else {
-                Write-Host "DSU is already installed."
-            }
+	Write-Host "Dell System Updates"
+	$Manufact = (Get-CimInstance -Class Win32_ComputerSystem).Manufacturer
+	$OSVersion = (get-itemproperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion" -Name ProductName).ProductName
+	If( $Manufact -NotLike "*Dell*")
+	{
+		Write-Host "This is not a Dell Computer"
+		Pause
+		Exit
+	} Else {
+		If ( $OSVersion -NotLike "*Server*") {
+			Write-Host "This is not a Server."
+			Pause
+			Exit
+		} Else {
+			Write-Host "Checkin if DSU is installed"
+			If ((Get-WmiObject win32_product | Where-Object -Property Name -Like "*Dell EMC System Update*").Version -NotLike "1.9.2*") {
+				Write-Host "Dell System Update is either not installed or not version 1.9.2"
+				Get-DSUInstall
+				Test-DSUInstall
+				Install-DSU
+			} Else {
+				Write-Host "DSU is already installed."
+			}
 
-            Write-Host "Installing Dell System Updates"
-            & "C:\Program Files\Dell\Dell EMC System Update\DSU.exe" /d /u /n
-        }
-    }
+			Write-Host "Installing Dell System Updates"
+			& "C:\Program Files\Dell\Dell EMC System Update\DSU.exe" /d /u /n
+		}
+	}
 }
 
 Function Update-Edge {
-    Write-Host "Updating Microsoft Edge"
-    If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
-    If (Get-Process MicrosoftEdge -ErrorAction SilentlyContinue) {Get-Process MicrosoftEdge | Stop-Process -Force}
-    Choco upgrade microsoft-edge -y
+	Write-Host "Updating Microsoft Edge"
+	If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
+	If (Get-Process MicrosoftEdge -ErrorAction SilentlyContinue) {Get-Process MicrosoftEdge | Stop-Process -Force}
+	Choco upgrade microsoft-edge -y
 }
 
 Function Update-Everything {
-    Write-Warning "Update-Everything will have a visible impact to any logged in users,`nas it will update drivers and reboot the computer.`nYou have 10 seconds to press CTRL+C to cancel this function."
-    $delay = 10
+	Write-Warning "Update-Everything will have a visible impact to any logged in users,`nas it will update drivers and reboot the computer.`nYou have 10 seconds to press CTRL+C to cancel this function."
+	$delay = 10
 
-    while ($delay -ge 0)
-    {
-        Write-Host "$delay seconds left to cancel"
-        Start-Sleep 1
-        $delay --
-    }
-    $delay = $null
-    If (!(Get-Command choco -ErrorAction SilentlyContinue)) {choco upgrade all -y}
-    Update-Windows
-    Update-DellPackages
-    Update-Edge
-    Update-NiniteApps
-    Update-PWSH
-    Restart-Computer -Force
+	while ($delay -ge 0)
+	{
+		Write-Host "$delay seconds left to cancel"
+		Start-Sleep 1
+		$delay --
+	}
+	$delay = $null
+	If (!(Get-Command choco -ErrorAction SilentlyContinue)) {choco upgrade all -y}
+	Update-Windows
+	Update-DellPackages
+	Update-Edge
+	Update-NiniteApps
+	Update-PWSH
+	Restart-Computer -Force
 }
 
 Function Update-ITS247Agent {
-    $DisplayVersion = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).DisplayVersion
-    $TYPE = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).TYPE
-    $AvailableVersion = ((Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/ITS247Agent/DPMAVersion.txt -UseBasicParsing).Content).Trim()
+	$DisplayVersion = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).DisplayVersion
+	$TYPE = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).TYPE
+	$AvailableVersion = ((Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/ITS247Agent/DPMAVersion.txt -UseBasicParsing).Content).Trim()
 
-    If(($DisplayVersion -ne $AvailableVersion) -and ($TYPE -eq "DPMA")) {
-     WRITE-HOST "Updating Agent from $DisplayVersion to $AvailableVersion"
-         $SaveFolder = 'C:\Ambitions'
-         New-Item -ItemType Directory -Force -Path $SaveFolder
-         $PatchPath = $SaveFolder + '\DPMAPatch' + $AvailableVersion + '.exe'
-         (New-Object System.Net.WebClient).DownloadFile('http://update.itsupport247.net/agtupdt/DPMAPatch.exe', $PatchPath)
-         & $PatchPath | Wait-Process
-         $DisplayVersion = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).DisplayVersion
-     WRITE-HOST "Agent is now version $DisplayVersion"
-    }
+	If(($DisplayVersion -ne $AvailableVersion) -and ($TYPE -eq "DPMA")) {
+	 WRITE-HOST "Updating Agent from $DisplayVersion to $AvailableVersion"
+		 $SaveFolder = 'C:\Ambitions'
+		 New-Item -ItemType Directory -Force -Path $SaveFolder
+		 $PatchPath = $SaveFolder + '\DPMAPatch' + $AvailableVersion + '.exe'
+		 (New-Object System.Net.WebClient).DownloadFile('http://update.itsupport247.net/agtupdt/DPMAPatch.exe', $PatchPath)
+		 & $PatchPath | Wait-Process
+		 $DisplayVersion = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).DisplayVersion
+	 WRITE-HOST "Agent is now version $DisplayVersion"
+	}
 
-    If(($DisplayVersion -eq $AvailableVersion) -and ($TYPE -eq "DPMA")) {
-     WRITE-HOST "Agent appears to be up to date at version $DisplayVersion"
-    }
+	If(($DisplayVersion -eq $AvailableVersion) -and ($TYPE -eq "DPMA")) {
+	 WRITE-HOST "Agent appears to be up to date at version $DisplayVersion"
+	}
 <#
-    .SYNOPSIS
-        Updates the Continuum ITS247 Desktop agent to the latest available. No parameters are needed.
+	.SYNOPSIS
+		Updates the Continuum ITS247 Desktop agent to the latest available. No parameters are needed.
 #>
 }
 
 Function Update-NiniteApps {
-    <#
-    .SYNOPSIS
-        Uses NinitePro to immediately update all applications it is cabable of updating. The log will be at C:\Ambitions\NiniteReport.txt
-    #>
-    If (-not (Test-Path 'C:\Ambitions\NinitePro.exe')) {Install-NinitePro}
-    Write-Host "Install Ninite Apps, waiting for install to complete and logging the results."
-        $NiniteCache = "\\adsaltoxl\data\Software\Ninite\NiniteDownloads"
-        If(test-path $NiniteCache){
-            & C:\Ambitions\NinitePro.exe /updateonly /cachepath $NiniteCache /silent 'C:\Ambitions\NiniteReport.txt' | Wait-Process
-        } ELSE {
-            & C:\Ambitions\NinitePro.exe /updateonly /nocache /silent 'C:\Ambitions\NiniteReport.txt' | Wait-Process
-        }
-    Get-Content 'C:\Ambitions\NiniteReport.txt'
-    Write-Host "End of Install Ninite Apps"
+	<#
+	.SYNOPSIS
+		Uses NinitePro to immediately update all applications it is cabable of updating. The log will be at C:\Ambitions\NiniteReport.txt
+	#>
+	If (-not (Test-Path 'C:\Ambitions\NinitePro.exe')) {Install-NinitePro}
+	Write-Host "Install Ninite Apps, waiting for install to complete and logging the results."
+		$NiniteCache = "\\adsaltoxl\data\Software\Ninite\NiniteDownloads"
+		If(test-path $NiniteCache){
+			& C:\Ambitions\NinitePro.exe /updateonly /cachepath $NiniteCache /silent 'C:\Ambitions\NiniteReport.txt' | Wait-Process
+		} ELSE {
+			& C:\Ambitions\NinitePro.exe /updateonly /nocache /silent 'C:\Ambitions\NiniteReport.txt' | Wait-Process
+		}
+	Get-Content 'C:\Ambitions\NiniteReport.txt'
+	Write-Host "End of Install Ninite Apps"
 }
 
 Function Update-O365Apps {
-    $global:O365CurrentCdn = ""
-    If (-not (Test-Path 'C:\Program Files\Common Files\Microsoft Shared\ClickToRun\OfficeC2RClient.exe')) {
-        Write-Host "Office 365 Click2Run is not installed. This script does not apply."
-    } Else {
-        $Apps = @('Excel','Outlook','WinWord','PowerPoint','MsAccess','MSPub','OneNote')
-        $OpenApps = @('')
-        $Apps | ForEach-Object {
-            If (Get-Process $_ -ErrorAction SilentlyContinue) {
-                $OpenApps = $OpenApps += $_
-            }
-        }
+	$global:O365CurrentCdn = ""
+	If (-not (Test-Path 'C:\Program Files\Common Files\Microsoft Shared\ClickToRun\OfficeC2RClient.exe')) {
+		Write-Host "Office 365 Click2Run is not installed. This script does not apply."
+	} Else {
+		$Apps = @('Excel','Outlook','WinWord','PowerPoint','MsAccess','MSPub','OneNote')
+		$OpenApps = @('')
+		$Apps | ForEach-Object {
+			If (Get-Process $_ -ErrorAction SilentlyContinue) {
+				$OpenApps = $OpenApps += $_
+			}
+		}
 
-        If ($OpenApps) {
-            Write-Host "Aborting update, the following Office Apps are open:"
-            $OpenApps | Format-List | Out-String
-            Write-Host "Please close these programs and try again."
-            } Else {
-            Function Get-Office365Version {
-                $O365CurrentVer = ""
-                $O365CurrentCdn = ""
-                $O365CurrentPol = ""
-                $O365CurrentVer = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration" -ErrorAction SilentlyContinue).VersionToReport
-                $O365CurrentCdn = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration" -ErrorAction SilentlyContinue).CDNBaseUrl
-                $O365CurrentPol = (Get-ItemProperty -Path "HKLM:\SOFTWARE\policies\microsoft\office\16.0\common\officeupdate" -ErrorAction SilentlyContinue).updatebranch
-                if ($O365CurrentVer.Length -eq 0) {
-                    Write-Host "Office 365 (C2R) is not installed on this PC."
-                } else {
-                    Write-Host "Office 365 (C2R) Current Version: "$O365CurrentVer
-                    switch ($O365CurrentCdn) {
-                        "http://officecdn.microsoft.com/pr/492350f6-3a01-4f97-b9c0-c7c6ddf67d60" {$O365CurrentCdn = "Monthly Channel"}
-                        "http://officecdn.microsoft.com/pr/7ffbc6bf-bc32-4f92-8982-f9dd17fd3114" {$O365CurrentCdn = "Semi-Annual Channel"}
-                        "http://officecdn.microsoft.com/pr/b8f9b850-328d-4355-9145-c59439a0c4cf" {$O365CurrentCdn = "Semi-Annual Channel (Targeted)"}
-                    }
-                    Write-Host "Office 365 Update Channel (Local Setting): "$O365CurrentCdn
-                    if ($O365CurrentPol.length -eq 0) {
-                        $O365CurrentPol = "None"
-                    } else {
-                        switch ($O365CurrentPol) {
-                            "Current" {$O365CurrentPol = "Monthly Channel"}
-                            "Deferred" {$O365CurrentPol = "Semi-Annual Channel"}
-                            "FirstReleaseDeferred" {$O365CurrentPol = "Semi-Annual Channel (Targeted)l"}
-                        }
-                    }
-                    Write-Host "Office 365 Update Channel (Policy Setting): "$O365CurrentPol
-                    Write-Host "`n"
-                }
-            }
+		If ($OpenApps) {
+			Write-Host "Aborting update, the following Office Apps are open:"
+			$OpenApps | Format-List | Out-String
+			Write-Host "Please close these programs and try again."
+			} Else {
+			Function Get-Office365Version {
+				$O365CurrentVer = ""
+				$O365CurrentCdn = ""
+				$O365CurrentPol = ""
+				$O365CurrentVer = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration" -ErrorAction SilentlyContinue).VersionToReport
+				$O365CurrentCdn = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration" -ErrorAction SilentlyContinue).CDNBaseUrl
+				$O365CurrentPol = (Get-ItemProperty -Path "HKLM:\SOFTWARE\policies\microsoft\office\16.0\common\officeupdate" -ErrorAction SilentlyContinue).updatebranch
+				if ($O365CurrentVer.Length -eq 0) {
+					Write-Host "Office 365 (C2R) is not installed on this PC."
+				} else {
+					Write-Host "Office 365 (C2R) Current Version: "$O365CurrentVer
+					switch ($O365CurrentCdn) {
+						"http://officecdn.microsoft.com/pr/492350f6-3a01-4f97-b9c0-c7c6ddf67d60" {$O365CurrentCdn = "Monthly Channel"}
+						"http://officecdn.microsoft.com/pr/7ffbc6bf-bc32-4f92-8982-f9dd17fd3114" {$O365CurrentCdn = "Semi-Annual Channel"}
+						"http://officecdn.microsoft.com/pr/b8f9b850-328d-4355-9145-c59439a0c4cf" {$O365CurrentCdn = "Semi-Annual Channel (Targeted)"}
+					}
+					Write-Host "Office 365 Update Channel (Local Setting): "$O365CurrentCdn
+					if ($O365CurrentPol.length -eq 0) {
+						$O365CurrentPol = "None"
+					} else {
+						switch ($O365CurrentPol) {
+							"Current" {$O365CurrentPol = "Monthly Channel"}
+							"Deferred" {$O365CurrentPol = "Semi-Annual Channel"}
+							"FirstReleaseDeferred" {$O365CurrentPol = "Semi-Annual Channel (Targeted)l"}
+						}
+					}
+					Write-Host "Office 365 Update Channel (Policy Setting): "$O365CurrentPol
+					Write-Host "`n"
+				}
+			}
 
-            Function Wait-UpdateStop {
-                param
-                (
-                    [Parameter(Mandatory=$False)]
-                    [string]$Process
-                )
+			Function Wait-UpdateStop {
+				param
+				(
+					[Parameter(Mandatory=$False)]
+					[string]$Process
+				)
 
-                Function Get-SpecificProcess {
-                    Get-Process OfficeClickToRun -ErrorAction SilentlyContinue | Where-Object -Property Path -Like "*Microsoft Shared\ClickToRun\Updates\*"
-                }
+				Function Get-SpecificProcess {
+					Get-Process OfficeClickToRun -ErrorAction SilentlyContinue | Where-Object -Property Path -Like "*Microsoft Shared\ClickToRun\Updates\*"
+				}
 
-                $Timeout = 190 ## seconds
-                Try {
-                    $timer = [Diagnostics.Stopwatch]::StartNew()
-                    while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not (Get-SpecificProcess))) {
-                        Start-Sleep -Seconds 2
-                        $totalSecs = [math]::Round($timer.Elapsed.TotalSeconds, 0)
-                        Write-Verbose -Message "Still waiting for action to complete after [$totalSecs] seconds..."
-                    }
-                    $timer.Stop()
-                    if ($timer.Elapsed.TotalSeconds -gt $Timeout) {
-                        Write-Host "Office update either failed or is already up to date"
-                    } else {
-                        Do {
-                            If (!(Get-SpecificProcess)) {
-                                   Write-Host "Waiting for $Process to Start"
-                                   Start-Sleep -Seconds 2
-                            } Else {
-                               Write-Host "$Process has Started"
-                               While (Get-SpecificProcess) {
-                                        [String]$CPU = (Get-SpecificProcess).CPU
-                                        If ($CPU.Length -gt 4) {$CPU = $CPU.substring(0,4)}
-                                        Write-Host -NoNewLine "`rWaiting for $Process to stop. CPU time = $CPU"
-                                        Start-Sleep -Seconds 5
-                               }
-                               Write-Host "`n`n$Process Stopped" ; $Status = 'Done'
-                            }
-                        } Until ($Status)
-                    }
-                } Catch {
-                    Write-Error -Message $_.Exception.Message
-                }
-            }
+				$Timeout = 190 ## seconds
+				Try {
+					$timer = [Diagnostics.Stopwatch]::StartNew()
+					while (($timer.Elapsed.TotalSeconds -lt $Timeout) -and (-not (Get-SpecificProcess))) {
+						Start-Sleep -Seconds 2
+						$totalSecs = [math]::Round($timer.Elapsed.TotalSeconds, 0)
+						Write-Verbose -Message "Still waiting for action to complete after [$totalSecs] seconds..."
+					}
+					$timer.Stop()
+					if ($timer.Elapsed.TotalSeconds -gt $Timeout) {
+						Write-Host "Office update either failed or is already up to date"
+					} else {
+						Do {
+							If (!(Get-SpecificProcess)) {
+								   Write-Host "Waiting for $Process to Start"
+								   Start-Sleep -Seconds 2
+							} Else {
+							   Write-Host "$Process has Started"
+							   While (Get-SpecificProcess) {
+										[String]$CPU = (Get-SpecificProcess).CPU
+										If ($CPU.Length -gt 4) {$CPU = $CPU.substring(0,4)}
+										Write-Host -NoNewLine "`rWaiting for $Process to stop. CPU time = $CPU"
+										Start-Sleep -Seconds 5
+							   }
+							   Write-Host "`n`n$Process Stopped" ; $Status = 'Done'
+							}
+						} Until ($Status)
+					}
+				} Catch {
+					Write-Error -Message $_.Exception.Message
+				}
+			}
 
-            Get-Office365Version
+			Get-Office365Version
 
-            If (!($O365CurrentCdn -like "*monthlty*")) {
-                Write-Host "Setting update channel to monthly"
-                & "C:\Program Files\Common Files\Microsoft Shared\ClickToRun\OfficeC2RClient.exe" /changesetting Channel=Current
-            }
+			If (!($O365CurrentCdn -like "*monthlty*")) {
+				Write-Host "Setting update channel to monthly"
+				& "C:\Program Files\Common Files\Microsoft Shared\ClickToRun\OfficeC2RClient.exe" /changesetting Channel=Current
+			}
 
-            Write-Host "Updating Office, please wait 120 seconds to see further progress."
-                & "C:\Program Files\Common Files\Microsoft Shared\ClickToRun\OfficeC2RClient.exe" /update user updatepromptuser=false forceappshutdown=true displaylevel=false
-                Restart-Service -Name "ClickToRunSvc" -Force -ErrorAction SilentlyContinue
-                Wait-UpdateStop OfficeClickToRun
+			Write-Host "Updating Office, please wait 120 seconds to see further progress."
+				& "C:\Program Files\Common Files\Microsoft Shared\ClickToRun\OfficeC2RClient.exe" /update user updatepromptuser=false forceappshutdown=true displaylevel=false
+				Restart-Service -Name "ClickToRunSvc" -Force -ErrorAction SilentlyContinue
+				Wait-UpdateStop OfficeClickToRun
 
-                Write-Host "`n"
+				Write-Host "`n"
 
-            Get-Office365Version
-        }
-    }
+			Get-Office365Version
+		}
+	}
 }
 
 Function Update-PowershellModules {
-    Set-ExecutionPolicy RemoteSigned -Scope Process -Force
-    [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
-    $Providers = (Get-PackageProvider).Name
-    If ($Providers -NotContains "Nuget") {
-        Install-PackageProvider -Name NuGet -Force -ErrorAction SilentlyContinue
-    }
-    Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue
-    $ModulesToInstall = @("PSReadline","PowerShellGet","AdvancedHistory")
-    $ModulesToInstall | ForEach-Object {
-        $Mod = $_
-        Write-Host "Processing $Mod"
-        If (Get-Module -Name $Mod -ListAvailable) {
-            Try {
-                Remove-Module $Mod -Force -ErrorAction Stop -WarningAction SilentlyContinue
-                Uninstall-Module $Mod -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-            } Catch {
-                Uninstall-Module $Mod -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-            }
-        }
-        Install-Module -Name $Mod -Scope AllUsers -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-        Try {
-            Import-Module -Name $Mod -Scope AllUsers -Force -ErrorAction Stop -WarningAction SilentlyContinue
-        } Catch {
-            Import-Module -Name $Mod -Force -WarningAction SilentlyContinue
-        }
-        Clear-Variable -Name Mod -Force
-    }
-    Write-Host "Updating all modules"
-    Try {
-        Update-Module -Scope AllUsers -Force -WarningAction SilentlyContinue
-    } Catch {
-        Update-Module -Force -WarningAction SilentlyContinue
-    }
-    Write-Host "Settings Prediction Source"
-    Try {
-        Set-PSReadLineOption -PredictionSource HistoryAndPlugin -ErrorAction Stop
-    } Catch {
-        Set-PSReadLineOption -PredictionSource History
-    }
-    Get-Module | Select-Object Name, Version, Description
+	Set-ExecutionPolicy RemoteSigned -Scope Process -Force
+	[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+	$Providers = (Get-PackageProvider).Name
+	If ($Providers -NotContains "Nuget") {
+		Install-PackageProvider -Name NuGet -Force -ErrorAction SilentlyContinue
+	}
+	Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue
+	$ModulesToInstall = @("PSReadline","PowerShellGet","AdvancedHistory")
+	$ModulesToInstall | ForEach-Object {
+		$Mod = $_
+		Write-Host "Processing $Mod"
+		If (Get-Module -Name $Mod -ListAvailable) {
+			Try {
+				Remove-Module $Mod -Force -ErrorAction Stop -WarningAction SilentlyContinue
+				Uninstall-Module $Mod -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+			} Catch {
+				Uninstall-Module $Mod -Force -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+			}
+		}
+		Install-Module -Name $Mod -Scope AllUsers -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
+		Try {
+			Import-Module -Name $Mod -Scope AllUsers -Force -ErrorAction Stop -WarningAction SilentlyContinue
+		} Catch {
+			Import-Module -Name $Mod -Force -WarningAction SilentlyContinue
+		}
+		Clear-Variable -Name Mod -Force
+	}
+	Write-Host "Updating all modules"
+	Try {
+		Update-Module -Scope AllUsers -Force -WarningAction SilentlyContinue
+	} Catch {
+		Update-Module -Force -WarningAction SilentlyContinue
+	}
+	Write-Host "Settings Prediction Source"
+	Try {
+		Set-PSReadLineOption -PredictionSource HistoryAndPlugin -ErrorAction Stop
+	} Catch {
+		Set-PSReadLineOption -PredictionSource History
+	}
+	Get-Module | Select-Object Name, Version, Description
 }
 
 Function Update-PWSH {
-    Write-Host "Updating PWSH"
-    If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
-    Choco upgrade pwsh -y
+	Write-Host "Updating PWSH"
+	If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
+	Choco upgrade pwsh -y
 }
 
 Function Update-Windows {
-    Write-Host "Install Windows Updates"
-        Set-ExecutionPolicy Bypass -Scope Process -Force
-        Enable-SSL
-        Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Windows-Update/UpdateWindows.txt -UseBasicParsing | Invoke-Expression
-    Write-Host "End of Install Windows Updates"
+	Write-Host "Install Windows Updates"
+		Set-ExecutionPolicy Bypass -Scope Process -Force
+		Enable-SSL
+		Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Windows-Update/UpdateWindows.txt -UseBasicParsing | Invoke-Expression
+	Write-Host "End of Install Windows Updates"
 }
 
 Function Update-WindowsApps {
-    Write-Host "Updating Windows Apps"
-        Start-Process ms-windows-store:
-        Start-Sleep -Seconds 5
-        (Get-WmiObject -Namespace "root\cimv2\mdm\dmmap" -Class "MDM_EnterpriseModernAppManagement_AppManagement01").UpdateScanMethod()
-    Write-Host "Update Windows Apps initiated"
+	Write-Host "Updating Windows Apps"
+		Start-Process ms-windows-store:
+		Start-Sleep -Seconds 5
+		(Get-WmiObject -Namespace "root\cimv2\mdm\dmmap" -Class "MDM_EnterpriseModernAppManagement_AppManagement01").UpdateScanMethod()
+	Write-Host "Update Windows Apps initiated"
 }
 
 Function Update-WindowTitle ([String] $PassNumber) {
-    Write-Host "Changing window title"
-        $host.ui.RawUI.WindowTitle = "$SiteCode Provisioning | $env:computername | Pass $PassNumber | Please Wait"
+	Write-Host "Changing window title"
+		$host.ui.RawUI.WindowTitle = "$SiteCode Provisioning | $env:computername | Pass $PassNumber | Please Wait"
 }
 
 If (Get-Module -Name ATGPS -ErrorAction SilentlyContinue){
-    # List imported functions from ATGPS
-    Write-Host `n====================================================
-    Write-Host "The below functions are now loaded and ready to use:"
-    Write-Host ====================================================
+	# List imported functions from ATGPS
+	Write-Host `n====================================================
+	Write-Host "The below functions are now loaded and ready to use:"
+	Write-Host ====================================================
 
-    Get-Command -Module ATGPS | Format-Wide -Column 3
+	Get-Command -Module ATGPS | Format-Wide -Column 3
 
-    Write-Host ====================================================
-    Write-Host "Type: 'Help <function name> -Detailed' for more info"
-    Write-Host ====================================================
+	Write-Host ====================================================
+	Write-Host "Type: 'Help <function name> -Detailed' for more info"
+	Write-Host ====================================================
 }

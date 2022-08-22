@@ -1,56 +1,56 @@
 Function Enable-O365AuditLog {
 <#
-    .SYNOPSIS
-        Sets auditig on all mailboxes in the organization as well as sets the default setting.
+	.SYNOPSIS
+		Sets auditig on all mailboxes in the organization as well as sets the default setting.
 
-    .LINK
-        https://docs.microsoft.com/en-us/microsoft-365/compliance/enable-mailbox-auditing
+	.LINK
+		https://docs.microsoft.com/en-us/microsoft-365/compliance/enable-mailbox-auditing
 
-    .LINK
-        https://support.microsoft.com/en-us/help/4026501/office-auditing-in-office-365-for-admins
+	.LINK
+		https://support.microsoft.com/en-us/help/4026501/office-auditing-in-office-365-for-admins
 #>
-    If (Get-Command Get-Mailbox -ErrorAction SilentlyContinue){
-        Write-Host "Enabling Auditing for all existing mailboxes"
-        Get-Mailbox -ResultSize Unlimited -Filter {RecipientTypeDetails -eq "UserMailbox"} | Set-Mailbox -AuditEnabled $true -Verbose
-        Write-Host "Enabling Auditing for the organization as a whole"
-        Set-OrganizationConfig -AuditDisabled $False
-        Write-Host "Checking the orginazation config. If auditing is enabled, this setting should show as 'False'"
-        Get-OrganizationConfig | Format-List AuditDisabled
-    } Else {
-        Write-Host "You are not connected to an exchange server. Try the command 'Connect-O365Exchange'"
-    }
+	If (Get-Command Get-Mailbox -ErrorAction SilentlyContinue){
+		Write-Host "Enabling Auditing for all existing mailboxes"
+		Get-Mailbox -ResultSize Unlimited -Filter {RecipientTypeDetails -eq "UserMailbox"} | Set-Mailbox -AuditEnabled $true -Verbose
+		Write-Host "Enabling Auditing for the organization as a whole"
+		Set-OrganizationConfig -AuditDisabled $False
+		Write-Host "Checking the orginazation config. If auditing is enabled, this setting should show as 'False'"
+		Get-OrganizationConfig | Format-List AuditDisabled
+	} Else {
+		Write-Host "You are not connected to an exchange server. Try the command 'Connect-O365Exchange'"
+	}
 }
 
 Function Enable-Onedrive {
-    #Enables usage of OneDrive local GP - Computer Config\Admin Templates\Windows Components\OneDrive    
-    Reg Add    "HKLM\SOFTWARE\Policies\Microsoft\Windows\OneDrive" /T REG_DWORD /V "DisableFileSyncNGSC" /D 0 /F
-    Reg Add "HKLM\SOFTWARE\Policies\Microsoft\Windows\OneDrive" /T REG_DWORD /V "DisableFileSync" /D 0 /F
-    #Adds OneDrive to File Explorer
-    Reg Add "HKCR\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" /T REG_DWORD /V "System.IsPinnedToNameSpaceTree" /D 1 /F
-    Reg Add "HKCR\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" /T REG_DWORD /V "System.IsPinnedToNameSpaceTree" /D 1 /F
-    Invoke-WebRequest tinyurl.com/get-atgps -useb | Invoke-Expression
-    Install-Choco
-    choco upgrade onedrive --exact -y
+	#Enables usage of OneDrive local GP - Computer Config\Admin Templates\Windows Components\OneDrive    
+	Reg Add    "HKLM\SOFTWARE\Policies\Microsoft\Windows\OneDrive" /T REG_DWORD /V "DisableFileSyncNGSC" /D 0 /F
+	Reg Add "HKLM\SOFTWARE\Policies\Microsoft\Windows\OneDrive" /T REG_DWORD /V "DisableFileSync" /D 0 /F
+	#Adds OneDrive to File Explorer
+	Reg Add "HKCR\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" /T REG_DWORD /V "System.IsPinnedToNameSpaceTree" /D 1 /F
+	Reg Add "HKCR\Wow6432Node\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" /T REG_DWORD /V "System.IsPinnedToNameSpaceTree" /D 1 /F
+	Invoke-WebRequest tinyurl.com/get-atgps -useb | Invoke-Expression
+	Install-Choco
+	choco upgrade onedrive --exact -y
 }
 
 Function Enable-Sleep {
-    If (Get-Process -Name "DontSleep_x64_p") {
-        Write-Host "Resuming power management plan"
-        Stop-Process -Name "DontSleep_x64_p" -Force
-    } Else {
-        Write-Host "Disable-Sleep wasn't running. Did you run 'Disable-Sleep'?"
-    }
+	If (Get-Process -Name "DontSleep_x64_p") {
+		Write-Host "Resuming power management plan"
+		Stop-Process -Name "DontSleep_x64_p" -Force
+	} Else {
+		Write-Host "Disable-Sleep wasn't running. Did you run 'Disable-Sleep'?"
+	}
 }
 
 Function Enable-SSL {
-    Write-Host "Enabling SSL"
-    try {
-    # Set TLS 1.2 (3072), then TLS 1.1 (768), then TLS 1.0 (192)
-    # Use integers because the enumeration values for TLS 1.2 and TLS 1.1 won't
-    # exist in .NET 4.0, even though they are addressable if .NET 4.5+ is
-    # installed (.NET 4.5 is an in-place upgrade).
-    [System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192
-    } catch {
-    Write-Output 'Unable to set PowerShell to use TLS 1.2 and TLS 1.1 due to old .NET Framework installed. If you see underlying connection closed or trust errors, you may need to upgrade to .NET Framework 4.5+ and PowerShell v3+.'
-    }
+	Write-Host "Enabling SSL"
+	try {
+	# Set TLS 1.2 (3072), then TLS 1.1 (768), then TLS 1.0 (192)
+	# Use integers because the enumeration values for TLS 1.2 and TLS 1.1 won't
+	# exist in .NET 4.0, even though they are addressable if .NET 4.5+ is
+	# installed (.NET 4.5 is an in-place upgrade).
+	[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192
+	} catch {
+	Write-Output 'Unable to set PowerShell to use TLS 1.2 and TLS 1.1 due to old .NET Framework installed. If you see underlying connection closed or trust errors, you may need to upgrade to .NET Framework 4.5+ and PowerShell v3+.'
+	}
 }

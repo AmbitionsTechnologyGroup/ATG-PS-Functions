@@ -1,4 +1,4 @@
 Function Expand-Terminal {
-    mode con: cols=120 lines=60
-    $host.UI.RawUI.BufferSize = New-Object System.Management.Automation.Host.Size(120,10240)
+	mode con: cols=120 lines=60
+	$host.UI.RawUI.BufferSize = New-Object System.Management.Automation.Host.Size(120,10240)
 }

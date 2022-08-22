@@ -1,123 +1,123 @@
 Function Add-ChromeShortcut{
-    #Requires -RunAsAdministrator
+	#Requires -RunAsAdministrator
 
-    param
-    (
-        [Parameter(Mandatory=$true)]
-        [string]$Label,
+	param
+	(
+		[Parameter(Mandatory=$true)]
+		[string]$Label,
 
-        [Parameter(Mandatory=$true)]
-        [string]$Url
-    )
+		[Parameter(Mandatory=$true)]
+		[string]$Url
+	)
 
-    If (Test-Path -Path 'C:\Program Files\Google\Chrome\Application\chrome.exe') {
-        $TargetFile = "C:\Program Files\Google\Chrome\Application\chrome.exe"
-    } ElseIf (Test-Path -Path 'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe') {
-        $TargetFile = "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
-    } Else {
-        Write-Host "Google Chrome was not found. Please install manually or with Chocolatey:"
-        Write-Host "   Install-Choco"
-        Write-Host "   choco install GoogleChrome"
-    }
+	If (Test-Path -Path 'C:\Program Files\Google\Chrome\Application\chrome.exe') {
+		$TargetFile = "C:\Program Files\Google\Chrome\Application\chrome.exe"
+	} ElseIf (Test-Path -Path 'C:\Program Files (x86)\Google\Chrome\Application\chrome.exe') {
+		$TargetFile = "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
+	} Else {
+		Write-Host "Google Chrome was not found. Please install manually or with Chocolatey:"
+		Write-Host "   Install-Choco"
+		Write-Host "   choco install GoogleChrome"
+	}
 
-    If ($TargetFile) {
-        $ShortcutFile = "$env:Public\Desktop\" + $Label + ".lnk"
-        $WScriptShell = New-Object -ComObject WScript.Shell
-        $Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
-        $Shortcut.TargetPath = $TargetFile
-        $Shortcut.Arguments = $Url
-        $Shortcut.Save()
-    }
-    <#
-    .SYNOPSIS
-        Creates a Google Chrome Shortcut on the "All Users" Desktop.
-        If Google Chrome is not found, prompts to install the program using ATG-PS scripts + Chocolately.
-    .PARAMETER Label
-        The file name of the shortcut; ".lnk" is automatically appended.
-    .PARAMETER Url
-        The full URL that the shortcut intends to open: "https://www.google.com/"
-    .EXAMPLE
-        Add-ChromeShortcut -Label "Github ATG-PS" -Url "https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/"
-    #>
+	If ($TargetFile) {
+		$ShortcutFile = "$env:Public\Desktop\" + $Label + ".lnk"
+		$WScriptShell = New-Object -ComObject WScript.Shell
+		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
+		$Shortcut.TargetPath = $TargetFile
+		$Shortcut.Arguments = $Url
+		$Shortcut.Save()
+	}
+	<#
+	.SYNOPSIS
+		Creates a Google Chrome Shortcut on the "All Users" Desktop.
+		If Google Chrome is not found, prompts to install the program using ATG-PS scripts + Chocolately.
+	.PARAMETER Label
+		The file name of the shortcut; ".lnk" is automatically appended.
+	.PARAMETER Url
+		The full URL that the shortcut intends to open: "https://www.google.com/"
+	.EXAMPLE
+		Add-ChromeShortcut -Label "Github ATG-PS" -Url "https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/"
+	#>
 }
 
 Function Add-FileFolderShortcut {
-    param
-    (
-        [Parameter(Mandatory=$true)]
-        [string]$SourceLnk,
+	param
+	(
+		[Parameter(Mandatory=$true)]
+		[string]$SourceLnk,
 
-        [Parameter(Mandatory=$true)]
-        [string]$DestinationPath,
+		[Parameter(Mandatory=$true)]
+		[string]$DestinationPath,
 
-        [Parameter(Mandatory=$false)]
-        [string]$StartIn
-    )
+		[Parameter(Mandatory=$false)]
+		[string]$StartIn
+	)
 
-    $WshShell = New-Object -comObject WScript.Shell
-    $Shortcut = $WshShell.CreateShortcut($SourceLnk)
-    $Shortcut.TargetPath = $DestinationPath
-    If ($StartIn) {$Shortcut.WorkingDirectory = $StartIn}
-    $Shortcut.Save()
+	$WshShell = New-Object -comObject WScript.Shell
+	$Shortcut = $WshShell.CreateShortcut($SourceLnk)
+	$Shortcut.TargetPath = $DestinationPath
+	If ($StartIn) {$Shortcut.WorkingDirectory = $StartIn}
+	$Shortcut.Save()
 
-    <#
-    .SYNOPSIS
-        Creates a shortcut to a file or folder.
-    .PARAMETER SourceLnk
-        The file name of the shortcut. Must end with ".lnk"
-    .PARAMETER DestinationPath
-        What the shortcut is pointing to. "C:\Ambitions\RyanIsAwesome.txt"
-    .EXAMPLE
-        Add-FileFolderShortcut -SourceLnk "$env:Public\Desktop\Ambitions Folder.lnk" -DestinationPath "C:\Ambitions"
-        This example puts a shortcut on the desktop called "Ambitions Folder" and points to C:\Ambitions.
-    .EXAMPLE
-        Add-FileFolderShortcut -SourceLnk "$env:Public\Desktop\ProLaw.lnk" -DestinationPath "\\rradb.robles.law\ProLaw\ProLaw.exe" -StartIn "\\rradb.robles.law\ProLaw"
-        This example puts a shortcut on the desktop called ProLaw and with the working directory filled out.
-    #>
+	<#
+	.SYNOPSIS
+		Creates a shortcut to a file or folder.
+	.PARAMETER SourceLnk
+		The file name of the shortcut. Must end with ".lnk"
+	.PARAMETER DestinationPath
+		What the shortcut is pointing to. "C:\Ambitions\RyanIsAwesome.txt"
+	.EXAMPLE
+		Add-FileFolderShortcut -SourceLnk "$env:Public\Desktop\Ambitions Folder.lnk" -DestinationPath "C:\Ambitions"
+		This example puts a shortcut on the desktop called "Ambitions Folder" and points to C:\Ambitions.
+	.EXAMPLE
+		Add-FileFolderShortcut -SourceLnk "$env:Public\Desktop\ProLaw.lnk" -DestinationPath "\\rradb.robles.law\ProLaw\ProLaw.exe" -StartIn "\\rradb.robles.law\ProLaw"
+		This example puts a shortcut on the desktop called ProLaw and with the working directory filled out.
+	#>
 }
 
 Function Add-IEShortcut {
-    param
-    (
-        [Parameter(Mandatory=$true)]
-        [string]$Label,
+	param
+	(
+		[Parameter(Mandatory=$true)]
+		[string]$Label,
 
-        [Parameter(Mandatory=$true)]
-        [string]$Url
-    )
+		[Parameter(Mandatory=$true)]
+		[string]$Url
+	)
 
-    $TargetFile = "C:\Program Files\Internet Explorer\iexplore.exe"
-    $ShortcutFile = "$env:Public\Desktop\" + $Label + ".lnk"
-    $WScriptShell = New-Object -ComObject WScript.Shell
-    $Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
-    $Shortcut.TargetPath = $TargetFile
-    $Shortcut.Arguments = $Url
-    $Shortcut.Save()
+	$TargetFile = "C:\Program Files\Internet Explorer\iexplore.exe"
+	$ShortcutFile = "$env:Public\Desktop\" + $Label + ".lnk"
+	$WScriptShell = New-Object -ComObject WScript.Shell
+	$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
+	$Shortcut.TargetPath = $TargetFile
+	$Shortcut.Arguments = $Url
+	$Shortcut.Save()
 
-    <#
-    .SYNOPSIS
-        Creates an Internet Explorer Shortcut on the "All Users" Desktop.
-    .PARAMETER Label
-        The file name of the shortcut; ".lnk" is automatically appended.
-    .PARAMETER Url
-        The full URL that the shortcut intends to open: "https://www.google.com/"
-    .EXAMPLE
-        Add-ChromeShortcut -Label "Github ATG-PS" -Url "https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/"
-    #>
+	<#
+	.SYNOPSIS
+		Creates an Internet Explorer Shortcut on the "All Users" Desktop.
+	.PARAMETER Label
+		The file name of the shortcut; ".lnk" is automatically appended.
+	.PARAMETER Url
+		The full URL that the shortcut intends to open: "https://www.google.com/"
+	.EXAMPLE
+		Add-ChromeShortcut -Label "Github ATG-PS" -Url "https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/"
+	#>
 
 }
 
 Function Add-WebShortcut{
-    param
-    (
-        [string]$Label,
-        [string]$Url
-    )
+	param
+	(
+		[string]$Label,
+		[string]$Url
+	)
 
-    Write-Host "Adding a shortcut to $Label to the desktop"
-    $Shell = New-Object -ComObject ("WScript.Shell")
-    $URLFilePath = $env:Public + "\Desktop\" + $Label + ".url"
-    $Favorite = $Shell.CreateShortcut($URLFilePath)
-    $Favorite.TargetPath = $Url
-    $Favorite.Save()
+	Write-Host "Adding a shortcut to $Label to the desktop"
+	$Shell = New-Object -ComObject ("WScript.Shell")
+	$URLFilePath = $env:Public + "\Desktop\" + $Label + ".url"
+	$Favorite = $Shell.CreateShortcut($URLFilePath)
+	$Favorite.TargetPath = $Url
+	$Favorite.Save()
 }

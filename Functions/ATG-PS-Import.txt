@@ -1,543 +1,543 @@
 Function Import-PPESenderLists {
-    Function Export-PPEListsViaAPI {
-        <#
-        .REQUIREMENTS
-            * API v1 from Proofpoint Essentials
-            [Documentation: https://us1.proofpointessentials.com/api/v1/docs/specification.php]
+	Function Export-PPEListsViaAPI {
+		<#
+		.REQUIREMENTS
+			* API v1 from Proofpoint Essentials
+			[Documentation: https://us1.proofpointessentials.com/api/v1/docs/specification.php]
 
-            * Administrator Account for Proofpoint Essentials
-                --Organization Admin
-                --Channel Admin
+			* Administrator Account for Proofpoint Essentials
+				--Organization Admin
+				--Channel Admin
 
-        .DESCRIPTION
-            This script is intended to use the API (v1) for Proofpoint Essentials to capture and export
-            user and organization level Sender Lists in 4 separate CSV files.
+		.DESCRIPTION
+			This script is intended to use the API (v1) for Proofpoint Essentials to capture and export
+			user and organization level Sender Lists in 4 separate CSV files.
 
-        .INPUTS
-            * Proofpoint Essentials Console Credentials
-            * Domain that you are going to get Safe Sender information from
-            * The Data Stack that the domain resides on. This is the beginning portion of your login site:
-                (I.E. https://us2.proofpointessentials.com -- us2 would be the stack.)
+		.INPUTS
+			* Proofpoint Essentials Console Credentials
+			* Domain that you are going to get Safe Sender information from
+			* The Data Stack that the domain resides on. This is the beginning portion of your login site:
+				(I.E. https://us2.proofpointessentials.com -- us2 would be the stack.)
 
-        .OUTPUTS
-            * This will output 4 files in the System Drive of your computer. These files will be located 
-            in the following folder:
-                ** (SystemDrive, C for example) C:\Temp\SenderListExport\domain.com\
+		.OUTPUTS
+			* This will output 4 files in the System Drive of your computer. These files will be located 
+			in the following folder:
+				** (SystemDrive, C for example) C:\Temp\SenderListExport\domain.com\
 
-            * Files Generated from this script
-                ** UserSafeSenderList.csv
-                ** UserBlockedSenderList.csv
-                ** OrgSafeSender.csv
-                ** OrgBlockedSender.csv
+			* Files Generated from this script
+				** UserSafeSenderList.csv
+				** UserBlockedSenderList.csv
+				** OrgSafeSender.csv
+				** OrgBlockedSender.csv
 
-        .NOTES
-            Version:         1.0
-            Creation Date:   4/8/2021
+		.NOTES
+			Version:         1.0
+			Creation Date:   4/8/2021
 
-        .DISCLAIMER
-            This script works in it's current form. Any alterations or adjustments made to this script
-            will not be supported or eligible for troubleshooting support. This script is used for
-            data gathering only. Proofpoint Essentials Support does not currently offer services
-            to troubleshoot scripting solutions or script configurations. This is a working example of
-            how the API can be utilized to get management information together for securing your 
-            customers and enabling partners with new tools for information. 
+		.DISCLAIMER
+			This script works in it's current form. Any alterations or adjustments made to this script
+			will not be supported or eligible for troubleshooting support. This script is used for
+			data gathering only. Proofpoint Essentials Support does not currently offer services
+			to troubleshoot scripting solutions or script configurations. This is a working example of
+			how the API can be utilized to get management information together for securing your 
+			customers and enabling partners with new tools for information. 
 
-        #>
+		#>
 
-        #Establish global parameters that will be used throughout the script.
-        $Global:params = @{
-            Domain      = ""
-            Stack       = ""
-            StackList   = ('us1','us2','us3','us4','us5','eu1')
-            Headers     = ""
-            Method      = 'GET'
-            Body        = ""
-            SMTP        = ""
-            ContentType = 'application/json'
-            FolderName  = ""
-        }
+		#Establish global parameters that will be used throughout the script.
+		$Global:params = @{
+			Domain      = ""
+			Stack       = ""
+			StackList   = ('us1','us2','us3','us4','us5','eu1')
+			Headers     = ""
+			Method      = 'GET'
+			Body        = ""
+			SMTP        = ""
+			ContentType = 'application/json'
+			FolderName  = ""
+		}
 
-        # This funciton will capture and prepare your credentials for the Proofpoint Essentials API.
-        function Snag-Creds {
-            $domain = $Global:params.Domain
-            $Creds = Get-Credential -Message "Enter your Credentials for Proofpoint Essentials."
-
-
-            $headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
-            $headers.Add("X-User",($Creds).UserName)
-            $headers.Add("X-Password",($Creds.GetNetworkCredential()).Password)
-
-            $Global:params.Headers = $headers
-
-        }
-
-        # This function will take the parameters collected in the main script and use them to cycle through
-        # the sender lists for the organization and each user within the provided domain.
-        function Check-SafeSenderLists ($Pdomain) {
-            $targetStack = $Global:params.Stack
-            $targetDomain = $Pdomain
-            $targetCompanyUsers = "https://$targetStack.proofpointessentials.com/api/v1/orgs/$targetDomain/users"
-            $targetCompanyOrg = "https://$targetStack.proofpointessentials.com/api/v1/orgs/$targetDomain/"
-            $AllDomainCheck = '*@'
+		# This funciton will capture and prepare your credentials for the Proofpoint Essentials API.
+		function Snag-Creds {
+			$domain = $Global:params.Domain
+			$Creds = Get-Credential -Message "Enter your Credentials for Proofpoint Essentials."
 
 
-            $UserResponse = Invoke-RestMethod -Headers $Global:params.Headers -Uri $targetCompanyUsers -Method Get
-            $OrgResponse = Invoke-RestMethod -Headers $Global:params.Headers -Uri $targetCompanyOrg -Method Get
+			$headers = New-Object "System.Collections.Generic.Dictionary[[String],[String]]"
+			$headers.Add("X-User",($Creds).UserName)
+			$headers.Add("X-Password",($Creds.GetNetworkCredential()).Password)
 
-            ## Export User Safe Sender
-            $Global:ExportFolder = "$ENV:SystemDrive\Temp\SenderListExport\$Pdomain"
-            $UserSafeSenderList = "$Global:ExportFolder\UserSafeSenderList.csv"
-            $UserBlockedSenderList = "$Global:ExportFolder\UserBlockedSenderList.csv"
-            $UserSafeSender = @()
-            $UserBlockedSender = @()
-            IF (!(Test-Path $Global:ExportFolder)) {New-Item $Global:ExportFolder -ItemType Directory -Force}
-            Write-Output "`nProcessing your request now..."
-        ## Exporting MULTI HashTable
-            
-            #Safe Sender Expansion for Users
-            foreach ($item in $UserResponse.users) {
-                $primary = $item.primary_email
-                
-                foreach ($WL in $item.white_list_senders) {
-                    $SafetyTest = $null
-                    IF ($WL -eq $primary) {$SafetyTest = "match"}     
-                    IF ($WL -match '\*\@' -and $SafetyTest -eq $null) {$SafetyTest = "domain"}
+			$Global:params.Headers = $headers
 
-                    switch ($SafetyTest) {
-                        "match" {$UserSafeSender += @([pscustomobject]@{PrimaryEmail=$primary;Entry="$WL"});break}
-                        "domain" {$UserSafeSender += @([pscustomobject]@{PrimaryEmail=$primary;Entry="$WL"});break}
-                        default {$UserSafeSender += @([pscustomobject]@{PrimaryEmail=$primary;Entry="$WL"});break}
-                    }
-                }
-            
-            foreach ($BL in $item.black_list_senders) {
-            
-                    $SafetyTest = $null
-                    IF ($BL -eq $primary) {$SafetyTest = "match"}     
-                    IF ($BL -match '\*\@' -and $SafetyTest -eq $null) {$SafetyTest = "domain"}
+		}
 
-                    switch ($SafetyTest) {
-                        "match" {$UserBlockedSender += @([pscustomobject]@{PrimaryEmail=$primary;Entry="$BL"});break}
-                        "domain" {$UserBlockedSender += @([pscustomobject]@{PrimaryEmail=$primary;Entry="$BL"});break}
-                        default {$UserBlockedSender += @([pscustomobject]@{PrimaryEmail=$primary;Entry="$BL"});break}
-                    }
-                }
-            
-            ## Export ORG Safe Sender List
-            $OrgSafeListLog = "$Global:ExportFolder\OrgSafeSender.csv"
-            $OrgBlockedListLog = "$Global:ExportFolder\OrgBlockedSender.csv"
-            $OrgSafeSender = @()
-            $OrgBlockedSender = @()
+		# This function will take the parameters collected in the main script and use them to cycle through
+		# the sender lists for the organization and each user within the provided domain.
+		function Check-SafeSenderLists ($Pdomain) {
+			$targetStack = $Global:params.Stack
+			$targetDomain = $Pdomain
+			$targetCompanyUsers = "https://$targetStack.proofpointessentials.com/api/v1/orgs/$targetDomain/users"
+			$targetCompanyOrg = "https://$targetStack.proofpointessentials.com/api/v1/orgs/$targetDomain/"
+			$AllDomainCheck = '*@'
 
 
-        ## Exporting MULTI HashTable
-            #Safe Sender Expansion for Users
-            $MainDomain = $OrgResponse.primary_domain
-            foreach ($OWL in $OrgResponse.white_list_senders) {
-                $OrgSafetyTest = $null
-                IF ($OWL -match '\*\@') {$OrgSafetyTest = "domain"}
+			$UserResponse = Invoke-RestMethod -Headers $Global:params.Headers -Uri $targetCompanyUsers -Method Get
+			$OrgResponse = Invoke-RestMethod -Headers $Global:params.Headers -Uri $targetCompanyOrg -Method Get
 
-                switch ($OrgSafetyTest) {
-                    "domain" {$OrgSafeSender += @([pscustomobject]@{PrimaryDomain=$MainDomain;Entry="$OWL -- WARNING: ALL Domain Email listed as Safe Sender"});break}
-                    default {$OrgSafeSender += @([pscustomobject]@{PrimaryDomain=$MainDomain;Entry="$OWL"});break}
-                }
-            }
+			## Export User Safe Sender
+			$Global:ExportFolder = "$ENV:SystemDrive\Temp\SenderListExport\$Pdomain"
+			$UserSafeSenderList = "$Global:ExportFolder\UserSafeSenderList.csv"
+			$UserBlockedSenderList = "$Global:ExportFolder\UserBlockedSenderList.csv"
+			$UserSafeSender = @()
+			$UserBlockedSender = @()
+			IF (!(Test-Path $Global:ExportFolder)) {New-Item $Global:ExportFolder -ItemType Directory -Force}
+			Write-Output "`nProcessing your request now..."
+		## Exporting MULTI HashTable
+			
+			#Safe Sender Expansion for Users
+			foreach ($item in $UserResponse.users) {
+				$primary = $item.primary_email
+				
+				foreach ($WL in $item.white_list_senders) {
+					$SafetyTest = $null
+					IF ($WL -eq $primary) {$SafetyTest = "match"}     
+					IF ($WL -match '\*\@' -and $SafetyTest -eq $null) {$SafetyTest = "domain"}
 
-            foreach ($OBL in $OrgResponse.black_list_senders) {
-                $OrgSafetyTest = $null
-                IF ($OBL -match '\*\@') {$OrgSafetyTest = "domain"}
+					switch ($SafetyTest) {
+						"match" {$UserSafeSender += @([pscustomobject]@{PrimaryEmail=$primary;Entry="$WL"});break}
+						"domain" {$UserSafeSender += @([pscustomobject]@{PrimaryEmail=$primary;Entry="$WL"});break}
+						default {$UserSafeSender += @([pscustomobject]@{PrimaryEmail=$primary;Entry="$WL"});break}
+					}
+				}
+			
+			foreach ($BL in $item.black_list_senders) {
+			
+					$SafetyTest = $null
+					IF ($BL -eq $primary) {$SafetyTest = "match"}     
+					IF ($BL -match '\*\@' -and $SafetyTest -eq $null) {$SafetyTest = "domain"}
 
-                switch ($OrgSafetyTest) {
-                    "domain" {$OrgBlockedSender += @([pscustomobject]@{PrimaryDomain=$MainDomain;Entry="$OBL -- WARNING: ALL Domain Email listed as Blocked Sender"});break}
-                    default {$OrgBlockedSender += @([pscustomobject]@{PrimaryDomain=$MainDomain;Entry="$OBL"});break}
-                }
-            }
-            
-            }
-
-            $UserSafeSender | Export-Csv -Path $UserSafeSenderList -NoTypeInformation -Force
-            $UserBlockedSender | Export-Csv -Path $UserBlockedSenderList -NoTypeInformation -Force
-            $OrgSafeSender | Export-Csv -Path $OrgSafeListLog -NoTypeInformation -Force
-            $OrgBlockedSender | Export-Csv -Path $OrgBlockedListLog -NoTypeInformation -Force
-            
-            #Open Explorer Window with new files inside.
-            Invoke-Item $Global:ExportFolder
-        }
-
-        # This script will begin with a clean Powershell Window and walk through the credentials capture.
-        cls
-        Write-Output "Enter your credentials for Proofpoint.`n"
-        Snag-Creds
-
-        # This will enable you to select the domain that you wish to get information from.
-        $TargetDomain = Read-Host -Prompt "Which domain are you going to pull sender lists from"
-
-        # This is a security check which will only accept appropriate data stacks that we currently use.
-        $Global:params.Stack = $null
-        do {
-            $Global:params.Stack = "us1" #(Read-Host "Which data stack are you accessing? (us1,us2,us3,us4,us5,eu1)").ToLower()
-            } while ($Global:params.Stack -notin $Global:params.StackList)
-
-        # This will execute the main program and generate the files within the selected directory. 
-        Check-SafeSenderLists -Pdomain $TargetDomain
-    }
+					switch ($SafetyTest) {
+						"match" {$UserBlockedSender += @([pscustomobject]@{PrimaryEmail=$primary;Entry="$BL"});break}
+						"domain" {$UserBlockedSender += @([pscustomobject]@{PrimaryEmail=$primary;Entry="$BL"});break}
+						default {$UserBlockedSender += @([pscustomobject]@{PrimaryEmail=$primary;Entry="$BL"});break}
+					}
+				}
+			
+			## Export ORG Safe Sender List
+			$OrgSafeListLog = "$Global:ExportFolder\OrgSafeSender.csv"
+			$OrgBlockedListLog = "$Global:ExportFolder\OrgBlockedSender.csv"
+			$OrgSafeSender = @()
+			$OrgBlockedSender = @()
 
 
-    Function Test-User {
-        Write-Host "Checking for a valid user"
-        $Global:Mailbox = ($AllUserMailboxes | Where-Object -Property EmailAddresses -match $Global:User)
-        If ($Mailbox) {
-            $Global:User = $Mailbox.Alias
-            $Global:Name = $Mailbox.DisplayName
-            Write-Host "Mailbox for $Name was successfully found."
-        } Else {
-            <#$Mailbox = Get-ExoMailbox | Where-Object {($_.EmailAddresses -match $Global:User) -or ($_.PrimarySmtpAddress -match $Global:User)}#>
-            If (-not $Mailbox) {
-                Write-Host "Mailbox not found."
-                #Break
-            } ElseIf ($Mailbox.Count -gt 1) {
-                Write-Host "Multiple mailboxes found. Please refine your search."
-                #Break
-            } ElseIf ($Mailbox) {
-                $Global:User = $Mailbox.Alias
-                $Global:Name = $Mailbox.DisplayName
-                Write-Host "Mailbox for $Name was successfully found by secondary email address."
-            }
-        }
-    }
-    
-    Function Test-Entries {
-        Write-Host "Scanning for invalid entries"
-        If ($Global:blocked) {
-            $PreBlockedCount = $Global:blocked.count
-            $Global:DomainList | ForEach-Object {$Global:blocked = $Global:blocked | Where-Object {$_ -notlike $('*@' + $_)}}
-            $Global:blocked = $Global:blocked.Replace('*@','')
-            $PostBlockedCount = $Global:blocked.count
-        }
-        
-        If ($Global:trusted) {
-            $PreTrustedCount = $Global:trusted.count
-            $Global:DomainList | ForEach-Object {$Global:trusted = $Global:trusted | Where-Object {$_ -notlike $('*@' + $_)}}
-            $Global:trusted = $Global:trusted.Replace('*@','')
-            $PostTrustedCount = $Global:trusted.count
-        }
-        $TotalRemovedCount = $($PreBlockedCount - $PostBlockedCount) + $($PreTrustedCount - $PostTrustedCount)
-        Write-Host "Removed $TotalRemovedCount invalid entries."
-    }
+		## Exporting MULTI HashTable
+			#Safe Sender Expansion for Users
+			$MainDomain = $OrgResponse.primary_domain
+			foreach ($OWL in $OrgResponse.white_list_senders) {
+				$OrgSafetyTest = $null
+				IF ($OWL -match '\*\@') {$OrgSafetyTest = "domain"}
 
-    Function Import-Entries {
-        #Check for empty lists
-        #$Global:blocked | FT
-        #$Global:trusted | FT
-        If ([string]::IsNullOrWhiteSpace($Global:blocked)) {Clear-Variable blocked}
-        If ([string]::IsNullOrWhiteSpace($Global:trusted)) {Clear-Variable trusted}
-        $BadBlocked = @()
-        $BadTrusted = @()
-        Try {
-            Write-Host "Attempting to configure all addresses at once."
-            If ($Global:blocked -and $Global:trusted) {
-                Write-Host "Blocked and Trusted Lists found, importing both."
-                Set-MailboxJunkEmailConfiguration $Global:User -BlockedSendersAndDomains @{Add=$Global:blocked} -TrustedSendersAndDomains @{Add=$Global:trusted} -ContactsTrusted $false -ErrorAction Stop
-            } elseif ($Global:blocked -and !($Global:trusted)) {
-                Write-Host "Only Blocked list found, importing it."
-                Set-MailboxJunkEmailConfiguration $Global:User -BlockedSendersAndDomains @{Add=$Global:blocked} -ErrorAction Stop
-            } elseif (!($Global:blocked) -and $Global:trusted) {
-                Write-Host "Only Trusted list found, importing it."
-                Set-MailboxJunkEmailConfiguration $Global:User -TrustedSendersAndDomains @{Add=$Global:trusted} -ContactsTrusted $false -ErrorAction Stop
-            } elseif (!($Global:blocked) -and !($Global:trusted)) {
-                Write-Host "Neither a blocked list nor a trusted list found. Is there anything to import?"
-            }
-            Write-Host "It worked!"
-            Get-MailboxJunkEmailConfiguration -Identity $Global:User | Format-Table Identity, TrustedSendersAndDomains, BlockedSendersAndDomains -AutoSize
-        } Catch {
-            Write-Host "That didn't work, trying one at a time."
-            $CurrentSettings = Get-MailboxJunkEmailConfiguration -Identity $Global:User
-            If ($Global:blocked) {
-                $Global:blocked | ForEach-Object {
-                    Write-Host "Blocking: $_"
-                    $CurrentEmail = $_
-                    If ($CurrentSettings.BlockedSendersAndDomains -Contains $_){
-                        Write-Host -ForegroundColor Green "Already Blocked: $_"
-                    } Else {
-                        Try {
-                            Set-MailboxJunkEmailConfiguration $Global:User -BlockedSendersAndDomains @{Add=$_} -ErrorAction Stop
-                        } Catch {
-                            Write-Host -ForegroundColor Red "Failed to block: $_"
-                            $BadBlocked += $CurrentEmail
-                            Clear-Variable CurrentEmail
-                        }
-                    }
-                }
-            }
-            If ($Global:trusted) {
-                $Global:trusted | ForEach-Object {
-                    Write-Host "Trusting $_"
-                    $CurrentEmail = $_
-                    If ($CurrentSettings.TrustedSendersAndDomains -Contains $_){
-                        Write-Host -ForegroundColor Green "Already trusted: $_"
-                    } Else {
-                        Try {
-                            Set-MailboxJunkEmailConfiguration $Global:User -TrustedSendersAndDomains @{Add=$_} -ErrorAction Stop
-                        } Catch {
-                            Write-Host -ForegroundColor Red "Failed to trust: $_"
-                            $BadTrusted += $CurrentEmail
-                            Clear-Variable CurrentEmail
-                        }
-                    }
-                }
-            }
-            Set-MailboxJunkEmailConfiguration $Global:User -ContactsTrusted $false
-            $BadBlocked
-            $BadTrusted
-            Get-MailboxJunkEmailConfiguration -Identity $Global:User | Format-Table Identity, TrustedSendersAndDomains, BlockedSendersAndDomains -AutoSize
-        }
-    }
-    Write-Host -NoNewLine "Create a new temporary organization admin account in the client`s account.`nNext, ensure you've connected to Exchange Online.`nWhen done, press any key to continue..."
-    $null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
-    Export-PPEListsViaAPI
-    $Directory = $Global:ExportFolder #Read-Host "Enter directory of exported files"
-    Clear-Variable user,email,domain,blocked,trusted -Force -Scope Global -ea SilentlyContinue
-    $Global:RawUserBlockedSenderList = Import-Csv -Path $($Directory + "\UserBlockedSenderList.csv")
-    $Global:RawUserSafeSenderList = Import-Csv -Path $($Directory + "\UserSafeSenderList.csv")
-    #Organization Wide List conversion and import
-    $OrgSafeSenderFile = $($Directory + '\OrgSafeSender.csv')
-    (Get-Content $OrgSafeSenderFile).replace('*@', '') | Set-Content $OrgSafeSenderFile
-    (Get-Content $OrgSafeSenderFile).replace(' -- WARNING: ALL Domain Email listed as Safe Sender', '') | Set-Content $OrgSafeSenderFile
-    $OrgBlockedSenderFile = $($Directory + '\OrgBlockedSender.csv')
-    (Get-Content $OrgBlockedSenderFile).replace('*@', '') | Set-Content $OrgBlockedSenderFile
-    (Get-Content $OrgBlockedSenderFile).replace(' -- WARNING: ALL Domain Email listed as Blocked Sender', '') | Set-Content $OrgBlockedSenderFile
-    $Global:RawOrgBlockedSenderList = Import-Csv -Path $OrgBlockedSenderFile
-    $Global:RawOrgSafeSenderList = Import-Csv -Path $OrgSafeSenderFile
-    $OrgBlockedIndividualSenders = $($RawOrgBlockedSenderList | Where-Object -Property Entry -Match '@').Entry
-    $OrgBlockedDomainSenders = $($RawOrgBlockedSenderList | Where-Object -Property Entry -NotMatch '@').Entry
-    $OrgSafeIndividualSenders = $($RawOrgSafeSenderList | Where-Object -Property Entry -Match '@').Entry
-    $OrgSafeDomainSenders = $($RawOrgSafeSenderList | Where-Object -Property Entry -NotMatch '@').Entry
+				switch ($OrgSafetyTest) {
+					"domain" {$OrgSafeSender += @([pscustomobject]@{PrimaryDomain=$MainDomain;Entry="$OWL -- WARNING: ALL Domain Email listed as Safe Sender"});break}
+					default {$OrgSafeSender += @([pscustomobject]@{PrimaryDomain=$MainDomain;Entry="$OWL"});break}
+				}
+			}
 
-    $Global:DomainList = (Get-AcceptedDomain).DomainName
-    $Global:UserBlockedSenderList = $Global:RawUserBlockedSenderList
-    $Global:UserSafeSenderList = $Global:RawUserSafeSenderList
-    ForEach ($Domain in $Global:DomainList){$Global:UserBlockedSenderList = $Global:UserBlockedSenderList | Where-Object {$_.Entry -notlike $('*@' + $Domain)}}
-    ForEach ($Domain in $Global:DomainList){$Global:UserSafeSenderList = $Global:UserSafeSenderList | Where-Object {$_.Entry -notlike $('*@' + $Domain)}}
+			foreach ($OBL in $OrgResponse.black_list_senders) {
+				$OrgSafetyTest = $null
+				IF ($OBL -match '\*\@') {$OrgSafetyTest = "domain"}
+
+				switch ($OrgSafetyTest) {
+					"domain" {$OrgBlockedSender += @([pscustomobject]@{PrimaryDomain=$MainDomain;Entry="$OBL -- WARNING: ALL Domain Email listed as Blocked Sender"});break}
+					default {$OrgBlockedSender += @([pscustomobject]@{PrimaryDomain=$MainDomain;Entry="$OBL"});break}
+				}
+			}
+			
+			}
+
+			$UserSafeSender | Export-Csv -Path $UserSafeSenderList -NoTypeInformation -Force
+			$UserBlockedSender | Export-Csv -Path $UserBlockedSenderList -NoTypeInformation -Force
+			$OrgSafeSender | Export-Csv -Path $OrgSafeListLog -NoTypeInformation -Force
+			$OrgBlockedSender | Export-Csv -Path $OrgBlockedListLog -NoTypeInformation -Force
+			
+			#Open Explorer Window with new files inside.
+			Invoke-Item $Global:ExportFolder
+		}
+
+		# This script will begin with a clean Powershell Window and walk through the credentials capture.
+		cls
+		Write-Output "Enter your credentials for Proofpoint.`n"
+		Snag-Creds
+
+		# This will enable you to select the domain that you wish to get information from.
+		$TargetDomain = Read-Host -Prompt "Which domain are you going to pull sender lists from"
+
+		# This is a security check which will only accept appropriate data stacks that we currently use.
+		$Global:params.Stack = $null
+		do {
+			$Global:params.Stack = "us1" #(Read-Host "Which data stack are you accessing? (us1,us2,us3,us4,us5,eu1)").ToLower()
+			} while ($Global:params.Stack -notin $Global:params.StackList)
+
+		# This will execute the main program and generate the files within the selected directory. 
+		Check-SafeSenderLists -Pdomain $TargetDomain
+	}
 
 
-    $Global:Users = ($Global:UserBlockedSenderList.PrimaryEmail + $Global:UserSafeSenderList.PrimaryEmail) | Sort -Unique
-    $Global:AllUserMailboxes = Get-Mailbox
-    $Global:Users | ForEach-Object {
-        $Global:Email = $_
-        $Global:User = $Global:Email.Split("@")[0]
-        #$Global:domain = $Global:Email.Split("@")[1]
-        Write-Host "Processing: User= $Global:User"
-        Test-User
-        #$Global:blocked = @()
-        #$Global:trusted = @()
-        $Global:blocked = ($Global:UserBlockedSenderList | Where-Object {$_.PrimaryEmail -eq $Global:Email}).Entry
-        $Global:trusted = ($Global:UserSafeSenderList | Where-Object {$_.PrimaryEmail -eq $Global:Email}).Entry
-        Write-Host "There are $($Global:blocked.count) blocked entries and $($Global:trusted.count) trusted entries for $Global:User"
-        #Test-Entries
-        If ($Global:Mailbox){Import-Entries}
-        Clear-Variable user,name,email,mailbox,domain,blocked,trusted -Force -Scope Global -ea SilentlyContinue
-        Write-Host "`n`n"
-    }
+	Function Test-User {
+		Write-Host "Checking for a valid user"
+		$Global:Mailbox = ($AllUserMailboxes | Where-Object -Property EmailAddresses -match $Global:User)
+		If ($Mailbox) {
+			$Global:User = $Mailbox.Alias
+			$Global:Name = $Mailbox.DisplayName
+			Write-Host "Mailbox for $Name was successfully found."
+		} Else {
+			<#$Mailbox = Get-ExoMailbox | Where-Object {($_.EmailAddresses -match $Global:User) -or ($_.PrimarySmtpAddress -match $Global:User)}#>
+			If (-not $Mailbox) {
+				Write-Host "Mailbox not found."
+				#Break
+			} ElseIf ($Mailbox.Count -gt 1) {
+				Write-Host "Multiple mailboxes found. Please refine your search."
+				#Break
+			} ElseIf ($Mailbox) {
+				$Global:User = $Mailbox.Alias
+				$Global:Name = $Mailbox.DisplayName
+				Write-Host "Mailbox for $Name was successfully found by secondary email address."
+			}
+		}
+	}
+	
+	Function Test-Entries {
+		Write-Host "Scanning for invalid entries"
+		If ($Global:blocked) {
+			$PreBlockedCount = $Global:blocked.count
+			$Global:DomainList | ForEach-Object {$Global:blocked = $Global:blocked | Where-Object {$_ -notlike $('*@' + $_)}}
+			$Global:blocked = $Global:blocked.Replace('*@','')
+			$PostBlockedCount = $Global:blocked.count
+		}
+		
+		If ($Global:trusted) {
+			$PreTrustedCount = $Global:trusted.count
+			$Global:DomainList | ForEach-Object {$Global:trusted = $Global:trusted | Where-Object {$_ -notlike $('*@' + $_)}}
+			$Global:trusted = $Global:trusted.Replace('*@','')
+			$PostTrustedCount = $Global:trusted.count
+		}
+		$TotalRemovedCount = $($PreBlockedCount - $PostBlockedCount) + $($PreTrustedCount - $PostTrustedCount)
+		Write-Host "Removed $TotalRemovedCount invalid entries."
+	}
 
-    Write-Host "Setting Organization Level sender lists."
-    $ContentFilterPolicies = Get-HostedContentFilterPolicy
-    If ($OrgBlockedIndividualSenders) {$ContentFilterPolicies | Set-HostedContentFilterPolicy -BlockedSenders $OrgBlockedIndividualSenders}
-    If ($OrgBlockedDomainSenders) {$ContentFilterPolicies | Set-HostedContentFilterPolicy -BlockedSenderDomains $OrgBlockedDomainSenders}
-    If ($OrgSafeIndividualSenders) {$ContentFilterPolicies | Set-HostedContentFilterPolicy -AllowedSenders $OrgSafeIndividualSenders}
-    If ($OrgSafeDomainSenders) {$ContentFilterPolicies | Set-HostedContentFilterPolicy -AllowedSenderDomains $OrgSafeDomainSenders}
+	Function Import-Entries {
+		#Check for empty lists
+		#$Global:blocked | FT
+		#$Global:trusted | FT
+		If ([string]::IsNullOrWhiteSpace($Global:blocked)) {Clear-Variable blocked}
+		If ([string]::IsNullOrWhiteSpace($Global:trusted)) {Clear-Variable trusted}
+		$BadBlocked = @()
+		$BadTrusted = @()
+		Try {
+			Write-Host "Attempting to configure all addresses at once."
+			If ($Global:blocked -and $Global:trusted) {
+				Write-Host "Blocked and Trusted Lists found, importing both."
+				Set-MailboxJunkEmailConfiguration $Global:User -BlockedSendersAndDomains @{Add=$Global:blocked} -TrustedSendersAndDomains @{Add=$Global:trusted} -ContactsTrusted $false -ErrorAction Stop
+			} elseif ($Global:blocked -and !($Global:trusted)) {
+				Write-Host "Only Blocked list found, importing it."
+				Set-MailboxJunkEmailConfiguration $Global:User -BlockedSendersAndDomains @{Add=$Global:blocked} -ErrorAction Stop
+			} elseif (!($Global:blocked) -and $Global:trusted) {
+				Write-Host "Only Trusted list found, importing it."
+				Set-MailboxJunkEmailConfiguration $Global:User -TrustedSendersAndDomains @{Add=$Global:trusted} -ContactsTrusted $false -ErrorAction Stop
+			} elseif (!($Global:blocked) -and !($Global:trusted)) {
+				Write-Host "Neither a blocked list nor a trusted list found. Is there anything to import?"
+			}
+			Write-Host "It worked!"
+			Get-MailboxJunkEmailConfiguration -Identity $Global:User | Format-Table Identity, TrustedSendersAndDomains, BlockedSendersAndDomains -AutoSize
+		} Catch {
+			Write-Host "That didn't work, trying one at a time."
+			$CurrentSettings = Get-MailboxJunkEmailConfiguration -Identity $Global:User
+			If ($Global:blocked) {
+				$Global:blocked | ForEach-Object {
+					Write-Host "Blocking: $_"
+					$CurrentEmail = $_
+					If ($CurrentSettings.BlockedSendersAndDomains -Contains $_){
+						Write-Host -ForegroundColor Green "Already Blocked: $_"
+					} Else {
+						Try {
+							Set-MailboxJunkEmailConfiguration $Global:User -BlockedSendersAndDomains @{Add=$_} -ErrorAction Stop
+						} Catch {
+							Write-Host -ForegroundColor Red "Failed to block: $_"
+							$BadBlocked += $CurrentEmail
+							Clear-Variable CurrentEmail
+						}
+					}
+				}
+			}
+			If ($Global:trusted) {
+				$Global:trusted | ForEach-Object {
+					Write-Host "Trusting $_"
+					$CurrentEmail = $_
+					If ($CurrentSettings.TrustedSendersAndDomains -Contains $_){
+						Write-Host -ForegroundColor Green "Already trusted: $_"
+					} Else {
+						Try {
+							Set-MailboxJunkEmailConfiguration $Global:User -TrustedSendersAndDomains @{Add=$_} -ErrorAction Stop
+						} Catch {
+							Write-Host -ForegroundColor Red "Failed to trust: $_"
+							$BadTrusted += $CurrentEmail
+							Clear-Variable CurrentEmail
+						}
+					}
+				}
+			}
+			Set-MailboxJunkEmailConfiguration $Global:User -ContactsTrusted $false
+			$BadBlocked
+			$BadTrusted
+			Get-MailboxJunkEmailConfiguration -Identity $Global:User | Format-Table Identity, TrustedSendersAndDomains, BlockedSendersAndDomains -AutoSize
+		}
+	}
+	Write-Host -NoNewLine "Create a new temporary organization admin account in the client`s account.`nNext, ensure you've connected to Exchange Online.`nWhen done, press any key to continue..."
+	$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown')
+	Export-PPEListsViaAPI
+	$Directory = $Global:ExportFolder #Read-Host "Enter directory of exported files"
+	Clear-Variable user,email,domain,blocked,trusted -Force -Scope Global -ea SilentlyContinue
+	$Global:RawUserBlockedSenderList = Import-Csv -Path $($Directory + "\UserBlockedSenderList.csv")
+	$Global:RawUserSafeSenderList = Import-Csv -Path $($Directory + "\UserSafeSenderList.csv")
+	#Organization Wide List conversion and import
+	$OrgSafeSenderFile = $($Directory + '\OrgSafeSender.csv')
+	(Get-Content $OrgSafeSenderFile).replace('*@', '') | Set-Content $OrgSafeSenderFile
+	(Get-Content $OrgSafeSenderFile).replace(' -- WARNING: ALL Domain Email listed as Safe Sender', '') | Set-Content $OrgSafeSenderFile
+	$OrgBlockedSenderFile = $($Directory + '\OrgBlockedSender.csv')
+	(Get-Content $OrgBlockedSenderFile).replace('*@', '') | Set-Content $OrgBlockedSenderFile
+	(Get-Content $OrgBlockedSenderFile).replace(' -- WARNING: ALL Domain Email listed as Blocked Sender', '') | Set-Content $OrgBlockedSenderFile
+	$Global:RawOrgBlockedSenderList = Import-Csv -Path $OrgBlockedSenderFile
+	$Global:RawOrgSafeSenderList = Import-Csv -Path $OrgSafeSenderFile
+	$OrgBlockedIndividualSenders = $($RawOrgBlockedSenderList | Where-Object -Property Entry -Match '@').Entry
+	$OrgBlockedDomainSenders = $($RawOrgBlockedSenderList | Where-Object -Property Entry -NotMatch '@').Entry
+	$OrgSafeIndividualSenders = $($RawOrgSafeSenderList | Where-Object -Property Entry -Match '@').Entry
+	$OrgSafeDomainSenders = $($RawOrgSafeSenderList | Where-Object -Property Entry -NotMatch '@').Entry
 
-    $UserCount = $Global:Users.Count
-    $TrustedCount = $Global:UserSafeSenderList.Count + $RawOrgSafeSenderList.Count
-    $BlockedCount = $Global:UserBlockedSenderList.Count + $RawOrgBlockedSenderList.Count
-    Write-Host "Processed $UserCount users, trusted $TrustedCount entries, and blocked $BlockedCount entries."
+	$Global:DomainList = (Get-AcceptedDomain).DomainName
+	$Global:UserBlockedSenderList = $Global:RawUserBlockedSenderList
+	$Global:UserSafeSenderList = $Global:RawUserSafeSenderList
+	ForEach ($Domain in $Global:DomainList){$Global:UserBlockedSenderList = $Global:UserBlockedSenderList | Where-Object {$_.Entry -notlike $('*@' + $Domain)}}
+	ForEach ($Domain in $Global:DomainList){$Global:UserSafeSenderList = $Global:UserSafeSenderList | Where-Object {$_.Entry -notlike $('*@' + $Domain)}}
+
+
+	$Global:Users = ($Global:UserBlockedSenderList.PrimaryEmail + $Global:UserSafeSenderList.PrimaryEmail) | Sort -Unique
+	$Global:AllUserMailboxes = Get-Mailbox
+	$Global:Users | ForEach-Object {
+		$Global:Email = $_
+		$Global:User = $Global:Email.Split("@")[0]
+		#$Global:domain = $Global:Email.Split("@")[1]
+		Write-Host "Processing: User= $Global:User"
+		Test-User
+		#$Global:blocked = @()
+		#$Global:trusted = @()
+		$Global:blocked = ($Global:UserBlockedSenderList | Where-Object {$_.PrimaryEmail -eq $Global:Email}).Entry
+		$Global:trusted = ($Global:UserSafeSenderList | Where-Object {$_.PrimaryEmail -eq $Global:Email}).Entry
+		Write-Host "There are $($Global:blocked.count) blocked entries and $($Global:trusted.count) trusted entries for $Global:User"
+		#Test-Entries
+		If ($Global:Mailbox){Import-Entries}
+		Clear-Variable user,name,email,mailbox,domain,blocked,trusted -Force -Scope Global -ea SilentlyContinue
+		Write-Host "`n`n"
+	}
+
+	Write-Host "Setting Organization Level sender lists."
+	$ContentFilterPolicies = Get-HostedContentFilterPolicy
+	If ($OrgBlockedIndividualSenders) {$ContentFilterPolicies | Set-HostedContentFilterPolicy -BlockedSenders $OrgBlockedIndividualSenders}
+	If ($OrgBlockedDomainSenders) {$ContentFilterPolicies | Set-HostedContentFilterPolicy -BlockedSenderDomains $OrgBlockedDomainSenders}
+	If ($OrgSafeIndividualSenders) {$ContentFilterPolicies | Set-HostedContentFilterPolicy -AllowedSenders $OrgSafeIndividualSenders}
+	If ($OrgSafeDomainSenders) {$ContentFilterPolicies | Set-HostedContentFilterPolicy -AllowedSenderDomains $OrgSafeDomainSenders}
+
+	$UserCount = $Global:Users.Count
+	$TrustedCount = $Global:UserSafeSenderList.Count + $RawOrgSafeSenderList.Count
+	$BlockedCount = $Global:UserBlockedSenderList.Count + $RawOrgBlockedSenderList.Count
+	Write-Host "Processed $UserCount users, trusted $TrustedCount entries, and blocked $BlockedCount entries."
 }
 
 Function Import-PPESingleUserSenderLists {
-    $Global:blocked = @()
-    $Global:trusted = @()
-    Function Read-InputBoxDialog([string]$Message, [string]$WindowTitle, [string]$DefaultText)
-    {
-        Add-Type -AssemblyName Microsoft.VisualBasic
-        return [Microsoft.VisualBasic.Interaction]::InputBox($Message, $WindowTitle, $DefaultText)
-    }
-    Function Read-MultiLineInputBoxDialog() {
-        param(
-            [string]$Message,
-            [string]$WindowTitle,
-            [string]$DefaultText
-        )
+	$Global:blocked = @()
+	$Global:trusted = @()
+	Function Read-InputBoxDialog([string]$Message, [string]$WindowTitle, [string]$DefaultText)
+	{
+		Add-Type -AssemblyName Microsoft.VisualBasic
+		return [Microsoft.VisualBasic.Interaction]::InputBox($Message, $WindowTitle, $DefaultText)
+	}
+	Function Read-MultiLineInputBoxDialog() {
+		param(
+			[string]$Message,
+			[string]$WindowTitle,
+			[string]$DefaultText
+		)
 
-        Add-Type -AssemblyName System.Drawing
-        Add-Type -AssemblyName System.Windows.Forms
+		Add-Type -AssemblyName System.Drawing
+		Add-Type -AssemblyName System.Windows.Forms
 
-        # Create the Label.
-        $label = New-Object System.Windows.Forms.Label
-        $label.Location = New-Object System.Drawing.Size(10,10)
-        $label.Size = New-Object System.Drawing.Size(280,20)
-        $label.AutoSize = $true
-        $label.Text = $Message
+		# Create the Label.
+		$label = New-Object System.Windows.Forms.Label
+		$label.Location = New-Object System.Drawing.Size(10,10)
+		$label.Size = New-Object System.Drawing.Size(280,20)
+		$label.AutoSize = $true
+		$label.Text = $Message
 
-        # Create the TextBox used to capture the user's text.
-        $textBox = New-Object System.Windows.Forms.TextBox
-        $textBox.Location = New-Object System.Drawing.Size(10,40)
-        $textBox.Size = New-Object System.Drawing.Size(575,200)
-        $textBox.AcceptsReturn = $true
-        $textBox.AcceptsTab = $false
-        $textBox.Multiline = $true
-        $textBox.ScrollBars = 'Both'
-        $textBox.Text = $DefaultText
+		# Create the TextBox used to capture the user's text.
+		$textBox = New-Object System.Windows.Forms.TextBox
+		$textBox.Location = New-Object System.Drawing.Size(10,40)
+		$textBox.Size = New-Object System.Drawing.Size(575,200)
+		$textBox.AcceptsReturn = $true
+		$textBox.AcceptsTab = $false
+		$textBox.Multiline = $true
+		$textBox.ScrollBars = 'Both'
+		$textBox.Text = $DefaultText
 
-        # Create the OK button.
-        $okButton = New-Object System.Windows.Forms.Button
-        $okButton.Location = New-Object System.Drawing.Size(415,250)
-        $okButton.Size = New-Object System.Drawing.Size(75,25)
-        $okButton.Text = "OK"
-        $okButton.Add_Click({ $form.Tag = $textBox.Text; $form.Close() })
+		# Create the OK button.
+		$okButton = New-Object System.Windows.Forms.Button
+		$okButton.Location = New-Object System.Drawing.Size(415,250)
+		$okButton.Size = New-Object System.Drawing.Size(75,25)
+		$okButton.Text = "OK"
+		$okButton.Add_Click({ $form.Tag = $textBox.Text; $form.Close() })
 
-        # Create the Cancel button.
-        $cancelButton = New-Object System.Windows.Forms.Button
-        $cancelButton.Location = New-Object System.Drawing.Size(510,250)
-        $cancelButton.Size = New-Object System.Drawing.Size(75,25)
-        $cancelButton.Text = "Cancel"
-        $cancelButton.Add_Click({ $form.Tag = $null; $form.Close() })
+		# Create the Cancel button.
+		$cancelButton = New-Object System.Windows.Forms.Button
+		$cancelButton.Location = New-Object System.Drawing.Size(510,250)
+		$cancelButton.Size = New-Object System.Drawing.Size(75,25)
+		$cancelButton.Text = "Cancel"
+		$cancelButton.Add_Click({ $form.Tag = $null; $form.Close() })
 
-        # Create the form.
-        $form = New-Object System.Windows.Forms.Form
-        $form.Text = $WindowTitle
-        $form.Size = New-Object System.Drawing.Size(610,320)
-        $form.FormBorderStyle = 'FixedSingle'
-        $form.StartPosition = "CenterScreen"
-        $form.AutoSizeMode = 'GrowAndShrink'
-        $form.Topmost = $True
-        $form.AcceptButton = $okButton
-        $form.CancelButton = $cancelButton
-        $form.ShowInTaskbar = $true
+		# Create the form.
+		$form = New-Object System.Windows.Forms.Form
+		$form.Text = $WindowTitle
+		$form.Size = New-Object System.Drawing.Size(610,320)
+		$form.FormBorderStyle = 'FixedSingle'
+		$form.StartPosition = "CenterScreen"
+		$form.AutoSizeMode = 'GrowAndShrink'
+		$form.Topmost = $True
+		$form.AcceptButton = $okButton
+		$form.CancelButton = $cancelButton
+		$form.ShowInTaskbar = $true
 
-        # Add all of the controls to the form.
-        $form.Controls.Add($label)
-        $form.Controls.Add($textBox)
-        $form.Controls.Add($okButton)
-        $form.Controls.Add($cancelButton)
+		# Add all of the controls to the form.
+		$form.Controls.Add($label)
+		$form.Controls.Add($textBox)
+		$form.Controls.Add($okButton)
+		$form.Controls.Add($cancelButton)
 
-        # Initialize and show the form.
-        $form.Add_Shown({$form.Activate()})
-        $form.ShowDialog() > $null   # Trash the text of the button that was clicked.
+		# Initialize and show the form.
+		$form.Add_Shown({$form.Activate()})
+		$form.ShowDialog() > $null   # Trash the text of the button that was clicked.
 
-        # Return the text that the user entered.
-        return $form.Tag
-    }
-
-
-    Function Test-Entries {
-        Write-Host "Scanning for invalid entries"
-        #$Global:domain = '*@' + $Global:domain
-        $PreBlockedCount = $Global:blocked.count
-        $Global:blocked = $Global:blocked | Where-Object {$_ -notlike $('*@' + $Global:domain)}
-        $Global:blocked = $Global:blocked.Replace('*@','')
-        $PostBlockedCount = $Global:blocked.count
-
-        $PreTrustedCount = $Global:trusted.count
-        $Global:trusted = $Global:trusted | Where-Object {$_ -notlike ('*@' + $Global:domain)}
-        $Global:trusted = $Global:trusted.Replace('*@','')
-        $PostTrustedCount = $Global:trusted.count
-        $TotalRemovedCount = $($PreBlockedCount - $PostBlockedCount) + $($PreTrustedCount - $PostTrustedCount)
-        Write-Host "Removed $TotalRemovedCount invalid entries."
-    }
+		# Return the text that the user entered.
+		return $form.Tag
+	}
 
 
-    Function Test-User {
-        Write-Host "Checking for a valid user"
-        $Mailbox = Get-Mailbox -Identity $User -ErrorAction SilentlyContinue
-        If ($Mailbox) {
-            $Global:Name = $Mailbox.DisplayName
-            Write-Host "Mailbox for $Name was successfully found."
-        } Else {
-            $Mailbox = Get-ExoMailbox | Where-Object {($_.EmailAddresses -match $User) -or ($_.PrimarySmtpAddress -match $User)}
-            If (-not $Mailbox) {
-                Write-Host "Mailbox not found."
-                #Break
-            } ElseIf ($Mailbox.Count -gt 1) {
-                Write-Host "Multiple mailboxes found. Please refine your search."
-                #Break
-            } ElseIf ($Mailbox) {
-                $Global:User = $Mailbox.Alias
-                $Global:Name = $Mailbox.DisplayName
-                Write-Host "Mailbox for $Name was successfully found by secondary email address."
-            }
-        }
-    }
+	Function Test-Entries {
+		Write-Host "Scanning for invalid entries"
+		#$Global:domain = '*@' + $Global:domain
+		$PreBlockedCount = $Global:blocked.count
+		$Global:blocked = $Global:blocked | Where-Object {$_ -notlike $('*@' + $Global:domain)}
+		$Global:blocked = $Global:blocked.Replace('*@','')
+		$PostBlockedCount = $Global:blocked.count
 
-    Function Import-Entries {
-        #Check for empty lists
-        If ([string]::IsNullOrWhiteSpace($blocked)) {Clear-Variable blocked}
-        If ([string]::IsNullOrWhiteSpace($trusted)) {Clear-Variable trusted}
-        $BadBlocked = @()
-        $BadTrusted = @()
-        Try {
-            Write-Host "Attempting to configure all addresses at once."
-            If ($blocked -and $trusted) {
-                Write-Host "Blocked and Trusted Lists found, importing both."
-                Set-MailboxJunkEmailConfiguration $User -BlockedSendersAndDomains @{Add=$blocked} -TrustedSendersAndDomains @{Add=$trusted} -ContactsTrusted $true -ErrorAction Stop
-            } elseif ($blocked -and !($trusted)) {
-                Write-Host "Only Blocked list found, importing it."
-                Set-MailboxJunkEmailConfiguration $User -BlockedSendersAndDomains @{Add=$blocked} -ErrorAction Stop
-            } elseif (!($blocked) -and $trusted) {
-                Write-Host "Only Trusted list found, importing it."
-                Set-MailboxJunkEmailConfiguration $User -TrustedSendersAndDomains @{Add=$trusted} -ContactsTrusted $true -ErrorAction Stop
-            } elseif (!($blocked) -and !($trusted)) {
-                Write-Host "Neither a blocked list nor a trusted list found. Is there anything to import?"
-            }
-            Write-Host "It worked!"
-            Get-MailboxJunkEmailConfiguration -Identity $User | Format-Table Identity, TrustedSendersAndDomains, BlockedSendersAndDomains -AutoSize
-        } Catch {
-            Write-Host "That didn't work, trying one at a time."
-            $CurrentSettings = Get-MailboxJunkEmailConfiguration -Identity $User
-            $blocked | ForEach-Object {
-                Write-Host "Blocking: $_"
-                $CurrentEmail = $_
-                If ($CurrentSettings.BlockedSendersAndDomains -Contains $_){
-                    Write-Host -ForegroundColor Green "Already Blocked: $_"
-                } Else {
-                    Try {
-                        Set-MailboxJunkEmailConfiguration $User -BlockedSendersAndDomains @{Add=$_} -ErrorAction Stop
-                    } Catch {
-                        Write-Host -ForegroundColor Red "Failed to block: $_"
-                        $BadBlocked += $CurrentEmail
-                        Clear-Variable CurrentEmail
-                    }
-                }
-            }
-            $trusted | ForEach-Object {
-                Write-Host "Trusting $_"
-                $CurrentEmail = $_
-                If ($CurrentSettings.TrustedSendersAndDomains -Contains $_){
-                    Write-Host -ForegroundColor Green "Already trusted: $_"
-                } Else {
-                    Try {
-                        Set-MailboxJunkEmailConfiguration $User -TrustedSendersAndDomains @{Add=$_} -ErrorAction Stop
-                    } Catch {
-                        Write-Host -ForegroundColor Red "Failed to trust: $_"
-                        $BadTrusted += $CurrentEmail
-                        Clear-Variable CurrentEmail
-                    }
-                }
-            }
-            Set-MailboxJunkEmailConfiguration $User -ContactsTrusted $true
-            $BadBlocked
-            $BadTrusted
-            Get-MailboxJunkEmailConfiguration -Identity $User | Format-Table Identity, TrustedSendersAndDomains, BlockedSendersAndDomains -AutoSize
-        }
-    }
-    $Global:Email = Read-InputBoxDialog -Message "Please enter the user's email address:" -WindowTitle "Email Address"
-    $Global:User = $Email.Split("@")[0]
-    $Global:domain = $Email.Split("@")[1]
-    $User
-    $Global:domain
-    Test-User
-    $Global:blocked = (Read-MultiLineInputBoxDialog -Message "Please paste in the blocked senders for $Global:Name from Proofpoint" -WindowTitle "ProofPoint Blocked Senders") -split [System.Environment]::NewLine
-    $Global:trusted = (Read-MultiLineInputBoxDialog -Message "Please paste in the Safe Sender List for $Global:Name from Proofpoint" -WindowTitle "ProofPoint Safe Senders") -split [System.Environment]::NewLine
+		$PreTrustedCount = $Global:trusted.count
+		$Global:trusted = $Global:trusted | Where-Object {$_ -notlike ('*@' + $Global:domain)}
+		$Global:trusted = $Global:trusted.Replace('*@','')
+		$PostTrustedCount = $Global:trusted.count
+		$TotalRemovedCount = $($PreBlockedCount - $PostBlockedCount) + $($PreTrustedCount - $PostTrustedCount)
+		Write-Host "Removed $TotalRemovedCount invalid entries."
+	}
 
-    Test-Entries
-    Import-Entries
-    Clear-Variable user,email,domain,blocked,trusted -ea SilentlyContinue
+
+	Function Test-User {
+		Write-Host "Checking for a valid user"
+		$Mailbox = Get-Mailbox -Identity $User -ErrorAction SilentlyContinue
+		If ($Mailbox) {
+			$Global:Name = $Mailbox.DisplayName
+			Write-Host "Mailbox for $Name was successfully found."
+		} Else {
+			$Mailbox = Get-ExoMailbox | Where-Object {($_.EmailAddresses -match $User) -or ($_.PrimarySmtpAddress -match $User)}
+			If (-not $Mailbox) {
+				Write-Host "Mailbox not found."
+				#Break
+			} ElseIf ($Mailbox.Count -gt 1) {
+				Write-Host "Multiple mailboxes found. Please refine your search."
+				#Break
+			} ElseIf ($Mailbox) {
+				$Global:User = $Mailbox.Alias
+				$Global:Name = $Mailbox.DisplayName
+				Write-Host "Mailbox for $Name was successfully found by secondary email address."
+			}
+		}
+	}
+
+	Function Import-Entries {
+		#Check for empty lists
+		If ([string]::IsNullOrWhiteSpace($blocked)) {Clear-Variable blocked}
+		If ([string]::IsNullOrWhiteSpace($trusted)) {Clear-Variable trusted}
+		$BadBlocked = @()
+		$BadTrusted = @()
+		Try {
+			Write-Host "Attempting to configure all addresses at once."
+			If ($blocked -and $trusted) {
+				Write-Host "Blocked and Trusted Lists found, importing both."
+				Set-MailboxJunkEmailConfiguration $User -BlockedSendersAndDomains @{Add=$blocked} -TrustedSendersAndDomains @{Add=$trusted} -ContactsTrusted $true -ErrorAction Stop
+			} elseif ($blocked -and !($trusted)) {
+				Write-Host "Only Blocked list found, importing it."
+				Set-MailboxJunkEmailConfiguration $User -BlockedSendersAndDomains @{Add=$blocked} -ErrorAction Stop
+			} elseif (!($blocked) -and $trusted) {
+				Write-Host "Only Trusted list found, importing it."
+				Set-MailboxJunkEmailConfiguration $User -TrustedSendersAndDomains @{Add=$trusted} -ContactsTrusted $true -ErrorAction Stop
+			} elseif (!($blocked) -and !($trusted)) {
+				Write-Host "Neither a blocked list nor a trusted list found. Is there anything to import?"
+			}
+			Write-Host "It worked!"
+			Get-MailboxJunkEmailConfiguration -Identity $User | Format-Table Identity, TrustedSendersAndDomains, BlockedSendersAndDomains -AutoSize
+		} Catch {
+			Write-Host "That didn't work, trying one at a time."
+			$CurrentSettings = Get-MailboxJunkEmailConfiguration -Identity $User
+			$blocked | ForEach-Object {
+				Write-Host "Blocking: $_"
+				$CurrentEmail = $_
+				If ($CurrentSettings.BlockedSendersAndDomains -Contains $_){
+					Write-Host -ForegroundColor Green "Already Blocked: $_"
+				} Else {
+					Try {
+						Set-MailboxJunkEmailConfiguration $User -BlockedSendersAndDomains @{Add=$_} -ErrorAction Stop
+					} Catch {
+						Write-Host -ForegroundColor Red "Failed to block: $_"
+						$BadBlocked += $CurrentEmail
+						Clear-Variable CurrentEmail
+					}
+				}
+			}
+			$trusted | ForEach-Object {
+				Write-Host "Trusting $_"
+				$CurrentEmail = $_
+				If ($CurrentSettings.TrustedSendersAndDomains -Contains $_){
+					Write-Host -ForegroundColor Green "Already trusted: $_"
+				} Else {
+					Try {
+						Set-MailboxJunkEmailConfiguration $User -TrustedSendersAndDomains @{Add=$_} -ErrorAction Stop
+					} Catch {
+						Write-Host -ForegroundColor Red "Failed to trust: $_"
+						$BadTrusted += $CurrentEmail
+						Clear-Variable CurrentEmail
+					}
+				}
+			}
+			Set-MailboxJunkEmailConfiguration $User -ContactsTrusted $true
+			$BadBlocked
+			$BadTrusted
+			Get-MailboxJunkEmailConfiguration -Identity $User | Format-Table Identity, TrustedSendersAndDomains, BlockedSendersAndDomains -AutoSize
+		}
+	}
+	$Global:Email = Read-InputBoxDialog -Message "Please enter the user's email address:" -WindowTitle "Email Address"
+	$Global:User = $Email.Split("@")[0]
+	$Global:domain = $Email.Split("@")[1]
+	$User
+	$Global:domain
+	Test-User
+	$Global:blocked = (Read-MultiLineInputBoxDialog -Message "Please paste in the blocked senders for $Global:Name from Proofpoint" -WindowTitle "ProofPoint Blocked Senders") -split [System.Environment]::NewLine
+	$Global:trusted = (Read-MultiLineInputBoxDialog -Message "Please paste in the Safe Sender List for $Global:Name from Proofpoint" -WindowTitle "ProofPoint Safe Senders") -split [System.Environment]::NewLine
+
+	Test-Entries
+	Import-Entries
+	Clear-Variable user,email,domain,blocked,trusted -ea SilentlyContinue
 }

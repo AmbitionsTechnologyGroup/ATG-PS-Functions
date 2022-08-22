@@ -1,62 +1,62 @@
 Function Restart-VSSWriter {
-    [CmdletBinding()]
+	[CmdletBinding()]
 
-    Param (
-        [Parameter(ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True, Mandatory = $True)]
-        [String[]]
-        $Name
-    ) #Param
+	Param (
+		[Parameter(ValueFromPipeline = $True, ValueFromPipelineByPropertyName = $True, Mandatory = $True)]
+		[String[]]
+		$Name
+	) #Param
 
-    BEGIN { Write-Verbose "BEGIN: Restart-KPVSSWriter"} #BEGIN
+	BEGIN { Write-Verbose "BEGIN: Restart-KPVSSWriter"} #BEGIN
 
-    PROCESS {
+	PROCESS {
 
-        Write-Verbose "Working on VSS Writer: $Name"
+		Write-Verbose "Working on VSS Writer: $Name"
 
-        Switch ($Name) {
-            'ASR Writer' { $Service = 'VSS' }
-            'BITS Writer' { $Service = 'BITS' }
-            'Certificate Authority' { $Service = 'EventSystem' }
-            'COM+ REGDB Writer' { $Service = 'VSS' }
-            'DFS Replication service writer' { $Service = 'DFSR' }
-            'DHCP Jet Writer' { $Service = 'DHCPServer' }
-            'FRS Writer' { $Service = 'NtFrs' }
-            'FSRM writer' { $Service = 'srmsvc' }
-            'IIS Config Writer' { $Service = 'AppHostSvc' }
-            'IIS Metabase Writer' { $Service = 'IISADMIN' }
-            'Microsoft Exchange Replica Writer' { $Service = 'MSExchangeRepl' }
-            'Microsoft Exchange Writer' { $Service = 'MSExchangeIS' }
-            'Microsoft Hyper-V VSS Writer' { $Service = 'vmms' }
-            'MSMQ Writer (MSMQ)' { $Service = 'MSMQ' }
-            'MSSearch Service Writer' { $Service = 'WSearch' }
-            'NPS VSS Writer' { $Service = 'EventSystem' }
-            'NTDS' { $Service = 'NTDS' }
-            'OSearch VSS Writer' { $Service = 'OSearch' }
-            'OSearch14 VSS Writer' { $Service = 'OSearch14' }
-            'Registry Writer' { $Service = 'VSS' }
-            'Shadow Copy Optimization Writer' { $Service = 'VSS' }
-            'SMS Writer' { $Service = 'SMS_SITE_VSS_WRITER' }
-            'SPSearch VSS Writer' { $Service = 'SPSearch' }
-            'SPSearch4 VSS Writer' { $Service = 'SPSearch4' }
-            'SqlServerWriter' { $Service = 'SQLWriter' }
-            'System Writer' { $Service = 'CryptSvc' }
-            'TermServLicensing' { $Service = 'TermServLicensing' }
-            'WDS VSS Writer' { $Service = 'WDSServer' }
-            'WIDWriter' { $Service = 'WIDWriter' }
-            'WINS Jet Writer' { $Service = 'WINS' }
-            'WMI Writer' { $Service = 'Winmgmt' }
-            default {$Null = $Service}
-        } #Switch
+		Switch ($Name) {
+			'ASR Writer' { $Service = 'VSS' }
+			'BITS Writer' { $Service = 'BITS' }
+			'Certificate Authority' { $Service = 'EventSystem' }
+			'COM+ REGDB Writer' { $Service = 'VSS' }
+			'DFS Replication service writer' { $Service = 'DFSR' }
+			'DHCP Jet Writer' { $Service = 'DHCPServer' }
+			'FRS Writer' { $Service = 'NtFrs' }
+			'FSRM writer' { $Service = 'srmsvc' }
+			'IIS Config Writer' { $Service = 'AppHostSvc' }
+			'IIS Metabase Writer' { $Service = 'IISADMIN' }
+			'Microsoft Exchange Replica Writer' { $Service = 'MSExchangeRepl' }
+			'Microsoft Exchange Writer' { $Service = 'MSExchangeIS' }
+			'Microsoft Hyper-V VSS Writer' { $Service = 'vmms' }
+			'MSMQ Writer (MSMQ)' { $Service = 'MSMQ' }
+			'MSSearch Service Writer' { $Service = 'WSearch' }
+			'NPS VSS Writer' { $Service = 'EventSystem' }
+			'NTDS' { $Service = 'NTDS' }
+			'OSearch VSS Writer' { $Service = 'OSearch' }
+			'OSearch14 VSS Writer' { $Service = 'OSearch14' }
+			'Registry Writer' { $Service = 'VSS' }
+			'Shadow Copy Optimization Writer' { $Service = 'VSS' }
+			'SMS Writer' { $Service = 'SMS_SITE_VSS_WRITER' }
+			'SPSearch VSS Writer' { $Service = 'SPSearch' }
+			'SPSearch4 VSS Writer' { $Service = 'SPSearch4' }
+			'SqlServerWriter' { $Service = 'SQLWriter' }
+			'System Writer' { $Service = 'CryptSvc' }
+			'TermServLicensing' { $Service = 'TermServLicensing' }
+			'WDS VSS Writer' { $Service = 'WDSServer' }
+			'WIDWriter' { $Service = 'WIDWriter' }
+			'WINS Jet Writer' { $Service = 'WINS' }
+			'WMI Writer' { $Service = 'Winmgmt' }
+			default {$Null = $Service}
+		} #Switch
 
-        IF ($Service) {
-            Write-Verbose "Found matching service"
-            $S = Get-Service -Name $Service
-            Write-Host "Restarting service $(($S).DisplayName)"
-            $S | Restart-Service -Force
-        }
-        ELSE {
-            Write-Warning "No service associated with VSS Writer: $Name"
-        }
-    } #PROCESS
-    END { } #END
+		IF ($Service) {
+			Write-Verbose "Found matching service"
+			$S = Get-Service -Name $Service
+			Write-Host "Restarting service $(($S).DisplayName)"
+			$S | Restart-Service -Force
+		}
+		ELSE {
+			Write-Warning "No service associated with VSS Writer: $Name"
+		}
+	} #PROCESS
+	END { } #END
 }

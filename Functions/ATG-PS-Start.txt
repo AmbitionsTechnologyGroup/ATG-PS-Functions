@@ -1,14 +1,14 @@
 Function Start-PPKGLog ([String] $LogLabel) {
-    Write-Host "Making a log file for debugging"
-        $LogPath = "C:\Ambitions\" + $SiteCode + "-" + $LogLabel + ".log"
-        Start-Transcript -path $LogPath -Force -Append
+	Write-Host "Making a log file for debugging"
+		$LogPath = "C:\Ambitions\" + $SiteCode + "-" + $LogLabel + ".log"
+		Start-Transcript -path $LogPath -Force -Append
 }
 
 Function Start-ServerMaintenance {
-    If ($PSVersionTable.PSEdition -eq "Desktop") {
-        If (-Not (Get-Command "pwsh" -ErrorAction SilentlyContinue)) { Update-PWSH }
-        pwsh -Command {(Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Maintenance-Checks/Server-Maintenance-Checks.txt -UseBasicParsing).Content | Invoke-Expression}
-    } Else {
-        (Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Maintenance-Checks/Server-Maintenance-Checks.txt -UseBasicParsing).Content | Invoke-Expression
-    }
+	If ($PSVersionTable.PSEdition -eq "Desktop") {
+		If (-Not (Get-Command "pwsh" -ErrorAction SilentlyContinue)) { Update-PWSH }
+		pwsh -Command {(Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Maintenance-Checks/Server-Maintenance-Checks.txt -UseBasicParsing).Content | Invoke-Expression}
+	} Else {
+		(Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Maintenance-Checks/Server-Maintenance-Checks.txt -UseBasicParsing).Content | Invoke-Expression
+	}
 }

@@ -1,82 +1,82 @@
 Function Remove-ITS247InstallFolder {
-    Write-Host "Cleaning up install folder"
-    Remove-PathForcefully -Path 'C:\Ambitions\ITS247Agent'
+	Write-Host "Cleaning up install folder"
+	Remove-PathForcefully -Path 'C:\Ambitions\ITS247Agent'
 }
 
 Function Remove-PathForcefully {
-    param(
-        [parameter(Mandatory=$true)]
-        [string] $Path
-    )
-    <# the code below has been used from
-        - https://blogs.technet.com/b/heyscriptingguy/archive/2013/10/19/weekend-scripter-use-powershell-and-pinvoke-to-remove-stubborn-files.aspx
-    with inspiration from
-        - http://www.leeholmes.com/blog/2009/02/17/moving-and-deleting-really-locked-files-in-powershell/
-    and error handling from
-        - https://blogs.technet.com/b/heyscriptingguy/archive/2013/06/25/use-powershell-to-interact-with-the-windows-api-part-1.aspx
-    #>
-    Add-Type -ErrorAction Ignore @'
-        using System;
-        using System.Text;
-        using System.Runtime.InteropServices;
+	param(
+		[parameter(Mandatory=$true)]
+		[string] $Path
+	)
+	<# the code below has been used from
+		- https://blogs.technet.com/b/heyscriptingguy/archive/2013/10/19/weekend-scripter-use-powershell-and-pinvoke-to-remove-stubborn-files.aspx
+	with inspiration from
+		- http://www.leeholmes.com/blog/2009/02/17/moving-and-deleting-really-locked-files-in-powershell/
+	and error handling from
+		- https://blogs.technet.com/b/heyscriptingguy/archive/2013/06/25/use-powershell-to-interact-with-the-windows-api-part-1.aspx
+	#>
+	Add-Type -ErrorAction Ignore @'
+		using System;
+		using System.Text;
+		using System.Runtime.InteropServices;
 
-        public class Posh
-        {
-            public enum MoveFileFlags
-            {
-                MOVEFILE_DELAY_UNTIL_REBOOT = 0x00000004
-            }
+		public class Posh
+		{
+			public enum MoveFileFlags
+			{
+				MOVEFILE_DELAY_UNTIL_REBOOT = 0x00000004
+			}
 
-            [DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-            static extern bool MoveFileEx(string lpExistingFileName, string lpNewFileName, MoveFileFlags dwFlags);
+			[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+			static extern bool MoveFileEx(string lpExistingFileName, string lpNewFileName, MoveFileFlags dwFlags);
 
-            public static bool MarkFileDelete (string sourcefile)
-            {
-                return MoveFileEx(sourcefile, null, MoveFileFlags.MOVEFILE_DELAY_UNTIL_REBOOT);
-            }
-        }
+			public static bool MarkFileDelete (string sourcefile)
+			{
+				return MoveFileEx(sourcefile, null, MoveFileFlags.MOVEFILE_DELAY_UNTIL_REBOOT);
+			}
+		}
 '@
-    Function Remove-SubPath {
-        param(
-            [parameter(Mandatory=$true)]
-            [string] $SubPath
-        )
+	Function Remove-SubPath {
+		param(
+			[parameter(Mandatory=$true)]
+			[string] $SubPath
+		)
 
 
-        $SubPath = (Resolve-Path $SubPath -ErrorAction Stop).Path
-        try {
-            Remove-Item $SubPath -Force -Recurse -ErrorAction Stop
-            Write-Host -ForegroundColor Green -BackgroundColor Black "Deletion of $SubPath succeeded."
-        } catch {
-            $deleteResult = [Posh]::MarkFileDelete($SubPath)
-            if ($deleteResult -eq $false) {
-                throw (New-Object ComponentModel.Win32Exception) # calls GetLastError
-            } else {
-                Write-Host -ForegroundColor Red -BackgroundColor Yellow "Deletion of ||$SubPath|| failed. Deleting at next boot."#`n$($_.Exception.Message)"
-            }
-        }
-    }
-    If (Test-Path -Path $Path -Verbose) {
-        $SubFiles = Get-ChildItem -Path $Path -Recurse -Force -File
-        $SubFolders = Get-ChildItem -Path $Path -Recurse -Force -Directory
-        If ($SubFiles -or $SubFolders) {
-            $SubFiles | ForEach-Object {Remove-SubPath -SubPath $_.FullName}
-            $SubFolders | ForEach-Object {Remove-SubPath -SubPath $_.FullName}
-            Remove-SubPath -SubPath $Path
-        } Else {
-            Remove-SubPath -SubPath $Path
-        }
-    } Else {
-        Write-Warning "$Path was not found."
-    }
-    <#
-    .SYNOPSIS
-        Deletes all files and folders given immediately if they are not locked.
-        If locked files are found, queues them up to be deleted upon next reboot.
-        Recurse is assumed.
-    .PARAMETER Path
-        The file system path of the folder or file to be deleted.
-    .EXAMPLE
-        Remove-PathForcefully -Path "C:\Temp" # Deletes the folder C:\Temp and all files or folders within, queuing up any locked files for deletion on next reboot.
-    #>
+		$SubPath = (Resolve-Path $SubPath -ErrorAction Stop).Path
+		try {
+			Remove-Item $SubPath -Force -Recurse -ErrorAction Stop
+			Write-Host -ForegroundColor Green -BackgroundColor Black "Deletion of $SubPath succeeded."
+		} catch {
+			$deleteResult = [Posh]::MarkFileDelete($SubPath)
+			if ($deleteResult -eq $false) {
+				throw (New-Object ComponentModel.Win32Exception) # calls GetLastError
+			} else {
+				Write-Host -ForegroundColor Red -BackgroundColor Yellow "Deletion of ||$SubPath|| failed. Deleting at next boot."#`n$($_.Exception.Message)"
+			}
+		}
+	}
+	If (Test-Path -Path $Path -Verbose) {
+		$SubFiles = Get-ChildItem -Path $Path -Recurse -Force -File
+		$SubFolders = Get-ChildItem -Path $Path -Recurse -Force -Directory
+		If ($SubFiles -or $SubFolders) {
+			$SubFiles | ForEach-Object {Remove-SubPath -SubPath $_.FullName}
+			$SubFolders | ForEach-Object {Remove-SubPath -SubPath $_.FullName}
+			Remove-SubPath -SubPath $Path
+		} Else {
+			Remove-SubPath -SubPath $Path
+		}
+	} Else {
+		Write-Warning "$Path was not found."
+	}
+	<#
+	.SYNOPSIS
+		Deletes all files and folders given immediately if they are not locked.
+		If locked files are found, queues them up to be deleted upon next reboot.
+		Recurse is assumed.
+	.PARAMETER Path
+		The file system path of the folder or file to be deleted.
+	.EXAMPLE
+		Remove-PathForcefully -Path "C:\Temp" # Deletes the folder C:\Temp and all files or folders within, queuing up any locked files for deletion on next reboot.
+	#>
 }
