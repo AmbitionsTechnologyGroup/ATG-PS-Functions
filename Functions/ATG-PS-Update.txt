@@ -30,7 +30,7 @@ Function Update-DellPackages {
 				#Install the latest
 				Stop-Process -Name DellCommandUpdate -Force -ErrorAction SilentlyContinue
 				If (Get-Command winget -ErrorAction SilentlyContinue) {
-					winget install --id Dell.CommandUpdate -e -h
+					winget install --id Dell.CommandUpdate -e -h --accept-package-agreements --accept-source-agreements
 				} Else {
 					Choco upgrade dellcommandupdate -y --force -i --ignorechecksums
 				}
@@ -54,9 +54,13 @@ Function Update-DellPackages {
 
 				#Compare version numbers of any remaining installed version.
 				$DCUInstalledVersion = (Get-Package -Provider Programs -IncludeWindowsInstaller -Name "Dell Command | Update" -ErrorAction SilentlyContinue).Version
-				$DCUAvailableVersion = choco list dellcommandupdate #Gets all results
-				$DCUAvailableVersion = ($DCUAvailableVersion | Select-String -Pattern "DellCommandUpdate " -SimpleMatch).Line #Isolates the desired result
-				$DCUAvailableVersion = $DCUAvailableVersion.split(" ",[System.StringSplitOptions]::RemoveEmptyEntries)[1] #Isolates the version number
+				If (Get-Command winget -ErrorAction SilentlyContinue) {
+					$DCUAvailableVersion = $(winget show --id Dell.CommandUpdate | Select-String -SimpleMatch "Version:").Line.Replace("Version: ","")
+				} Else {
+					$DCUAvailableVersion = choco list dellcommandupdate #Gets all results
+					$DCUAvailableVersion = ($DCUAvailableVersion | Select-String -Pattern "DellCommandUpdate " -SimpleMatch).Line #Isolates the desired result
+					$DCUAvailableVersion = $DCUAvailableVersion.split(" ",[System.StringSplitOptions]::RemoveEmptyEntries)[1] #Isolates the version number
+				}
 
 			If (-not $DCUInstalledVersion) {
 				Write-Host "'Dell Command Update' is not installed, installing now."
@@ -73,7 +77,7 @@ Function Update-DellPackages {
 				Install-DCU
 
 			} ElseIf ($DCUInstalledVersion -eq $DCUAvailableVersion) {
-				Write-Host "'Dell Command Update' is current."
+				Write-Host -ForegroundColor Green "'Dell Command Update' is current."
 			}
 
 			#Configure and run Dell Command Update
