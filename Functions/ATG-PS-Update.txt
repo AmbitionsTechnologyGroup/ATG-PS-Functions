@@ -166,9 +166,13 @@ Function Update-DellServer {
 
 Function Update-Edge {
 	Write-Host "Updating Microsoft Edge"
-	If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
 	If (Get-Process MicrosoftEdge -ErrorAction SilentlyContinue) {Get-Process MicrosoftEdge | Stop-Process -Force}
-	Choco upgrade microsoft-edge -y
+	If (Get-Command winget -ErrorAction SilentlyContinue) {
+		winget install --id Microsoft.Edge -e -h --accept-package-agreements --accept-source-agreements
+	} Else {
+		If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
+		Choco upgrade microsoft-edge -y
+	}
 }
 
 Function Update-Everything {
@@ -182,7 +186,11 @@ Function Update-Everything {
 		$delay --
 	}
 	$delay = $null
-	If (!(Get-Command choco -ErrorAction SilentlyContinue)) {choco upgrade all -y}
+	If (Get-Command winget -ErrorAction SilentlyContinue) {
+		winget upgrade --all -h
+	} Else {
+		If (Get-Command choco -ErrorAction SilentlyContinue) {choco upgrade all -y}
+	}
 	Update-Windows
 	Update-DellPackages
 	Update-Edge
@@ -390,8 +398,12 @@ Function Update-PowershellModules {
 
 Function Update-PWSH {
 	Write-Host "Updating PWSH"
-	If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
-	Choco upgrade pwsh -y
+	If (Get-Command winget -ErrorAction SilentlyContinue) {
+		winget install --id Microsoft.PowerShell -e -h --accept-package-agreements --accept-source-agreements
+	} Else {
+		If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
+		Choco upgrade pwsh -y
+	}
 }
 
 Function Update-Windows {
