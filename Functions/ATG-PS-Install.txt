@@ -43,8 +43,12 @@ Function Install-NetExtender {
 		($App).Uninstall()
 	}
 	Write-Host "Downloading & Installing NetExtender"
+	If (Get-Command winget -ErrorAction SilentlyContinue) {
+		winget install --id SonicWALL.NetExtender -e -h --accept-package-agreements --accept-source-agreements
+	} Else {
 		If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
-		choco install sonicwall-sslvpn-netextender -y
+		Choco upgrade sonicwall-sslvpn-netextender -y
+	}
 }
 
 Function Install-NiniteApps {
