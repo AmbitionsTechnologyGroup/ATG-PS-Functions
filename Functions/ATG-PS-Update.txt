@@ -55,7 +55,7 @@ Function Update-DellPackages {
 				#Compare version numbers of any remaining installed version.
 				$DCUInstalledVersion = (Get-Package -Provider Programs -IncludeWindowsInstaller -Name "Dell Command | Update" -ErrorAction SilentlyContinue).Version
 				If (Get-Command winget -ErrorAction SilentlyContinue) {
-					$DCUAvailableVersion = $(winget show --id Dell.CommandUpdate | Select-String -SimpleMatch "Version:").Line.Replace("Version: ","")
+					$DCUAvailableVersion = $(winget show --id Dell.CommandUpdate --accept-source-agreements | Select-String -SimpleMatch "Version:").Line.Replace("Version: ","")
 				} Else {
 					$DCUAvailableVersion = choco list dellcommandupdate #Gets all results
 					$DCUAvailableVersion = ($DCUAvailableVersion | Select-String -Pattern "DellCommandUpdate " -SimpleMatch).Line #Isolates the desired result
