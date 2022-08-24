@@ -541,3 +541,86 @@ Function Import-PPESingleUserSenderLists {
 	Import-Entries
 	Clear-Variable user,email,domain,blocked,trusted -ea SilentlyContinue
 }
+
+Function Import-WindowsInstallerDrivers {
+	param
+	(
+		[Parameter(Mandatory=$False)]
+		$WorkingDirectory = $($Env:SystemDrive) + "\WinInstaller",
+		
+		[Parameter(Mandatory=$True)]
+		[String]$USBDriveLetter
+	)
+	#$WorkingDirectory = $($Env:SystemDrive) + "\WinInstaller"
+	#[String]$USBDriveLetter = "P"
+	$DriversDir = $($WorkingDirectory + "\Drivers")
+	$MountDir = $($WorkingDirectory + "\Mount")
+	$WIMBootDir = $($WorkingDirectory + "\WIM-Boot")
+	$WimInstallDir = $($WorkingDirectory + "\WIM-Install")
+
+	$NeededFolders = @(
+		$WorkingDirectory
+		$DriversDir
+		$MountDir
+		$WIMBootDir
+		$WimInstallDir
+	)
+
+	Write-Host "Creating needed folders"
+	$NeededFolders | ForEach-Object {
+		If (!(Test-Path $_)) {
+			$null = (New-Item -ItemType Directory -Force -Path $_)
+		}
+	}
+
+	#Get Drivers
+	$SourcePage = (Invoke-WebRequest -Uri "https://www.intel.com/content/www/us/en/download/19512/intel-rapid-storage-technology-driver-installation-software-with-intel-optane-memory-10th-and-11th-gen-platforms.html" -UseBasicParsing).Content -split '\n'
+	$PageLinkLines = ($SourcePage | Select-String -SimpleMatch "VMD.zip").Line
+	$URLStrings = @()
+	$PageLinkLines | ForEach-Object {
+		$URLStrings += ((Select-String '(http[s]?)(:\/\/)([^\s,]+)(?=")' -Input $($_.Replace(' ','%20'))).Matches.Value)
+	}
+	$URLStrings = $URLStrings | Where-Object {$_ -ne $Null}
+	$DownloadedFiles = @()
+	$URLStrings | ForEach-Object {
+		$OutFile = $($DriversDir + "\" + $(Split-Path $_.Replace('%20','') -Leaf))
+		$DownloadedFiles += $OutFile
+		Invoke-WebRequest -Uri $_ -UseBasicParsing -OutFile $OutFile
+		Clear-Variable OutFile -Force -ErrorAction SilentlyContinue
+	}
+
+	$DownloadedFiles | ForEach-Object {
+		Expand-Archive -Path $_ -DestinationPath $DriversDir -Force
+	}
+
+	#Get USB drive WIM
+	$Global:BootWimPath = $($USBDriveLetter + ":\sources\boot.wim")
+	If (-Not (Test-Path -Path $BootWimPath -ErrorAction SilentlyContinue)) {
+		Do {
+			Write-host "$BootWimPath is not valid. Please select a drive letter that has a Windows Installer on it"
+			Get-Volume | Where-Object -Property DriveType -eq Removable | Select DriveLetter,FileSystemLabel | Out-Host
+			$USBDriveLetter = Read-Host "Drive Letter of Windows USB Installer:"
+			$BootWimPath = $($USBDriveLetter + ":\sources\boot.wim")
+		} Until (Test-Path -Path $BootWimPath -ErrorAction SilentlyContinue)
+	}
+
+	#Move File from USB to local Computer
+	Write-Host "Copying installer to local computer"
+	$WIMBootWorkingFile = $WIMBootDir + "\boot.wim"
+	Write-Host "Copy-Item -Path $BootWimPath -Destination $WIMBootWorkingFile -Force"
+	Copy-Item -Path $BootWimPath -Destination $WIMBootWorkingFile -Force
+	
+	$Index = @("1","2")
+	$Index | ForEach-Object {
+		Write-Host "Mounting Boot Image Index $_"
+		Mount-WindowsImage -Path $MountDir -ImagePath $WIMBootWorkingFile -Index $_
+		Write-Host "Adding Drivers"
+		Add-WindowsDriver -Path $MountDir -Driver $DriversDir -Recurse -ForceUnsigned -Verbose
+		Write-Host "Dismounting Boot Image Index $_"
+		Dismount-WindowsImage -Path $MountDir -Save
+		Start-Sleep 1
+	}
+	Write-Host "Copying installer to USB drive"
+	Write-Host "Copy-Item -Path $WIMBootWorkingFile -Destination $BootWimPath -Force"
+	Copy-Item -Path $WIMBootWorkingFile -Destination $BootWimPath -Force
+}
