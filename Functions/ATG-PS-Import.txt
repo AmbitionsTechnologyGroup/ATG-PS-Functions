@@ -574,6 +574,7 @@ Function Import-WindowsInstallerDrivers {
 	}
 
 	#Get Drivers
+	Write-Host "Downloading drivers from Intel"
 	$SourcePage = (Invoke-WebRequest -Uri "https://www.intel.com/content/www/us/en/download/19512/intel-rapid-storage-technology-driver-installation-software-with-intel-optane-memory-10th-and-11th-gen-platforms.html" -UseBasicParsing).Content -split '\n'
 	$PageLinkLines = ($SourcePage | Select-String -SimpleMatch "VMD.zip").Line
 	$URLStrings = @()
