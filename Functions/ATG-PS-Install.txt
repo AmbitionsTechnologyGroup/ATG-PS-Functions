@@ -217,7 +217,7 @@ Function Install-UmbrellaDNS {
 		} -ScriptBlock {
 			$global:SiteCode = $using:SiteCode
 			$global:IAmJOB = $True
-			Install-ITS247Agent
+			Install-UmbrellaDNS
 		} | Receive-Job -Wait #-AutoRemoveJob
 	} ElseIf (($SiteCode -and $IAmJOB) -or (!$SiteCode -and !$IAmJOB)) {
 		$progressPreference = 'silentlyContinue'
