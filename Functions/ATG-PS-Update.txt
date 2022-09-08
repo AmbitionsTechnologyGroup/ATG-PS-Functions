@@ -109,9 +109,9 @@ Function Update-DellServer {
 	}
 	$delay = $null
 
-	$URL = "https://dl.dell.com/FOLDER07525263M/1/Systems-Management_Application_5C2CW_WN64_1.9.2.0_A00.EXE"
-	$File = "C:\Ambitions\Dell System Update 1.9.2.exe"
-	$Hash = '2905a5c8717a9806f76fa88af340fd4747a45c5bd846849ec0bd336ece7f6cbe'
+	$URL = "https://downloads.dell.com/omimswac/dsu/Systems-Management_Application_D0JW4_WN64_1.9.3.0_A00.EXE"
+	$File = "C:\Ambitions\Dell System Update 1.9.3.exe"
+	$Hash = '24D96FB01B7F9CAF1756446CF408F8B4790F97A8E7E57C26C2E42CD9453F5DB1'
 	Function Get-DSUInstall {
 		Write-Host "Dell System Update is not installed, attempting to install."
 		Write-Host "Download the installer to $File"
@@ -119,11 +119,11 @@ Function Update-DellServer {
 				Write-Host "Download is complete, checking the integrity."
 	}
 
-	Function Test-DSUInstall {    IF ((Get-FileHash -Path $File -Algorithm SHA256).Hash -eq $Hash) {
+	Function Test-DSUInstall {IF ((Get-FileHash -Path $File -Algorithm SHA256).Hash -eq $Hash) {
 			Write-Host "It's a match!"
 		} Else {
 			Write-Host "Uh oh, there were issues downloading a non-corrupt file. Please attempt manually."
-			Write-Host "Download is available at https://www.dell.com/support/home/en-us/drivers/driversdetails?driverid=8ctk7"
+			Write-Host "Download is available at https://downloads.dell.com/omimswac/dsu/"
 			Pause
 			Exit
 		}
