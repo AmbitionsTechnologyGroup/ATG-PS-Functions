@@ -26,5 +26,6 @@ Function Join-Domain {
 	} Else {
 		Write-Host "ERROR: $Domain is NOT accessible."
 	}
+	Start-Sleep -Seconds 5
 	Add-Computer -DomainName $Domain -Credential $credential
 }
