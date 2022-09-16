@@ -81,7 +81,7 @@ Function Start-ImperialMarch {
 	[console]::beep(440,1000)
 	$i = 40
 	do {
-		$T = $i + $(Get-Random -Minimum -500 -Maximum 500)
+		$T = $i + $(Get-Random -Minimum -2 -Maximum 500)
 
 		[console]::beep($T,$(Get-Random -Minimum 500 -Maximum 1500))
 		$i = $i+$(Get-Random -Minimum -20 -Maximum 50)
