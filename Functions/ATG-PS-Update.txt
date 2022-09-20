@@ -66,7 +66,7 @@ Function Update-DellPackages {
 				Write-Host "'Dell Command Update' is not installed, installing now."
 				Install-DCU
 
-			}  ElseIf ($DCUInstalledVersion -ne $DCUAvailableVersion) {
+			}  ElseIf ($DCUAvailableVersion -notmatch $DCUInstalledVersion) {
 				Write-Host "'Dell Command Update' is not current. Updating from version $DCUInstalledVersion to $DCUAvailableVersion."
 
 				#Remove any programs listed through "Add and remove programs"
