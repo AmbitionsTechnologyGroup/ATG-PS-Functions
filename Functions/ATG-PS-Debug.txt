@@ -4,7 +4,7 @@ Function Debug-UmbrellaDNS {
 	$Lookup = Resolve-DnsName -Name debug.opendns.com -Type txt
 	$OrgID = ($Lookup | Where-Object -Property Strings -Match "orgid").Strings -replace "[^0-9]" , ''
 	$Bundle = ($Lookup | Where-Object -Property Strings -Match "bundle").Strings -replace "[^0-9]" , ''
-	$PolicyURL = 'https://dashboard.umbrella.com/o/' + $OrgID + '/#/configuration/policy/' + $Bundle
+	$PolicyURL = 'https://dashboard.umbrella.com/o/' + $OrgID + '/#/configuration/policy/' + $Bundle
 	Write-Output "Organization ID: $OrgID"
 	Write-Output "Policy ID: $Bundle"
 	Write-Output "Umbrella DNS Policy applied to this computer:`n`n$PolicyURL"

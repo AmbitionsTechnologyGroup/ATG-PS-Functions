@@ -278,7 +278,7 @@ Function Global:Get-DellWarranty {
 		$ApiKey = Get-Content "$env:appdata\Microsoft\Windows\PowerShell\DellKey.txt"
 		$ApiSecret = Get-Content "$env:appdata\Microsoft\Windows\PowerShell\DellSec.txt"
 		[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-		$Auth = Invoke-WebRequest "https://apigtwb2c.us.dell.com/auth/oauth/v2/token?client_id=${ApiKey}&client_secret=${ApiSecret}&grant_type=client_credentials" -Method Post
+		$Auth = Invoke-WebRequest $('https://apigtwb2c.us.dell.com/auth/oauth/v2/token?client_id=' + ${ApiKey} + '&client_secret=' + ${ApiSecret} + '&grant_type=client_credentials') -Method Post
 		$AuthSplit = $Auth.Content -split ('"')
 		$AuthKey = $AuthSplit[3]
 
