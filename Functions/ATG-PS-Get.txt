@@ -388,14 +388,40 @@ Function Get-DomainInfo {
 	}
 }
 
-Function Get-ThunderBolt {
-	$Thunderbolt = Get-WmiObject Win32_SystemDriver | Where-Object -Property DisplayName -Like "*Thunder*"
-	If ($Thunderbolt) {
-		Write-Host "The following ThunderBolt controllers have been detected:"
-		$Thunderbolt
+Function Get-FileDownload {
+	param(
+		[Parameter(Mandatory = $True)]
+		[uri]$URL,
+		[Parameter(Mandatory = $True)]
+		[ValidateScript({Test-Path $_ -PathType ‘Container’})]
+		[string]$SaveToFolder
+	)
+	
+	#Isolate file name from URL
+	[string]$File = $URL.Segments[-1]
+	
+	#Add a '\' to the end of the folder only if needed.
+	If ($SaveToFolder -notmatch '\\$'){	$SaveToFolder += '\'}
+
+	#Create full download path
+	[string]$FilePath = $SaveToFolder + $File
+	
+	Write-Host "Enabling SSL"
+	Try {
+		# Set TLS 1.2 (3072), then TLS 1.1 (768), then TLS 1.0 (192)
+		# Use integers because the enumeration values for TLS 1.2 and TLS 1.1 won't
+		# exist in .NET 4.0, even though they are addressable if .NET 4.5+ is
+		# installed (.NET 4.5 is an in-place upgrade).
+		[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192
+	} Catch {
+		Write-Output 'Unable to set PowerShell to use TLS 1.2 and TLS 1.1 due to old .NET Framework installed. If you see underlying connection closed or trust errors, you may need to upgrade to .NET Framework 4.5+ and PowerShell v3+.'
 	}
- Else {
-		Write-Host "No Thunderbolt Controllers have been detected"
+
+	#Time to download
+	Try {
+		Invoke-WebRequest -Uri $URL -OutFile $FilePath
+	} Catch {
+		(New-Object System.Net.WebClient).DownloadFile($URL, $FilePath)
 	}
 }
 
@@ -815,6 +841,17 @@ Function Get-UserMailboxAccess {
 		Chelsea Sandoval does not have Send As access to any other mailboxes.
 		Chelsea Sandoval does not have Send On Behalf access to any other mailboxes.
 	#>
+}
+
+Function Get-ThunderBolt {
+	$Thunderbolt = Get-WmiObject Win32_SystemDriver | Where-Object -Property DisplayName -Like "*Thunder*"
+	If ($Thunderbolt) {
+		Write-Host "The following ThunderBolt controllers have been detected:"
+		$Thunderbolt
+	}
+ Else {
+		Write-Host "No Thunderbolt Controllers have been detected"
+	}
 }
 
 Function Get-UserProfileSpace {
