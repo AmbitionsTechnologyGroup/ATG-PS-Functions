@@ -1,29 +1,29 @@
 Function Deploy-ATGPSFunctions {
-	$ProfileContent = @'
+    $ProfileContent = @'
 Function Get-ATGPS {
-	$progressPreference = 'silentlyContinue'
-	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
-	$Destination = $Env:temp + "\ATGPS.psm1"
-	(Invoke-WebRequest git.io/ATGPS -UseBasicParsing).Content | Out-File -FilePath $Destination
-	Import-Module $Destination -Verbose -Global -PassThru -Force
+    $progressPreference = 'silentlyContinue'
+    [System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
+    $Destination = $Env:temp + "\ATGPS.psm1"
+    (Invoke-WebRequest git.io/ATGPS -UseBasicParsing).Content | Out-File -FilePath $Destination
+    Import-Module $Destination -Verbose -Global -PassThru -Force
 }
 '@
-	$ProfileContent | Out-String | Out-File $Profile.AllUsersCurrentHost -Append
-	Set-ExecutionPolicy RemoteSigned -Scope LocalMachine -ErrorAction SilentlyContinue
+    $ProfileContent | Out-String | Out-File $Profile.AllUsersCurrentHost -Append
+    Set-ExecutionPolicy RemoteSigned -Scope LocalMachine -ErrorAction SilentlyContinue
 }
 
 If (Test-Path $Profile.AllUsersCurrentHost){
-	Write-Host "Profile exists"
-	If (Select-String -Path $Profile.AllUsersCurrentHost -Pattern "Get-ATGPS" -SimpleMatch -Quiet)
-	{
-		Write-Host "Function already exists"
-	} Else {
-		Write-Host "Function does not already exist, deploying."
-		Deploy-ATGPSFunctions
-	}
-	
+    Write-Host "Profile exists"
+    If (Select-String -Path $Profile.AllUsersCurrentHost -Pattern "Get-ATGPS" -SimpleMatch -Quiet)
+    {
+        Write-Host "Function already exists"
+    } Else {
+        Write-Host "Function does not already exist, deploying."
+        Deploy-ATGPSFunctions
+    }
+    
 } Else {
-	Write-Host "Profile does not exist"
-	New-Item $Profile.AllUsersCurrentHost -ItemType file -Force
-	Deploy-ATGPSFunctions
+    Write-Host "Profile does not exist"
+    New-Item $Profile.AllUsersCurrentHost -ItemType file -Force
+    Deploy-ATGPSFunctions
 }

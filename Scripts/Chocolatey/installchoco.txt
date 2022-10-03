@@ -4,49 +4,49 @@
 # === EDIT HERE ===
 
 #Custom
-	#Dowload config file index
-		$SiteConfigs = @()
-		$SiteConfigs = (Invoke-WebRequest -uri "http://download.ambitionsgroup.com/Sites/ITS247Agent/SiteAgentConfigs.csv" -UseBasicParsing).Content | convertfrom-csv -Delimiter ','
+    #Dowload config file index
+        $SiteConfigs = @()
+        $SiteConfigs = (Invoke-WebRequest -uri "http://download.ambitionsgroup.com/Sites/ITS247Agent/SiteAgentConfigs.csv" -UseBasicParsing).Content | convertfrom-csv -Delimiter ','
 
-	$DetectedIP = (Invoke-WebRequest -uri "http://ip.ambitionsgroup.com/" -UseBasicParsing).Content
-	$searchterm = '*' + $DetectedIP + '*'
-	$DetectedSite = $SiteConfigs.Where({$PSItem.ExtIPs -like $searchterm})
-	If ($DetectedSite){
-		$DetectedIni = $DetectedSite.iniLoc
-		$DetectedCode = $DetectedSite.Code
-		$DetectedTitle = $DetectedSite.Site
-		[string]$packageRepo = $DetectedSite.Choco
+    $DetectedIP = (Invoke-WebRequest -uri "http://ip.ambitionsgroup.com/" -UseBasicParsing).Content
+    $searchterm = '*' + $DetectedIP + '*'
+    $DetectedSite = $SiteConfigs.Where({$PSItem.ExtIPs -like $searchterm})
+    If ($DetectedSite){
+        $DetectedIni = $DetectedSite.iniLoc
+        $DetectedCode = $DetectedSite.Code
+        $DetectedTitle = $DetectedSite.Site
+        [string]$packageRepo = $DetectedSite.Choco
 
-		if ($packageRepo -eq $null -or $packageRepo -eq '') {
-			Write-Host "Install Ambitions Chocolatey Server"
-			$ChocoName = "ACG-Choco"
-			$packageRepo = 'http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/'
-		} else {
-			Write-Host "Install local Chocolatey Server"
-			$ChocoName = $DetectedCode + "-Choco"
-			#Remove Ambitions source if it is no longer needed.
-			If (Get-Command choco -errorAction SilentlyContinue) {
-				$Sources = (choco source) ; If ($Sources -Like "*ambitionsgroup.com*"){choco source remove -n=ACG-Choco}
-			}
-			$SourceAdd = "choco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=1"
-		}
-	} else {
-		Write-Host "You're not at a specialized site."
-		Write-Host "Install Ambitions Chocolatey Server"
-			$ChocoName = "ACG-Choco-local"
-			$packageRepo = 'http://10.40.0.41:8081/repository/chocolatey-group/'
-			$SourceAdd += "`nchoco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=2"
+        if ($packageRepo -eq $null -or $packageRepo -eq '') {
+            Write-Host "Install Ambitions Chocolatey Server"
+            $ChocoName = "ACG-Choco"
+            $packageRepo = 'http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/'
+        } else {
+            Write-Host "Install local Chocolatey Server"
+            $ChocoName = $DetectedCode + "-Choco"
+            #Remove Ambitions source if it is no longer needed.
+            If (Get-Command choco -errorAction SilentlyContinue) {
+                $Sources = (choco source) ; If ($Sources -Like "*ambitionsgroup.com*"){choco source remove -n=ACG-Choco}
+            }
+            $SourceAdd = "choco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=1"
+        }
+    } else {
+        Write-Host "You're not at a specialized site."
+        Write-Host "Install Ambitions Chocolatey Server"
+            $ChocoName = "ACG-Choco-local"
+            $packageRepo = 'http://10.40.0.41:8081/repository/chocolatey-group/'
+            $SourceAdd += "`nchoco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=2"
 
-			$ChocoName = "ACG-Choco"
-			$packageRepo = 'http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/'
-			$SourceAdd = "choco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=1"
-	}
+            $ChocoName = "ACG-Choco"
+            $packageRepo = 'http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/'
+            $SourceAdd = "choco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=1"
+    }
 
-	<#
-	if ($url -eq $null -or $url -eq '') {
+    <#
+    if ($url -eq $null -or $url -eq '') {
     $packageRepo = 'http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/'
-	}
-	#>
+    }
+    #>
 #EndCustom
 
 
@@ -334,6 +334,6 @@ Invoke-Expression $SourceAdd
 Choco Source Remove -n:chocolatey
 #Update Chocolatey if Needed
 If (Get-Command choco -errorAction SilentlyContinue) {
-	choco upgrade chocolatey -y
+    choco upgrade chocolatey -y
 }
 #EndCustom

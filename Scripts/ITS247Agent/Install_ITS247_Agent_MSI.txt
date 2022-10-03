@@ -1,32 +1,32 @@
 <#
 .Synopsis
-	Installs the Ambitions Consulting Group Continuum Agent
+    Installs the Ambitions Consulting Group Continuum Agent
 .Description
-	Determines the site code from IP or manually, then downloads and installs the appropriate config file for the site.
+    Determines the site code from IP or manually, then downloads and installs the appropriate config file for the site.
 .Example
-	InstallAgent.ps1 -Code ACG
-	Installs the agent for the site Ambitions Consulting Group. Will prompt for silent install confirmation.
+    InstallAgent.ps1 -Code ACG
+    Installs the agent for the site Ambitions Consulting Group. Will prompt for silent install confirmation.
 .Example
-	InstallAgent.ps1 -Silent
-	Attempts to detect the site and installs the agent without a GUI. Will prompt for site confirmation.
+    InstallAgent.ps1 -Silent
+    Attempts to detect the site and installs the agent without a GUI. Will prompt for site confirmation.
 .Example
-	InstallAgent.ps1 -Code AAIHB -Silent
-	Installs the agent for the site 'Albuqurque Area Indian Health Board' and installs the agent with a GUI
+    InstallAgent.ps1 -Code AAIHB -Silent
+    Installs the agent for the site 'Albuqurque Area Indian Health Board' and installs the agent with a GUI
 .Example
-	InstallAgent.ps1 -Auto
-	Attempts to detect the site and installs the agent without a GUI. Will not prompt for anything.
+    InstallAgent.ps1 -Auto
+    Attempts to detect the site and installs the agent without a GUI. Will not prompt for anything.
 .Notes
-	For a list of site codes, go to:
-	https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/blob/master/Scripts/ITS247Agent/SiteAgentURLs.csv
+    For a list of site codes, go to:
+    https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/blob/master/Scripts/ITS247Agent/SiteAgentURLs.csv
 #>
 
 #Requires -RunAsAdministrator
 
 [cmdletbinding()]
 param(
-	[string]$Code, #Shortcode of the site you want to install, list available at https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/blob/master/Scripts/ITS247Agent/SiteAgentURLs.csv
-	[switch]$Silent, #Installs the agent silently
-	[switch]$Auto #Uses ip detection to silently install the script
+    [string]$Code, #Shortcode of the site you want to install, list available at https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/blob/master/Scripts/ITS247Agent/SiteAgentURLs.csv
+    [switch]$Silent, #Installs the agent silently
+    [switch]$Auto #Uses ip detection to silently install the script
 )
 Write-Host Ambitions Desktop Agent Installer
 #Dowload config file index
@@ -46,208 +46,208 @@ Function Disable-Sleep {
    Run mylongrunningscript with Display idle timeout prevented and verbose messages
 #>
 
-	If (!(Test-Path "C:\ProgramData\chocolatey\lib\dontsleep.portable\tools\DontSleep_x64_p.exe")) {
-		If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
-		choco install dontsleep.portable -y
-	}
-	& C:\ProgramData\chocolatey\lib\dontsleep.portable\tools\DontSleep_x64_p.exe -bg please_sleep_mode=0 enable=1
+    If (!(Test-Path "C:\ProgramData\chocolatey\lib\dontsleep.portable\tools\DontSleep_x64_p.exe")) {
+        If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
+        choco install dontsleep.portable -y
+    }
+    & C:\ProgramData\chocolatey\lib\dontsleep.portable\tools\DontSleep_x64_p.exe -bg please_sleep_mode=0 enable=1
 }
 
 Function Enable-Sleep {
-	If (Get-Process -Name "DontSleep_x64_p") {
-		Write-Host "Resuming power management plan"
-		Stop-Process -Name "DontSleep_x64_p" -Force
-	} Else {
-		Write-Host "Disable-Sleep wasn't running. Did you run 'Disable-Sleep'?"
-	}
+    If (Get-Process -Name "DontSleep_x64_p") {
+        Write-Host "Resuming power management plan"
+        Stop-Process -Name "DontSleep_x64_p" -Force
+    } Else {
+        Write-Host "Disable-Sleep wasn't running. Did you run 'Disable-Sleep'?"
+    }
 }
 
 Function InstallAgent {
-	Write-Host
-	Write-Host ================ Agent Installation ================
-	Write-Host Downloading the agent for $SelectedSite.Site
-	$msiURL = $SelectedSite.msiURL
+    Write-Host
+    Write-Host ================ Agent Installation ================
+    Write-Host Downloading the agent for $SelectedSite.Site
+    $msiURL = $SelectedSite.msiURL
 
-	#$msiURL = "https://prod.setup.itsupport247.net/windows/DPMA/32/atg_ACG_DPMA_ITSPlatform_TKN3882d625-3bbf-4ad5-9ca0-d226ec86ad7d/MSI/setup"
-	$pos = $msiURL.IndexOf("/atg_")
-	$rightPart = $msiURL.Substring($pos + 1)
-	$pos = $rightPart.IndexOf("/setup")
-	$leftPart = $rightPart.Substring(0, $pos)
-	$msiFileName = $leftPart -replace "/MSI", ".msi"
-	$msiFolder = $ENV:SystemDrive + '\Ambitions\ITS247Agent\'
-	$msiFilePath = $msiFolder + $msiFileName
+    #$msiURL = "https://prod.setup.itsupport247.net/windows/DPMA/32/atg_ACG_DPMA_ITSPlatform_TKN3882d625-3bbf-4ad5-9ca0-d226ec86ad7d/MSI/setup"
+    $pos = $msiURL.IndexOf("/atg_")
+    $rightPart = $msiURL.Substring($pos + 1)
+    $pos = $rightPart.IndexOf("/setup")
+    $leftPart = $rightPart.Substring(0, $pos)
+    $msiFileName = $leftPart -replace "/MSI", ".msi"
+    $msiFolder = $ENV:SystemDrive + '\Ambitions\ITS247Agent\'
+    $msiFilePath = $msiFolder + $msiFileName
 
 
-	$null = (New-Item -ItemType Directory -Force -Path 'C:\Ambitions\ITS247Agent')
-	If (Test-Path 'C:\Ambitions\ITS247Agent\SaazMobile.ini') { Remove-Item 'C:\Ambitions\ITS247Agent\SaazMobile.ini' }
-	If (Test-Path 'C:\Ambitions\ITS247Agent\DPMASetup.exe') { Remove-Item 'C:\Ambitions\ITS247Agent\DPMASetup.exe' }
-	(New-Object System.Net.WebClient).DownloadFile($msiURL, $msiFilePath)
-	Get-ChildItem 'C:\Ambitions\ITS247Agent' | Unblock-File
-	Write-Host Disabling Windows Defender Real Time Scanning
-	Set-MpPreference -DisableRealtimeMonitoring $True
-	Disable-Sleep
-	If ($Silent) {
-		Write-Host Installing the agent for $SelectedSite.Site silently. No errors will be shown.
-		Start-Process "msiexec.exe" -ArgumentList "/I $msiFilePath /q" -Wait -NoNewWindow
-		#Start-Process -wait -Verb RunAs -FilePath 'C:\Ambitions\ITS247Agent\DPMASetup.exe' -ArgumentList '/S SaazMobile.ini'
-	}
+    $null = (New-Item -ItemType Directory -Force -Path 'C:\Ambitions\ITS247Agent')
+    If (Test-Path 'C:\Ambitions\ITS247Agent\SaazMobile.ini') { Remove-Item 'C:\Ambitions\ITS247Agent\SaazMobile.ini' }
+    If (Test-Path 'C:\Ambitions\ITS247Agent\DPMASetup.exe') { Remove-Item 'C:\Ambitions\ITS247Agent\DPMASetup.exe' }
+    (New-Object System.Net.WebClient).DownloadFile($msiURL, $msiFilePath)
+    Get-ChildItem 'C:\Ambitions\ITS247Agent' | Unblock-File
+    Write-Host Disabling Windows Defender Real Time Scanning
+    Set-MpPreference -DisableRealtimeMonitoring $True
+    Disable-Sleep
+    If ($Silent) {
+        Write-Host Installing the agent for $SelectedSite.Site silently. No errors will be shown.
+        Start-Process "msiexec.exe" -ArgumentList "/I $msiFilePath /q" -Wait -NoNewWindow
+        #Start-Process -wait -Verb RunAs -FilePath 'C:\Ambitions\ITS247Agent\DPMASetup.exe' -ArgumentList '/S SaazMobile.ini'
+    }
  Else {
-		Write-Host Installing the agent for $SelectedSite.Site interactively
-		Start-Process "msiexec.exe" -ArgumentList "/I $msiFilePath" -Wait -NoNewWindow
-		#Start-Process -wait -Verb RunAs -FilePath 'C:\Ambitions\ITS247Agent\DPMASetup.exe' -ArgumentList 'SaazMobile.ini'
-	}
-	Write-Host "`nRemember: If powershell seems frozen you might have clicked in the window. Try clicking in the window again and press the ESC key to unfreeze.`n"
-	Do {
-		$IRStart = Get-Date
-		$IRStartHM = Get-Date -Format hh:mm
-		$Process = "irsetup"
-		If (!(Get-Process $Process -ErrorAction SilentlyContinue)) {
-			Write-Host -NoNewLine "`rWaiting for $Process to Start"
-			Start-Sleep -Seconds 2
-		}
-		Else {
-			Write-Host "`n"
-			Write-Host "$Process has Started"
-			$IRStart = Get-Date
-			While (Get-Process $Process -ErrorAction SilentlyContinue) {
-				[int32]$IRWait = (New-TimeSpan -Start $IRStart -End $(Get-Date)).TotalMinutes
-				Write-Host -NoNewLine "`rWaiting for $Process to stop since $IRStartHM, it's been $IRWait minutes"
-				Start-Sleep -Seconds 2
-			}
-			Write-Host "$Process Stopped" ; $Status = 'Done'
-		}
-	} Until ($Status)
+        Write-Host Installing the agent for $SelectedSite.Site interactively
+        Start-Process "msiexec.exe" -ArgumentList "/I $msiFilePath" -Wait -NoNewWindow
+        #Start-Process -wait -Verb RunAs -FilePath 'C:\Ambitions\ITS247Agent\DPMASetup.exe' -ArgumentList 'SaazMobile.ini'
+    }
+    Write-Host "`nRemember: If powershell seems frozen you might have clicked in the window. Try clicking in the window again and press the ESC key to unfreeze.`n"
+    Do {
+        $IRStart = Get-Date
+        $IRStartHM = Get-Date -Format hh:mm
+        $Process = "irsetup"
+        If (!(Get-Process $Process -ErrorAction SilentlyContinue)) {
+            Write-Host -NoNewLine "`rWaiting for $Process to Start"
+            Start-Sleep -Seconds 2
+        }
+        Else {
+            Write-Host "`n"
+            Write-Host "$Process has Started"
+            $IRStart = Get-Date
+            While (Get-Process $Process -ErrorAction SilentlyContinue) {
+                [int32]$IRWait = (New-TimeSpan -Start $IRStart -End $(Get-Date)).TotalMinutes
+                Write-Host -NoNewLine "`rWaiting for $Process to stop since $IRStartHM, it's been $IRWait minutes"
+                Start-Sleep -Seconds 2
+            }
+            Write-Host "$Process Stopped" ; $Status = 'Done'
+        }
+    } Until ($Status)
 <#
-	$countdownTime = 30
-	$startTime = Get-Date
-	$endTime = $startTime.AddMinutes($countdownTime)
-	$totalSeconds = (New-TimeSpan -Start $startTime -End $endTime).TotalSeconds
-	Write-Host "Beginning follow up timer at $startTime for installation to complete."
-	Write-Host "Timer should complete at $endTime"
-	Write-Host "Remember: If powershell seems frozen you might have clicked in the window. Try clicking in the window again and press the ESC key to unfreeze."
-	Do {
-		$now = Get-Date
-		$secondsElapsed = (New-TimeSpan -Start $startTime -End $now).TotalSeconds
-		$secondsRemaining = $totalSeconds - $secondsElapsed
-		$percentDone = ($secondsElapsed / $totalSeconds) * 100
-		Write-Progress -id 0 -Activity "ITS247 Agent Installation" -Status "Trying to be patient as Continuum does it's stuff" -PercentComplete $percentDone -SecondsRemaining $secondsRemaining
-	} Until ($now -ge $endTime)
+    $countdownTime = 30
+    $startTime = Get-Date
+    $endTime = $startTime.AddMinutes($countdownTime)
+    $totalSeconds = (New-TimeSpan -Start $startTime -End $endTime).TotalSeconds
+    Write-Host "Beginning follow up timer at $startTime for installation to complete."
+    Write-Host "Timer should complete at $endTime"
+    Write-Host "Remember: If powershell seems frozen you might have clicked in the window. Try clicking in the window again and press the ESC key to unfreeze."
+    Do {
+        $now = Get-Date
+        $secondsElapsed = (New-TimeSpan -Start $startTime -End $now).TotalSeconds
+        $secondsRemaining = $totalSeconds - $secondsElapsed
+        $percentDone = ($secondsElapsed / $totalSeconds) * 100
+        Write-Progress -id 0 -Activity "ITS247 Agent Installation" -Status "Trying to be patient as Continuum does it's stuff" -PercentComplete $percentDone -SecondsRemaining $secondsRemaining
+    } Until ($now -ge $endTime)
 #>
-	1..3 | ForEach-Object { [console]::Beep(1200, 505); Start-Sleep .505 }; [console]::Beep(1800, 1500)
-	Disable-Sleep
-	Exit
+    1..3 | ForEach-Object { [console]::Beep(1200, 505); Start-Sleep .505 }; [console]::Beep(1800, 1500)
+    Disable-Sleep
+    Exit
 } #End of InstallAgent
 
 Function AskSilent {
-	#Prompt for Silent install
-	$message = "Do you want to install the agent silently?"
-	$question = 'Note: Errors will not be shown.'
-	$choices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
-	$choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
-	$choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
-	$decision = $Host.UI.PromptForChoice($message, $question, $choices, 1)
-	Write-Host
-	If ($decision -eq 0) {
-		Write-Host 'Selection Confirmed: Silent installation'
-		$Silent = $True
-		InstallAgent
-	}
+    #Prompt for Silent install
+    $message = "Do you want to install the agent silently?"
+    $question = 'Note: Errors will not be shown.'
+    $choices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
+    $choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
+    $choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
+    $decision = $Host.UI.PromptForChoice($message, $question, $choices, 1)
+    Write-Host
+    If ($decision -eq 0) {
+        Write-Host 'Selection Confirmed: Silent installation'
+        $Silent = $True
+        InstallAgent
+    }
  Else {
-		Write-Host 'Selection Confirmed: Interactive installation'
-		$Silent = $False
-		InstallAgent
-	}
+        Write-Host 'Selection Confirmed: Interactive installation'
+        $Silent = $False
+        InstallAgent
+    }
 } #End of AskSilent
 
 Function Show-Menu {
-	param (
-		[string]$Title = 'Site Selection'
-	)
-	Clear-Host
-	Write-Host Ambitions Desktop Agent Installer
-	Write-Host
-	Write-Host "================ $Title ================"
-	Foreach ($Site in $SiteConfigs) {
-		Write-Host "Enter "$Site.Code"`t for "$Site.Site
-	}
-	Write-Host "Enter 'Q' to quit"
-	Write-Host
+    param (
+        [string]$Title = 'Site Selection'
+    )
+    Clear-Host
+    Write-Host Ambitions Desktop Agent Installer
+    Write-Host
+    Write-Host "================ $Title ================"
+    Foreach ($Site in $SiteConfigs) {
+        Write-Host "Enter "$Site.Code"`t for "$Site.Site
+    }
+    Write-Host "Enter 'Q' to quit"
+    Write-Host
 } #End of Show-Menu
 
 Function Create-Menu {
-	$selection = $null
-	Do {
-		Show-Menu -Title 'Site Selection'
-		If (!($selection)) { $selection = Read-Host "Please make a selection" }
-		$SelectedSite = $SiteConfigs.Where( { $PSItem.Code -like $selection })
-		If ($selection -eq 'q') { exit }
-		If ($SelectedSite) {
-			Write-Host
-			Write-Host Selection Confirmed: $SelectedSite.Site
-			AskSilent
-			InstallAgent
-		}
-		Else {
-			$selection = Read-Host "Invalid code. Please make a valid selection"
-		}
-	}
-	Until ($selection -eq 'q')
+    $selection = $null
+    Do {
+        Show-Menu -Title 'Site Selection'
+        If (!($selection)) { $selection = Read-Host "Please make a selection" }
+        $SelectedSite = $SiteConfigs.Where( { $PSItem.Code -like $selection })
+        If ($selection -eq 'q') { exit }
+        If ($SelectedSite) {
+            Write-Host
+            Write-Host Selection Confirmed: $SelectedSite.Site
+            AskSilent
+            InstallAgent
+        }
+        Else {
+            $selection = Read-Host "Invalid code. Please make a valid selection"
+        }
+    }
+    Until ($selection -eq 'q')
 } #End of Create-Menu
 
 # Check for preassigned site code, offer choices If not
 If (Get-Variable -Name SiteCode -ErrorAction SilentlyContinue) { $Code = $SiteCode ; $Silent = $True }
 If ($Code) {
-	$SelectedSite = $SiteConfigs.Where( { $PSItem.Code -like $code })
-	If ($SelectedSite) {
-		InstallAgent
-	}
+    $SelectedSite = $SiteConfigs.Where( { $PSItem.Code -like $code })
+    If ($SelectedSite) {
+        InstallAgent
+    }
  Else {
-		Do {
-			Show-Menu -Title 'Site Selection'
-			$selection = Read-Host "Invalid code. Please make a valid selection"
-		}
-		Until ($selection -eq 'q')
-	}
+        Do {
+            Show-Menu -Title 'Site Selection'
+            $selection = Read-Host "Invalid code. Please make a valid selection"
+        }
+        Until ($selection -eq 'q')
+    }
 }
 Else {
-	$DetectedIP = (Invoke-WebRequest -uri "http://ip.ambitionsgroup.com/" -UseBasicParsing).Content
-	$searchterm = '*' + $DetectedIP + '*'
-	$DetectedSite = $SiteConfigs.Where( { $PSItem.ExtIPs -like $searchterm })
-	If ($DetectedSite) {
-		$DetectedIni = $DetectedSite.msiURL
-		$DetectedCode = $DetectedSite.Code
-		$DetectedTitle = $DetectedSite.Site
+    $DetectedIP = (Invoke-WebRequest -uri "http://ip.ambitionsgroup.com/" -UseBasicParsing).Content
+    $searchterm = '*' + $DetectedIP + '*'
+    $DetectedSite = $SiteConfigs.Where( { $PSItem.ExtIPs -like $searchterm })
+    If ($DetectedSite) {
+        $DetectedIni = $DetectedSite.msiURL
+        $DetectedCode = $DetectedSite.Code
+        $DetectedTitle = $DetectedSite.Site
 
-		If ($Auto) {
-			#Silently install automatically
-			Write-Host Automatic mode, hold on!
-			$SelectedSite = $DetectedSite
-			$Silent = $True
-			InstallAgent
-		}
-		Else {
-			#Prompt for auto install
-			$message = "Based on your external IP address of $DetectedIP, you are at $DetectedTitle"
-			$question = 'Do you want to proceed installing the agent for this site?'
-			$choices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
-			$choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
-			$choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
-			$decision = $Host.UI.PromptForChoice($message, $question, $choices, 0)
-			If ($decision -eq 0) {
-				Write-Host "Selection Confirmed: $DetectedTitle"
-				$SelectedSite = $DetectedSite
-				AskSilent
-				InstallAgent
-			}
-			Else {
-				Write-Host Generating a site selection menu
-				Create-Menu
-			}
-			#Pause
-		}
-	}
+        If ($Auto) {
+            #Silently install automatically
+            Write-Host Automatic mode, hold on!
+            $SelectedSite = $DetectedSite
+            $Silent = $True
+            InstallAgent
+        }
+        Else {
+            #Prompt for auto install
+            $message = "Based on your external IP address of $DetectedIP, you are at $DetectedTitle"
+            $question = 'Do you want to proceed installing the agent for this site?'
+            $choices = New-Object Collections.ObjectModel.Collection[Management.Automation.Host.ChoiceDescription]
+            $choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&Yes'))
+            $choices.Add((New-Object Management.Automation.Host.ChoiceDescription -ArgumentList '&No'))
+            $decision = $Host.UI.PromptForChoice($message, $question, $choices, 0)
+            If ($decision -eq 0) {
+                Write-Host "Selection Confirmed: $DetectedTitle"
+                $SelectedSite = $DetectedSite
+                AskSilent
+                InstallAgent
+            }
+            Else {
+                Write-Host Generating a site selection menu
+                Create-Menu
+            }
+            #Pause
+        }
+    }
  Else {
-		Write-Host No site detected based on your external IP address
-		Create-Menu
-	}
+        Write-Host No site detected based on your external IP address
+        Create-Menu
+    }
 }
