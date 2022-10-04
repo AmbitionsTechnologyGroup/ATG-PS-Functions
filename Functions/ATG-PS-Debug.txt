@@ -23,22 +23,22 @@ Function Debug-UmbrellaDNS {
 	Write-Host "Here is the help file for UmbrellaDiagnostic.exe:"
 Write-Host @"
 
-  -d, --domain=VALUE         A specific URL to target with tests (e.g.
+  -d, --domain=VALUE		 A specific URL to target with tests (e.g.
 							   opendns.com)
-  -s, --silent               Automatically run tests in silent mode (will not
+  -s, --silent			   Automatically run tests in silent mode (will not
 							   show the UI or new windows; defaults to -i
 							   output)
-  -i, --internet             Output all results to diagnostic.opendns.com;
+  -i, --internet			 Output all results to diagnostic.opendns.com;
 							   destination URL will print to console as
 							   'url=URL'
-  -o, --output=VALUE         Output to a file, which will print to console as
+  -o, --output=VALUE		 Output to a file, which will print to console as
 							   'outputFile=FILE'; can be a full path, make sure
 							   to use "quotes" if needed
-  -c, --console              Output all results to console as text
-	  --erc                  Force the Roaming Client tests to be performed
-	  --noerc                Skip the Roaming Client tests even if it's
+  -c, --console			  Output all results to console as text
+	  --erc				  Force the Roaming Client tests to be performed
+	  --noerc				Skip the Roaming Client tests even if it's
 							   installed
-  -h, -?, --help             Display this usage statement
+  -h, -?, --help			 Display this usage statement
 
 If run without -o or -c arguments, -i is the default output; if run with -o or -c, then -i must be explicitly set if desired as additional output.
 

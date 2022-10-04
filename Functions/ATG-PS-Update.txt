@@ -257,14 +257,14 @@ Function Update-NTPDateTime {
 	Write-Host -NoNewLine "`nSystem date/time has been set to: "
 	$StartOfEpoch=New-Object DateTime(1900,1,1,0,0,0,[DateTimeKind]::Utc)   
 	[Byte[]]$NtpData = ,0 * 48
-	$NtpData[0] = 0x1B    # NTP Request header in first byte
+	$NtpData[0] = 0x1B	# NTP Request header in first byte
 	$Socket = New-Object Net.Sockets.Socket([Net.Sockets.AddressFamily]::InterNetwork, [Net.Sockets.SocketType]::Dgram, [Net.Sockets.ProtocolType]::Udp)
 	$Socket.Connect($sNTPServer,123)
 	 
-	$t1 = Get-Date    # Start of transaction... the clock is ticking...
+	$t1 = Get-Date	# Start of transaction... the clock is ticking...
 	[Void]$Socket.Send($NtpData)
 	[Void]$Socket.Receive($NtpData)  
-	$t4 = Get-Date    # End of transaction time
+	$t4 = Get-Date	# End of transaction time
 	$Socket.Close()
  
 	$IntPart = [BitConverter]::ToUInt32($NtpData[43..40],0)   # t3

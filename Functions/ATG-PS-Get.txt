@@ -172,7 +172,7 @@ Function Get-BitLockerKey {
 
 			#$strToReport = $_.name,$BitLocker_Key
 			$strToReport = [PSCustomObject]@{
-				Computer     = $_.name
+				Computer	 = $_.name
 				BitLockerKey = $BitLocker_Key
 			}
 			$AllComputers += $strToReport
@@ -186,7 +186,7 @@ Function Get-BitLockerKey {
 			$BitLocker_Key = "None"
 			#$strToReport = $_.name,$BitLocker_Key
 			$strToReport = [PSCustomObject]@{
-				Computer     = $_.name
+				Computer	 = $_.name
 				BitLockerKey = $BitLocker_Key
 			}
 			$AllComputers += $strToReport
@@ -461,14 +461,14 @@ Function Get-InternetHealth {
 	[PSCustomObject]$SpeedtestObj = @{
 		downloadspeed = [math]::Round($SpeedtestResults.download.bandwidth / 1000000 * 8, 2)
 		uploadspeed   = [math]::Round($SpeedtestResults.upload.bandwidth / 1000000 * 8, 2)
-		packetloss    = [math]::Round($SpeedtestResults.packetLoss)
-		isp           = $SpeedtestResults.isp
-		ExternalIP    = $SpeedtestResults.interface.externalIp
-		InternalIP    = $SpeedtestResults.interface.internalIp
-		UsedServer    = $SpeedtestResults.server.host
-		ResultsURL    = $SpeedtestResults.result.url
-		Jitter        = [math]::Round($SpeedtestResults.ping.jitter)
-		Latency       = [math]::Round($SpeedtestResults.ping.latency)
+		packetloss	= [math]::Round($SpeedtestResults.packetLoss)
+		isp		   = $SpeedtestResults.isp
+		ExternalIP	= $SpeedtestResults.interface.externalIp
+		InternalIP	= $SpeedtestResults.interface.internalIp
+		UsedServer	= $SpeedtestResults.server.host
+		ResultsURL	= $SpeedtestResults.result.url
+		Jitter		= [math]::Round($SpeedtestResults.ping.jitter)
+		Latency	   = [math]::Round($SpeedtestResults.ping.latency)
 	}
 	$SpeedtestHealth = @()
 	#Comparing against previous result. Alerting is download or upload differs more than 20%.
@@ -592,7 +592,7 @@ Function Get-LoginHistory {
 
 		$LogFilter = @{
 			LogName   = 'Microsoft-Windows-TerminalServices-LocalSessionManager/Operational'
-			ID        = 21, 23, 24, 25
+			ID		= 21, 23, 24, 25
 			StartTime = $StartTime
 		}
 
@@ -602,9 +602,9 @@ Function Get-LoginHistory {
 			$entry = [xml]$_.ToXml()
 			[array]$Output += New-Object PSObject -Property @{
 				TimeCreated = $_.TimeCreated
-				User        = $entry.Event.UserData.EventXML.User
+				User		= $entry.Event.UserData.EventXML.User
 				IPAddress   = $entry.Event.UserData.EventXML.Address
-				EventID     = $entry.Event.System.EventID
+				EventID	 = $entry.Event.System.EventID
 				ServerName  = $Server
 			}
 		}
@@ -910,14 +910,14 @@ Function Get-UserProfileSpace {
 
 			} #ForEach ($Folder in $Folders)
 			$FolderSizes = [PSCustomObject]@{
-				"User"      = $($ActiveProfile | split-path -leaf).ToLower()
-				"Host"      = $env:computername
-				"Date"      = $(Get-Date -Format "yyyyMMdd")
+				"User"	  = $($ActiveProfile | split-path -leaf).ToLower()
+				"Host"	  = $env:computername
+				"Date"	  = $(Get-Date -Format "yyyyMMdd")
 
 				"Desktop"   = $Desktop
 				"Documents" = $Documents
 				"Pictures"  = $Pictures
-				"Total"     = $Desktop + $Documents + $Pictures
+				"Total"	 = $Desktop + $Documents + $Pictures
 			}
 			#$FolderSizes
 			If ($BigObject.Count -eq 0) {
@@ -965,10 +965,10 @@ Function Get-VSSWriter {
 			Write-Verbose "Creating object"
 			foreach ($Prop in $_) {
 				$Obj = [pscustomobject]@{
-					Name       = $Name
-					Id         = $Id
+					Name	   = $Name
+					Id		 = $Id
 					InstanceId = $InstanceId
-					State      = $State
+					State	  = $State
 					LastError  = $LastError
 				}
 			}#foreach

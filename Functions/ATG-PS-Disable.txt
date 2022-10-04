@@ -29,14 +29,14 @@ Function Disable-FastStartup {
 Function Disable-Sleep {
 	<#
 .Synopsis
-    Function to suspend your current Power Plan settings when running a PowerShell script.
+	Function to suspend your current Power Plan settings when running a PowerShell script.
 .SYNOPSIS
-    Function to suspend your current Power Plan settings when running a PowerShell script.
-    Scenario: When downloading files using Robocopy from PowerShell you don't want your
-    laptop to go into sleep mode.
+	Function to suspend your current Power Plan settings when running a PowerShell script.
+	Scenario: When downloading files using Robocopy from PowerShell you don't want your
+	laptop to go into sleep mode.
 .EXAMPLE
-    Disable-Sleep
-    Run mylongrunningscript with Display idle timeout prevented and verbose messages
+	Disable-Sleep
+	Run mylongrunningscript with Display idle timeout prevented and verbose messages
 #>
 
 	If (!(Test-Path "C:\ProgramData\chocolatey\lib\dontsleep.portable\tools\DontSleep_x64_p.exe")) {

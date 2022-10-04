@@ -31,7 +31,7 @@ Function Import-PPESenderLists {
 				** OrgBlockedSender.csv
 
 		.NOTES
-			Version:         1.0
+			Version:		 1.0
 			Creation Date:   4/8/2021
 
 		.DISCLAIMER
@@ -46,13 +46,13 @@ Function Import-PPESenderLists {
 
 		#Establish global parameters that will be used throughout the script.
 		$Global:params = @{
-			Domain      = ""
-			Stack       = ""
+			Domain	  = ""
+			Stack	   = ""
 			StackList   = ('us1','us2','us3','us4','us5','eu1')
-			Headers     = ""
-			Method      = 'GET'
-			Body        = ""
-			SMTP        = ""
+			Headers	 = ""
+			Method	  = 'GET'
+			Body		= ""
+			SMTP		= ""
 			ContentType = 'application/json'
 			FolderName  = ""
 		}
@@ -100,7 +100,7 @@ Function Import-PPESenderLists {
 				
 				foreach ($WL in $item.white_list_senders) {
 					$SafetyTest = $null
-					IF ($WL -eq $primary) {$SafetyTest = "match"}     
+					IF ($WL -eq $primary) {$SafetyTest = "match"}	 
 					IF ($WL -match '\*\@' -and $SafetyTest -eq $null) {$SafetyTest = "domain"}
 
 					switch ($SafetyTest) {
@@ -113,7 +113,7 @@ Function Import-PPESenderLists {
 			foreach ($BL in $item.black_list_senders) {
 			
 					$SafetyTest = $null
-					IF ($BL -eq $primary) {$SafetyTest = "match"}     
+					IF ($BL -eq $primary) {$SafetyTest = "match"}	 
 					IF ($BL -match '\*\@' -and $SafetyTest -eq $null) {$SafetyTest = "domain"}
 
 					switch ($SafetyTest) {

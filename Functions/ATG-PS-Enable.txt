@@ -22,8 +22,8 @@ Function Enable-O365AuditLog {
 }
 
 Function Enable-Onedrive {
-	#Enables usage of OneDrive local GP - Computer Config\Admin Templates\Windows Components\OneDrive    
-	Reg Add    "HKLM\SOFTWARE\Policies\Microsoft\Windows\OneDrive" /T REG_DWORD /V "DisableFileSyncNGSC" /D 0 /F
+	#Enables usage of OneDrive local GP - Computer Config\Admin Templates\Windows Components\OneDrive	
+	Reg Add	"HKLM\SOFTWARE\Policies\Microsoft\Windows\OneDrive" /T REG_DWORD /V "DisableFileSyncNGSC" /D 0 /F
 	Reg Add "HKLM\SOFTWARE\Policies\Microsoft\Windows\OneDrive" /T REG_DWORD /V "DisableFileSync" /D 0 /F
 	#Adds OneDrive to File Explorer
 	Reg Add "HKCR\CLSID\{018D5C66-4533-4307-9B53-224DE2ED1FE6}" /T REG_DWORD /V "System.IsPinnedToNameSpaceTree" /D 1 /F
