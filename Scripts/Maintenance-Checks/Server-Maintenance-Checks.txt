@@ -1,695 +1,695 @@
 <#TODO Lan Manager
-    Resultant set of policy
-    Event logs Count of each, error
+	Resultant set of policy
+	Event logs Count of each, error
 #>
 $progressPreference = 'silentlyContinue'
 
 #Random Functions
 Function DattoBDRCheck {
-    #Determine if Shadowsnap agent is installed
-    $OnlineDattoAgent = iwr https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Datto-Agent-Update/OnlineDattoAgent.json | ConvertFrom-Json
-    if (Get-Service "StorageCraft Raw Agent" -ErrorAction SilentlyContinue) {
-        #Designate Registry key to read version number from
-        $RegKeyVer = "hklm:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ShadowSnap"
-        #Designate name of agent
-        $agent = "ShadowSnap Agent"
-        $OnlineDattoVersion = $OnlineDattoAgent.ShadowSnapAgent.Version
-        $InstalledVer = (Get-ItemProperty "$RegKeyVer" -Name "DisplayVersion" -ErrorAction SilentlyContinue).DisplayVersion
-    }
-    #Determine if Datto Windows agent is installed
-    if (Get-Service "Datto Backup Agent Service" -ErrorAction SilentlyContinue) {
-        #Designate Registry key to read version number from
-        $FileVer = "C:\Program Files\Datto\Datto Windows Agent\DattoBackupAgent.exe"
-        #Designate name of agent
-        $agent = "Datto Windows Agent"
-        $OnlineDattoVersion = $OnlineDattoAgent.DattoWindowsAgent.Version
-        $InstalledVer = (Get-Item $FileVer).VersionInfo.ProductVersion
-    }
-    #If neither agent is installed
-    if (!$agent) {
-        Write-Host "No Datto backup agent is installed"
-    }
+	#Determine if Shadowsnap agent is installed
+	$OnlineDattoAgent = iwr https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Datto-Agent-Update/OnlineDattoAgent.json | ConvertFrom-Json
+	if (Get-Service "StorageCraft Raw Agent" -ErrorAction SilentlyContinue) {
+		#Designate Registry key to read version number from
+		$RegKeyVer = "hklm:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ShadowSnap"
+		#Designate name of agent
+		$agent = "ShadowSnap Agent"
+		$OnlineDattoVersion = $OnlineDattoAgent.ShadowSnapAgent.Version
+		$InstalledVer = (Get-ItemProperty "$RegKeyVer" -Name "DisplayVersion" -ErrorAction SilentlyContinue).DisplayVersion
+	}
+	#Determine if Datto Windows agent is installed
+	if (Get-Service "Datto Backup Agent Service" -ErrorAction SilentlyContinue) {
+		#Designate Registry key to read version number from
+		$FileVer = "C:\Program Files\Datto\Datto Windows Agent\DattoBackupAgent.exe"
+		#Designate name of agent
+		$agent = "Datto Windows Agent"
+		$OnlineDattoVersion = $OnlineDattoAgent.DattoWindowsAgent.Version
+		$InstalledVer = (Get-Item $FileVer).VersionInfo.ProductVersion
+	}
+	#If neither agent is installed
+	if (!$agent) {
+		Write-Host "No Datto backup agent is installed"
+	}
  else {
-        #Check Version number
-        If ($InstalledVer -match $OnlineDattoVersion) {
-            Write-Host -ForegroundColor Green 'The'$agent' version '$InstalledVer' is currently installed and it is up to date'
-        }
-        Else {
-            Write-Host -ForegroundColor Red 'The'$agent' Version '$InstalledVer' is currently installed and it is NOT up to date. The latest version available is '$OnlineDattoVersion
-        }
-    }
+		#Check Version number
+		If ($InstalledVer -match $OnlineDattoVersion) {
+			Write-Host -ForegroundColor Green 'The'$agent' version '$InstalledVer' is currently installed and it is up to date'
+		}
+		Else {
+			Write-Host -ForegroundColor Red 'The'$agent' Version '$InstalledVer' is currently installed and it is NOT up to date. The latest version available is '$OnlineDattoVersion
+		}
+	}
 }
 
 Function EnableWinModules {
-    Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
-    #Import needed modules for AD
-    $modulename = "WindowsCompatibility"
-    $module = Get-module -name $modulename
-    If (($module.Name) -match ($modulename)) {
-        write-host Module $modulename is loaded
-    }
+	Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
+	#Import needed modules for AD
+	$modulename = "WindowsCompatibility"
+	$module = Get-module -name $modulename
+	If (($module.Name) -match ($modulename)) {
+		write-host Module $modulename is loaded
+	}
  else {
-        #import Get-RemotePrograms module
-        Import-Module $modulename -Force -ErrorAction SilentlyContinue
-    }
-    Add-WindowsPSModulePath -ErrorAction SilentlyContinue
-    Install-Module WindowsCompatibility
-    $modulename = "ActiveDirectory"
-    $module = Get-module -name $modulename
-    If (($module.Name) -match ($modulename)) {
-        write-host Module $modulename is loaded
-    }
+		#import Get-RemotePrograms module
+		Import-Module $modulename -Force -ErrorAction SilentlyContinue
+	}
+	Add-WindowsPSModulePath -ErrorAction SilentlyContinue
+	Install-Module WindowsCompatibility
+	$modulename = "ActiveDirectory"
+	$module = Get-module -name $modulename
+	If (($module.Name) -match ($modulename)) {
+		write-host Module $modulename is loaded
+	}
  else {
-        #import Get-RemotePrograms module
-        $progressPreference = 'silentlyContinue'
-        Import-Winmodule $modulename -Force
-    }
-    $modulename = "DnsClient"
-    $module = Get-module -name $modulename
-    If (($module.Name) -match ($modulename)) {
-        write-host Module $modulename is loaded
-    }
+		#import Get-RemotePrograms module
+		$progressPreference = 'silentlyContinue'
+		Import-Winmodule $modulename -Force
+	}
+	$modulename = "DnsClient"
+	$module = Get-module -name $modulename
+	If (($module.Name) -match ($modulename)) {
+		write-host Module $modulename is loaded
+	}
  else {
-        #import Get-RemotePrograms module
-        Import-Winmodule $modulename -Force
-    }
-    $modulename = "GroupPolicy"
-    $module = Get-module -name $modulename
-    If (($module.Name) -match ($modulename)) {
-        write-host Module $modulename is loaded
-    }
+		#import Get-RemotePrograms module
+		Import-Winmodule $modulename -Force
+	}
+	$modulename = "GroupPolicy"
+	$module = Get-module -name $modulename
+	If (($module.Name) -match ($modulename)) {
+		write-host Module $modulename is loaded
+	}
  else {
-        #import Get-RemotePrograms module
-        Import-Winmodule $modulename -Force
-    }
+		#import Get-RemotePrograms module
+		Import-Winmodule $modulename -Force
+	}
 }
 EnableWinModules
 #End of Random Functions
 
 
 function Maintenance {
-    #Uptime Check
-    Write-Host
-    Write-Host "Uptime Check:"
-    $uptime = Get-Uptime
-    $UptimeDays = [math]::round($uptime.TotalDays)
-    $UptimeHours = [math]::round($uptime.Hours)
-    If ($UptimeDays -cge 45) {
-        Write-Host -ForegroundColor Red "Uptime is too much! - $UptimeDays" days, "$UptimeHours"hours""
-    }
+	#Uptime Check
+	Write-Host
+	Write-Host "Uptime Check:"
+	$uptime = Get-Uptime
+	$UptimeDays = [math]::round($uptime.TotalDays)
+	$UptimeHours = [math]::round($uptime.Hours)
+	If ($UptimeDays -cge 45) {
+		Write-Host -ForegroundColor Red "Uptime is too much! - $UptimeDays" days, "$UptimeHours"hours""
+	}
  Else {
-        Write-Host -ForegroundColor Green  "Uptime is ok - $UptimeDays" days, "$UptimeHours"hours""
-    }
-    #End of Uptime Check
+		Write-Host -ForegroundColor Green  "Uptime is ok - $UptimeDays" days, "$UptimeHours"hours""
+	}
+	#End of Uptime Check
 
-    #Disk Free Space
-    Write-Host
-    Write-Host "Disk Space Check:"
-    $disks = Get-CimInstance Win32_LogicalDisk -Filter drivetype=3
-    $badresults = @()
-    $allresults = foreach ($disk in $disks) {
-        if ($disk.Size -gt 0) {
-            $size = [math]::round($disk.Size / 1GB, 0)
-            $free = [math]::round($disk.FreeSpace / 1GB, 0)
-            $diskPercent = [math]::round((100 * ($free / $size)), 0)
-            $diskName = $disk.Name
-            if ($diskPercent -lt 20) {
-                Write-Host -NoNewLine -ForegroundColor Red $diskName $diskPercent%
-                $badresults += $disk
-            }
-            if ($diskPercent -ge 20) {
-                Write-Host -NoNewLine $diskName $diskPercent%
-            }
-            If ($disk -ne $disks[-1]) { Write-host -NoNewLine ", " } else { Write-Host " free space." }
-        }
-    }
+	#Disk Free Space
+	Write-Host
+	Write-Host "Disk Space Check:"
+	$disks = Get-CimInstance Win32_LogicalDisk -Filter drivetype=3
+	$badresults = @()
+	$allresults = foreach ($disk in $disks) {
+		if ($disk.Size -gt 0) {
+			$size = [math]::round($disk.Size / 1GB, 0)
+			$free = [math]::round($disk.FreeSpace / 1GB, 0)
+			$diskPercent = [math]::round((100 * ($free / $size)), 0)
+			$diskName = $disk.Name
+			if ($diskPercent -lt 20) {
+				Write-Host -NoNewLine -ForegroundColor Red $diskName $diskPercent%
+				$badresults += $disk
+			}
+			if ($diskPercent -ge 20) {
+				Write-Host -NoNewLine $diskName $diskPercent%
+			}
+			If ($disk -ne $disks[-1]) { Write-host -NoNewLine ", " } else { Write-Host " free space." }
+		}
+	}
 
-    If ($badresults -ne $Null) {
-        Write-Host -ForegroundColor red '-Some drives are below 20% free-'
-        If ($badresults -ne $disks) {
-            foreach ($disk in $badresults) {
-                if ($disk.Size -gt 0) {
-                    $size = [math]::round($disk.Size / 1GB, 0)
-                    $free = [math]::round($disk.FreeSpace / 1GB, 0)
-                    $diskPercent = [math]::round((100 * ($free / $size)), 0)
-                    $diskVolName = $disk.VolumeName
-                    $diskName = $disk.Name
-                    If ($disk.VolumeName) {
-                        Write-Host -NoNewLine $diskName"("$diskVolName") "$diskPercent%
-                    }
-                    else {
-                        Write-Host -NoNewLine $diskName $diskPercent%
-                    }
-                    If ($disk -ne $disks[-1]) { Write-host -NoNewLine ", " } else { Write-Host " free space." }
-                }
-            }
-        }
-    }
+	If ($badresults -ne $Null) {
+		Write-Host -ForegroundColor red '-Some drives are below 20% free-'
+		If ($badresults -ne $disks) {
+			foreach ($disk in $badresults) {
+				if ($disk.Size -gt 0) {
+					$size = [math]::round($disk.Size / 1GB, 0)
+					$free = [math]::round($disk.FreeSpace / 1GB, 0)
+					$diskPercent = [math]::round((100 * ($free / $size)), 0)
+					$diskVolName = $disk.VolumeName
+					$diskName = $disk.Name
+					If ($disk.VolumeName) {
+						Write-Host -NoNewLine $diskName"("$diskVolName") "$diskPercent%
+					}
+					else {
+						Write-Host -NoNewLine $diskName $diskPercent%
+					}
+					If ($disk -ne $disks[-1]) { Write-host -NoNewLine ", " } else { Write-Host " free space." }
+				}
+			}
+		}
+	}
  else {
-        Write-Host -ForegroundColor green 'All drives are above 20% free'
-    }
-    #End of Disk Free Space
+		Write-Host -ForegroundColor green 'All drives are above 20% free'
+	}
+	#End of Disk Free Space
 
-    #User Logged in check
-    Write-Host
-    Write-Host "User logged in check:"
-    $QUSER = (Get-ciminstance -Class win32_computersystem).UserName
-    If ($QUSER -ne $null) {
-        Write-Host -ForegroundColor Red The user $QUSER is logged in
-    }
+	#User Logged in check
+	Write-Host
+	Write-Host "User logged in check:"
+	$QUSER = (Get-ciminstance -Class win32_computersystem).UserName
+	If ($QUSER -ne $null) {
+		Write-Host -ForegroundColor Red The user $QUSER is logged in
+	}
  Else { Write-Host -ForegroundColor Green "No user logged in to the console" }
-    #End of User Logged in check
+	#End of User Logged in check
 
-    #Responsive Check
-    #Figure this out
-    #End of Responsive Check
+	#Responsive Check
+	#Figure this out
+	#End of Responsive Check
 
-    #Manufacturer Tools
-    $Manufact = Get-CimInstance -Class Win32_ComputerSystem | Select-Object Manufacturer | Format-Table -HideTableHeaders Manufacturer | Out-String
-    $Model = Get-CimInstance -Class Win32_ComputerSystem |  Format-Table -HideTableHeaders Model | Out-String
-    #Clean up whitespace
-    $Manufact = $Manufact -replace '(^\s+|\s+$)', '' -replace '\s+', ' '
-    Write-Host
-    Write-Host "Manufacturer tools check for this"$Manufact" computer:"
-    if ( $Manufact -like "*Dell*") {
-        $service = Get-Service -Name omsad -ErrorAction SilentlyContinue
-        if ($service -ne $null) {
-            Write-Host -ForegroundColor Green Dell Manufacturer tools are installed
-        }
-        else {
-            Write-Host -ForegroundColor Red Dell Manufacturer tools are NOT installed
-        }
-    }
-    if ( $Manufact -like "*HP*") {
-        $service = Get-Service -Name SysMgmtHp -ErrorAction SilentlyContinue
-        if ($service -ne $null) {
-            Write-Host -ForegroundColor Green HP Manufacturer tools are installed
-        }
-        else {
-            Write-Host -ForegroundColor Red HP Manufacturer tools are NOT installed
-        }
-    }
-    if ( $Model -like "*Virtual*") {
-        Write-Host  'Not applicable for virtual machines'
-    }
-    #End of Manufacturer Tools
+	#Manufacturer Tools
+	$Manufact = Get-CimInstance -Class Win32_ComputerSystem | Select-Object Manufacturer | Format-Table -HideTableHeaders Manufacturer | Out-String
+	$Model = Get-CimInstance -Class Win32_ComputerSystem |  Format-Table -HideTableHeaders Model | Out-String
+	#Clean up whitespace
+	$Manufact = $Manufact -replace '(^\s+|\s+$)', '' -replace '\s+', ' '
+	Write-Host
+	Write-Host "Manufacturer tools check for this"$Manufact" computer:"
+	if ( $Manufact -like "*Dell*") {
+		$service = Get-Service -Name omsad -ErrorAction SilentlyContinue
+		if ($service -ne $null) {
+			Write-Host -ForegroundColor Green Dell Manufacturer tools are installed
+		}
+		else {
+			Write-Host -ForegroundColor Red Dell Manufacturer tools are NOT installed
+		}
+	}
+	if ( $Manufact -like "*HP*") {
+		$service = Get-Service -Name SysMgmtHp -ErrorAction SilentlyContinue
+		if ($service -ne $null) {
+			Write-Host -ForegroundColor Green HP Manufacturer tools are installed
+		}
+		else {
+			Write-Host -ForegroundColor Red HP Manufacturer tools are NOT installed
+		}
+	}
+	if ( $Model -like "*Virtual*") {
+		Write-Host  'Not applicable for virtual machines'
+	}
+	#End of Manufacturer Tools
 
-    #Manufacturer Tools Alerts
-    #TODO
-    #Dell: https://gallery.technet.microsoft.com/scriptcenter/Get-Dell-Server-Hardware-61f72b66
-    #HP: https://gallery.technet.microsoft.com/scriptcenter/Multithreaded-HP-Server-f48080a3
-    #End of Manufacturer Tools Alerts
+	#Manufacturer Tools Alerts
+	#TODO
+	#Dell: https://gallery.technet.microsoft.com/scriptcenter/Get-Dell-Server-Hardware-61f72b66
+	#HP: https://gallery.technet.microsoft.com/scriptcenter/Multithreaded-HP-Server-f48080a3
+	#End of Manufacturer Tools Alerts
 
-    #Critical Errors
-    Write-Host
-    Write-Host Event log check for Critical Errors:
-    If ($WinVer -notlike "*2008*") {
-        Set-Variable -Name EventAgeDays -Value 30    #we will take events for the latest 7 days
-        Set-Variable -Name CompArr -Value @("localhost")   # replace it with your server names
-        Set-Variable -Name LogNames -Value @("Application", "System")  # Checking app and system logs
-        Set-Variable -Name EventTypes -Value @("1")  # Loading only Errors and Warnings
-        Set-Variable -Name ExportFolder -Value "C:\EventLogs\"
-        $el_c = @()   #consolidated error log
-        $now = get-date
-        $startdate = $now.adddays(-$EventAgeDays)
-        $ExportFile = $ExportFolder + "el" + $now.ToString("yyyy-MM-dd---hh-mm-ss") + ".csv"  # we cannot use standard delimiteds like ":"
-        foreach ($log in $LogNames) {
-            # Write-Host Processing $comp\$log
-            $el = get-winevent -FilterHashtable @{logname = "$log"; level = $eventtypes; starttime = "$startdate" } -ErrorAction SilentlyContinue
-            if ( $el -eq $null) {
-                Write-Host -ForegroundColor Green There are no critical errors for $log in the last $EventAgeDays days.
-            }
-            else {
-                Write-Host -ForegroundColor Red There are critical errors for $log in the last $EventAgeDays days.
-            }
+	#Critical Errors
+	Write-Host
+	Write-Host Event log check for Critical Errors:
+	If ($WinVer -notlike "*2008*") {
+		Set-Variable -Name EventAgeDays -Value 30    #we will take events for the latest 7 days
+		Set-Variable -Name CompArr -Value @("localhost")   # replace it with your server names
+		Set-Variable -Name LogNames -Value @("Application", "System")  # Checking app and system logs
+		Set-Variable -Name EventTypes -Value @("1")  # Loading only Errors and Warnings
+		Set-Variable -Name ExportFolder -Value "C:\EventLogs\"
+		$el_c = @()   #consolidated error log
+		$now = get-date
+		$startdate = $now.adddays(-$EventAgeDays)
+		$ExportFile = $ExportFolder + "el" + $now.ToString("yyyy-MM-dd---hh-mm-ss") + ".csv"  # we cannot use standard delimiteds like ":"
+		foreach ($log in $LogNames) {
+			# Write-Host Processing $comp\$log
+			$el = get-winevent -FilterHashtable @{logname = "$log"; level = $eventtypes; starttime = "$startdate" } -ErrorAction SilentlyContinue
+			if ( $el -eq $null) {
+				Write-Host -ForegroundColor Green There are no critical errors for $log in the last $EventAgeDays days.
+			}
+			else {
+				Write-Host -ForegroundColor Red There are critical errors for $log in the last $EventAgeDays days.
+			}
 
-            $el_c += $el  #consolidating
-        }
-        $el_sorted = $el_c | Sort-Object TimeGenerated    #sort by time
-        #Write-Host Exporting to $ExportFile
-        $el_sorted | Select LevelDisplayName, TimeCreated, ProviderName, ID, MachineName, Message
-    }
+			$el_c += $el  #consolidating
+		}
+		$el_sorted = $el_c | Sort-Object TimeGenerated    #sort by time
+		#Write-Host Exporting to $ExportFile
+		$el_sorted | Select LevelDisplayName, TimeCreated, ProviderName, ID, MachineName, Message
+	}
  else {
-        Set-Variable -Name EventAgeDays -Value 30    #we will take events for the latest 30 days
-        Set-Variable -Name EventAgeMilliSec -Value 86400000 #Sets variable to be used to 1 day in milliseconds for 2008 version
-        $EventAgeMilliSec *= $EventAgeDays
-        Set-Variable -Name LogNames -Value @("Application", "System")  # Checking app and system logs
-        Set-Variable -Name EventTypes -Value @("1")  # Loading only Errors and Warnings
-        Set-Variable -Name ExportFolder -Value "C:\EventLogs\"
-        $el_c = @()   #consolidated error log
-        $now = get-date
-        $ExportFile = $ExportFolder + "el" + $now.ToString("yyyy-MM-dd---hh-mm-ss") + ".csv"  # we cannot use standard delimiteds like ":"
-        foreach ($log in $LogNames) {
-            # Write-Host Processing $comp\$log
-            $el = get-winevent -LogName "$log" -FilterXPath "*[System[Level=$eventtypes and TimeCreated[timediff(@SystemTime) <= $EventAgeMilliSec]]]" -ErrorAction SilentlyContinue
-            if ( $el -eq $null) {
-                Write-Host -ForegroundColor Green There are no critical errors for $log in the last $EventAgeDays days.
-            }
-            else {
-                Write-Host -ForegroundColor Red There are critical errors for $log in the last $EventAgeDays days.
-            }
+		Set-Variable -Name EventAgeDays -Value 30    #we will take events for the latest 30 days
+		Set-Variable -Name EventAgeMilliSec -Value 86400000 #Sets variable to be used to 1 day in milliseconds for 2008 version
+		$EventAgeMilliSec *= $EventAgeDays
+		Set-Variable -Name LogNames -Value @("Application", "System")  # Checking app and system logs
+		Set-Variable -Name EventTypes -Value @("1")  # Loading only Errors and Warnings
+		Set-Variable -Name ExportFolder -Value "C:\EventLogs\"
+		$el_c = @()   #consolidated error log
+		$now = get-date
+		$ExportFile = $ExportFolder + "el" + $now.ToString("yyyy-MM-dd---hh-mm-ss") + ".csv"  # we cannot use standard delimiteds like ":"
+		foreach ($log in $LogNames) {
+			# Write-Host Processing $comp\$log
+			$el = get-winevent -LogName "$log" -FilterXPath "*[System[Level=$eventtypes and TimeCreated[timediff(@SystemTime) <= $EventAgeMilliSec]]]" -ErrorAction SilentlyContinue
+			if ( $el -eq $null) {
+				Write-Host -ForegroundColor Green There are no critical errors for $log in the last $EventAgeDays days.
+			}
+			else {
+				Write-Host -ForegroundColor Red There are critical errors for $log in the last $EventAgeDays days.
+			}
 
-            #$el_c += $el  #consolidating
-        }
-        #$el_sorted = $el_c | Sort-Object TimeGenerated    #sort by time
-        #Write-Host Exporting to $ExportFile
-        #Write-Host ($el_sorted | Select LevelDisplayName, TimeCreated, ProviderName, ID, MachineName, Message)
-    }
-    #End of Critical Errors
+			#$el_c += $el  #consolidating
+		}
+		#$el_sorted = $el_c | Sort-Object TimeGenerated    #sort by time
+		#Write-Host Exporting to $ExportFile
+		#Write-Host ($el_sorted | Select LevelDisplayName, TimeCreated, ProviderName, ID, MachineName, Message)
+	}
+	#End of Critical Errors
 
-    #Processes Resource Use
-    Write-Host
-    Write-Host Processes Resource Use:
-    Write-Host -NoNewLine "Retrieving Top 3 CPU users"
-    Get-CimInstance Win32_PerfFormattedData_PerfProc_Process | `
-        where-object { $_.Name -ne "_Total" -and $_.Name -ne "Idle" } | `
-        Sort-Object PercentProcessorTime -Descending | `
-        select -First 3 | `
-        Format-Table Name, IDProcess, @{Name = 'CPU %'; Expression = { $_.PercentProcessorTime } } -AutoSize
+	#Processes Resource Use
+	Write-Host
+	Write-Host Processes Resource Use:
+	Write-Host -NoNewLine "Retrieving Top 3 CPU users"
+	Get-CimInstance Win32_PerfFormattedData_PerfProc_Process | `
+		where-object { $_.Name -ne "_Total" -and $_.Name -ne "Idle" } | `
+		Sort-Object PercentProcessorTime -Descending | `
+		select -First 3 | `
+		Format-Table Name, IDProcess, @{Name = 'CPU %'; Expression = { $_.PercentProcessorTime } } -AutoSize
 
-    Write-Host -NoNewLine "Retrieving Top 3 RAM users"
-    Get-CimInstance Win32_PerfFormattedData_PerfProc_Process | `
-        where-object { $_.Name -ne "_Total" -and $_.Name -ne "Idle" } | `
-        Sort-Object WorkingSet -Descending | `
-        select -First 3 | `
-        Format-Table Name, IDProcess, @{Name = 'Memory (MB)'; Expression = { [math]::round($_.WorkingSet / 1MB, 0) } } -AutoSize
-    #End of Processes Resource Use
+	Write-Host -NoNewLine "Retrieving Top 3 RAM users"
+	Get-CimInstance Win32_PerfFormattedData_PerfProc_Process | `
+		where-object { $_.Name -ne "_Total" -and $_.Name -ne "Idle" } | `
+		Sort-Object WorkingSet -Descending | `
+		select -First 3 | `
+		Format-Table Name, IDProcess, @{Name = 'Memory (MB)'; Expression = { [math]::round($_.WorkingSet / 1MB, 0) } } -AutoSize
+	#End of Processes Resource Use
 
-    #Anti-Virus installed
-    #Is Antivirus Running
-    Write-Host
-    Write-Host "Antivirus Check:"
-    Function ConvertTo-Hex {
-        Param([int]$Number)
-        '0x{0:x}' -f $Number
-    }
+	#Anti-Virus installed
+	#Is Antivirus Running
+	Write-Host
+	Write-Host "Antivirus Check:"
+	Function ConvertTo-Hex {
+		Param([int]$Number)
+		'0x{0:x}' -f $Number
+	}
 
-    $cimParams = @{
-        Namespace   = "root/SecurityCenter2"
-        ClassName   = "Antivirusproduct"
-        ErrorAction = "Stop"
-    }
-    $results = $null
-    $results = @()
-    $item = (Get-CIMInstance -Namespace "root\SecurityCenter2" -Class AntiVirusProduct -ErrorAction SilentlyContinue | Where { $_.productState -ne "393472" -and $_.productState -ne "393216" } )
-    If ($item) {
-        $hx = ConvertTo-Hex $item.ProductState
-        $mid = $hx.Substring(3, 2)
-        if ($mid -match "00|01") {
-            $Enabled = $False
-        }
-        else {
-            $Enabled = $True
-        }
-        $end = $hx.Substring(5)
-        if ($end -eq "00") {
-            $UpToDate = $True
-        }
-        else {
-            $UpToDate = $False
-        }
+	$cimParams = @{
+		Namespace   = "root/SecurityCenter2"
+		ClassName   = "Antivirusproduct"
+		ErrorAction = "Stop"
+	}
+	$results = $null
+	$results = @()
+	$item = (Get-CIMInstance -Namespace "root\SecurityCenter2" -Class AntiVirusProduct -ErrorAction SilentlyContinue | Where { $_.productState -ne "393472" -and $_.productState -ne "393216" } )
+	If ($item) {
+		$hx = ConvertTo-Hex $item.ProductState
+		$mid = $hx.Substring(3, 2)
+		if ($mid -match "00|01") {
+			$Enabled = $False
+		}
+		else {
+			$Enabled = $True
+		}
+		$end = $hx.Substring(5)
+		if ($end -eq "00") {
+			$UpToDate = $True
+		}
+		else {
+			$UpToDate = $False
+		}
 
-        $results += $item | Select Displayname, ProductState,
-        @{Name = "Enabled"; Expression = { $Enabled } },
-        @{Name = "UpToDate"; Expression = { $UptoDate } },
-        @{Name = "Path"; Expression = { $_.pathToSignedProductExe } }
-        $results | Out-Host
-    }
+		$results += $item | Select Displayname, ProductState,
+		@{Name = "Enabled"; Expression = { $Enabled } },
+		@{Name = "UpToDate"; Expression = { $UptoDate } },
+		@{Name = "Path"; Expression = { $_.pathToSignedProductExe } }
+		$results | Out-Host
+	}
  else {
-        $WRSA = Get-Process WRSA -ErrorAction SilentlyContinue
-        if ($WRSA) {
-            Write-Host -ForegroundColor Green "Webroot is Running"
-        }
-        Else { Write-Host -ForegroundColor Red "Webroot is NOT Running" }
-    }
-    #End of Anti-Virus installed
+		$WRSA = Get-Process WRSA -ErrorAction SilentlyContinue
+		if ($WRSA) {
+			Write-Host -ForegroundColor Green "Webroot is Running"
+		}
+		Else { Write-Host -ForegroundColor Red "Webroot is NOT Running" }
+	}
+	#End of Anti-Virus installed
 
-    #Firewall Enabled Check
+	#Firewall Enabled Check
 Function Get-FWCheck {
-    $GPFW = (gpresult /scope COMPUTER /Z)
-    $fws = Get-NetConnectionProfile
-    Foreach ($fw in $fws) {
-        Write-Host
-        If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta "____________ Connected Network: $($fw.InterfaceAlias) ($($fw.Name)) ____________"}
-        If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
-        Write-Host "Windows Firewall Enabled Check:"
-        If (($fw.NetworkCategory -eq 'DomainAuthenticated') -or ($fw.NetworkCategory -eq '2')) {
-            If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
-            Write-Host -ForegroundColor Green -NoNewLine 'The firewall profile is set to Domain'
-            netsh advfirewall show current | Select-String -Pattern "State" -OutVariable fs > $null
-            $GPFW = ($GPFW | Select-String -pattern "DomainProfile\\EnableFirewall" -Context 0, 2 | Out-String)
-            $FWName = 'Domain'
-        }
-        If (($fw.NetworkCategory -eq 'Private') -or ($fw.NetworkCategory -eq '1')) {
-            If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
-            Write-Host -ForegroundColor Red -NoNewLine 'The firewall profile is set to Private'
-            netsh advfirewall show current | Select-String -Pattern "State" -OutVariable fs > $null
-            $GPFW = ($GPFW | Select-String -pattern "PrivateProfile\\EnableFirewall" -Context 0, 2 | Out-String)
-            $FWName = 'Private'
-        }
-        If (($fw.NetworkCategory -eq 'Public') -or ($fw.NetworkCategory -eq '0')) {
-            If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
-            Write-Host -ForegroundColor Red -NoNewLine 'The firewall profile is set to Public'
-            netsh advfirewall show current | Select-String -Pattern "State" -OutVariable fs > $null
-            $GPFW = ($GPFW | Select-String -pattern "PublicProfile\\EnableFirewall" -Context 0, 2 | Out-String)
-            $FWName = 'Public'
-        }
-        If (($GPFW -like "*0, 0, 0, 0*") -AND ($GPFW -like "*Enabled*")) { $fs = 'OFF'; $GPONOFF = 'OFF' }
-        If (($GPFW -like "*1, 0, 0, 0*") -AND ($GPFW -like "*Enabled*")) { $fs = 'ON'; $GPONOFF = 'ON' }
-        If ($fs -match 'ON') {
-            If ($GPONOFF -match 'ON') {
-                If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
-                Write-Host -ForegroundColor Green ' and it is turned ON by Group Policy'
-            } Else {
-                Write-Host -ForegroundColor Green ' and it is turned ON'
-            }
-        } Else {
-            If ($GPONOFF -match 'OFF') {
-                Write-Host -ForegroundColor Red ' and it is turned OFF by Group Policy'
-            }
-            else {
-                Write-Host -ForegroundColor Red ' and it is turned OFF'
-            }
-        }
-        #End of Firewall Enabled Check
-        
-    #Firewall Settings Check
-        If ($fws.count -gt 1) {
-            Write-Host -ForegroundColor Magenta "|  "
-            Write-Host -ForegroundColor Magenta -NoNewLine "|  "
-        } Else {
-            Write-Host
-        }
-        Write-Host "Windows Firewall Default Inbound Action Check:"
-        $ActiveFWProfile = Get-NetFirewallProfile -Name $FWName
-        If ($ActiveFWProfile.DefaultInboundAction -ne 'Allow'){
-            If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
-            Write-Host -ForegroundColor Green "The $FWName profile is set to block connections by default."
-        } Else {
-            If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
-            Write-Host -ForegroundColor Red "The $FWName profile is set to allow connections by default."
-        }
-        
-        If ($fws.count -gt 1) {
-            Write-Host -ForegroundColor Magenta "|  "
-            Write-Host -ForegroundColor Magenta -NoNewLine "|  "
-        } Else {
-            Write-Host
-        }
-        Write-Host "Windows Firewall Disabled Interfaces Check:"
-        If ($($ActiveFWProfile.DisabledInterfaceAliases) -eq "NotConfigured") {
-            If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
-            Write-Host -ForegroundColor Green "The $FWName profile is set to protect all interfaces."
-        } Else {
-            If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
-            Write-Host -ForegroundColor Red "The $FWName profile is set NOT to protect all interfaces.`nThe unprotected interfaces are:`n$($ActiveFWProfile.DisabledInterfaceAliases | FL | Out-STring)"
-        }
-        If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta "¯¯¯¯¯¯¯¯¯¯¯¯ Connected Network: $($fw.InterfaceAlias) ($($fw.Name)) ¯¯¯¯¯¯¯¯¯¯¯¯"}
-    }
+	$GPFW = (gpresult /scope COMPUTER /Z)
+	$fws = Get-NetConnectionProfile
+	Foreach ($fw in $fws) {
+		Write-Host
+		If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta "____________ Connected Network: $($fw.InterfaceAlias) ($($fw.Name)) ____________"}
+		If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
+		Write-Host "Windows Firewall Enabled Check:"
+		If (($fw.NetworkCategory -eq 'DomainAuthenticated') -or ($fw.NetworkCategory -eq '2')) {
+			If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
+			Write-Host -ForegroundColor Green -NoNewLine 'The firewall profile is set to Domain'
+			netsh advfirewall show current | Select-String -Pattern "State" -OutVariable fs > $null
+			$GPFW = ($GPFW | Select-String -pattern "DomainProfile\\EnableFirewall" -Context 0, 2 | Out-String)
+			$FWName = 'Domain'
+		}
+		If (($fw.NetworkCategory -eq 'Private') -or ($fw.NetworkCategory -eq '1')) {
+			If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
+			Write-Host -ForegroundColor Red -NoNewLine 'The firewall profile is set to Private'
+			netsh advfirewall show current | Select-String -Pattern "State" -OutVariable fs > $null
+			$GPFW = ($GPFW | Select-String -pattern "PrivateProfile\\EnableFirewall" -Context 0, 2 | Out-String)
+			$FWName = 'Private'
+		}
+		If (($fw.NetworkCategory -eq 'Public') -or ($fw.NetworkCategory -eq '0')) {
+			If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
+			Write-Host -ForegroundColor Red -NoNewLine 'The firewall profile is set to Public'
+			netsh advfirewall show current | Select-String -Pattern "State" -OutVariable fs > $null
+			$GPFW = ($GPFW | Select-String -pattern "PublicProfile\\EnableFirewall" -Context 0, 2 | Out-String)
+			$FWName = 'Public'
+		}
+		If (($GPFW -like "*0, 0, 0, 0*") -AND ($GPFW -like "*Enabled*")) { $fs = 'OFF'; $GPONOFF = 'OFF' }
+		If (($GPFW -like "*1, 0, 0, 0*") -AND ($GPFW -like "*Enabled*")) { $fs = 'ON'; $GPONOFF = 'ON' }
+		If ($fs -match 'ON') {
+			If ($GPONOFF -match 'ON') {
+				If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
+				Write-Host -ForegroundColor Green ' and it is turned ON by Group Policy'
+			} Else {
+				Write-Host -ForegroundColor Green ' and it is turned ON'
+			}
+		} Else {
+			If ($GPONOFF -match 'OFF') {
+				Write-Host -ForegroundColor Red ' and it is turned OFF by Group Policy'
+			}
+			else {
+				Write-Host -ForegroundColor Red ' and it is turned OFF'
+			}
+		}
+		#End of Firewall Enabled Check
+		
+	#Firewall Settings Check
+		If ($fws.count -gt 1) {
+			Write-Host -ForegroundColor Magenta "|  "
+			Write-Host -ForegroundColor Magenta -NoNewLine "|  "
+		} Else {
+			Write-Host
+		}
+		Write-Host "Windows Firewall Default Inbound Action Check:"
+		$ActiveFWProfile = Get-NetFirewallProfile -Name $FWName
+		If ($ActiveFWProfile.DefaultInboundAction -ne 'Allow'){
+			If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
+			Write-Host -ForegroundColor Green "The $FWName profile is set to block connections by default."
+		} Else {
+			If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
+			Write-Host -ForegroundColor Red "The $FWName profile is set to allow connections by default."
+		}
+		
+		If ($fws.count -gt 1) {
+			Write-Host -ForegroundColor Magenta "|  "
+			Write-Host -ForegroundColor Magenta -NoNewLine "|  "
+		} Else {
+			Write-Host
+		}
+		Write-Host "Windows Firewall Disabled Interfaces Check:"
+		If ($($ActiveFWProfile.DisabledInterfaceAliases) -eq "NotConfigured") {
+			If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
+			Write-Host -ForegroundColor Green "The $FWName profile is set to protect all interfaces."
+		} Else {
+			If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta -NoNewLine "|  "}
+			Write-Host -ForegroundColor Red "The $FWName profile is set NOT to protect all interfaces.`nThe unprotected interfaces are:`n$($ActiveFWProfile.DisabledInterfaceAliases | FL | Out-STring)"
+		}
+		If ($fws.count -gt 1) {Write-Host -ForegroundColor Magenta "¯¯¯¯¯¯¯¯¯¯¯¯ Connected Network: $($fw.InterfaceAlias) ($($fw.Name)) ¯¯¯¯¯¯¯¯¯¯¯¯"}
+	}
 }
 Get-FWCheck
 #End of Firewall Settings Check
 
-    #Datto Backup Check
-    Write-Host
-    Write-Host "Datto Backup Check:"
-    DattoBDRCheck
-    #End of Datto Backup Check
+	#Datto Backup Check
+	Write-Host
+	Write-Host "Datto Backup Check:"
+	DattoBDRCheck
+	#End of Datto Backup Check
 
-    #Check if ATG tools exists
-    Write-Host
-    Write-Host "Portable Apps check:"
-    if (Test-Path C:\Ambitions\Windows_Repair_Toolbox) {
-        Write-Host -ForegroundColor Green ATG Portable Apps tools are installed
-    } Else {
-        Write-Host -ForegroundColor Red ATG Portable Apps tools are NOT installed
-    }
-    #End of Check if ATG tools exists
+	#Check if ATG tools exists
+	Write-Host
+	Write-Host "Portable Apps check:"
+	if (Test-Path C:\Ambitions\Windows_Repair_Toolbox) {
+		Write-Host -ForegroundColor Green ATG Portable Apps tools are installed
+	} Else {
+		Write-Host -ForegroundColor Red ATG Portable Apps tools are NOT installed
+	}
+	#End of Check if ATG tools exists
 
-    #Changelog check
-    Write-Host
-    Write-Host "Change Log file check:"
-    if (Test-Path C:\ambitions\*_$env:computername"_ChangeLog.txt") {
-        Write-Host -ForegroundColor Green $env:computername"_ChangeLog.txt does exist"
-    }
+	#Changelog check
+	Write-Host
+	Write-Host "Change Log file check:"
+	if (Test-Path C:\ambitions\*_$env:computername"_ChangeLog.txt") {
+		Write-Host -ForegroundColor Green $env:computername"_ChangeLog.txt does exist"
+	}
  else {
-        Write-Host -ForegroundColor Red $env:computername"_ChangeLog.txt" does NOT exist
-    }
-    #End of Changelog check
+		Write-Host -ForegroundColor Red $env:computername"_ChangeLog.txt" does NOT exist
+	}
+	#End of Changelog check
 
-    #Management tools
-    #Tools
-    Write-Host
+	#Management tools
+	#Tools
+	Write-Host
 } #End of maintenance function
 
 
 function LongMaintenance {
-    #Begining of the Long Maintenance Menu Option
+	#Begining of the Long Maintenance Menu Option
 
-    #OS Service Pack
-    $date = Get-Date
-    Write-Host Maintenance info for the Server $env:computername on $date.ToShortDateString()
-    $sPropertyD = (Get-CimInstance -class Win32_OperatingSystem).Description
-    $sPropertyC = (Get-CimInstance -class Win32_OperatingSystem).Caption
-    $sPropertyA = (Get-CimInstance -class Win32_OperatingSystem).OSArchitecture
-    $sPropertySP = (Get-CimInstance -class Win32_OperatingSystem).ServicePackMajorVersion
-    Write-Host
-    Write-Host OS Service Pack Check:
-    write-host -NoNewLine "$sPropertyC ($sPropertyA)"
-    if ($sPropertySP -ge 1) {
-        write-host "running Service Pack $sPropertySP"
-    }
+	#OS Service Pack
+	$date = Get-Date
+	Write-Host Maintenance info for the Server $env:computername on $date.ToShortDateString()
+	$sPropertyD = (Get-CimInstance -class Win32_OperatingSystem).Description
+	$sPropertyC = (Get-CimInstance -class Win32_OperatingSystem).Caption
+	$sPropertyA = (Get-CimInstance -class Win32_OperatingSystem).OSArchitecture
+	$sPropertySP = (Get-CimInstance -class Win32_OperatingSystem).ServicePackMajorVersion
+	Write-Host
+	Write-Host OS Service Pack Check:
+	write-host -NoNewLine "$sPropertyC ($sPropertyA)"
+	if ($sPropertySP -ge 1) {
+		write-host "running Service Pack $sPropertySP"
+	}
  else {
-        write-host " without any Service Packs"
+		write-host " without any Service Packs"
  }
-    #End of OS Service Pack
+	#End of OS Service Pack
 
-    #Major Updates (Security Rollups)
-    $Session = New-Object -ComObject "Microsoft.Update.Session"
-    $Searcher = $Session.CreateUpdateSearcher()
-    $historyCount = $Searcher.GetTotalHistoryCount()
-    If ($historyCount) {
-        $UpdateHistory = $Searcher.QueryHistory(0, $historyCount)
-        $KBs = @()
-        foreach ($Update in $UpdateHistory) {
-            [regex]::match($Update.Title, '(KB[0-9]{6,7})').value | Where-Object { $_ -ne "" } | foreach {
-                $KB = New-Object -TypeName PSObject
-                $KB | Add-Member -MemberType NoteProperty -Name KB -Value $_
-                $KB | Add-Member -MemberType NoteProperty -Name Title -Value $Update.Title
-                $KB | Add-Member -MemberType NoteProperty -Name Description -Value $Update.Description
-                $KB | Add-Member -MemberType NoteProperty -Name Date -Value $Update.Date
-                $KBs += $KB
-            }
-        }
-        Write-Host
-        Write-Host -Nonewline "Major Update Check - Recently installed Security Rollups:"
-        $KBsro = $KBs | Select Title | Select-String -Pattern "Rollup" | Select -First 4 Line | Format-Table -hidetableheaders
-        $KBsro
-        $KBscu = $KBs | Select Title | Select-String -Pattern "Cumulative Update" | Select -First 4 Line | Format-Table -hidetableheaders
-        $KBscuers
-        $KBscu
-    }
+	#Major Updates (Security Rollups)
+	$Session = New-Object -ComObject "Microsoft.Update.Session"
+	$Searcher = $Session.CreateUpdateSearcher()
+	$historyCount = $Searcher.GetTotalHistoryCount()
+	If ($historyCount) {
+		$UpdateHistory = $Searcher.QueryHistory(0, $historyCount)
+		$KBs = @()
+		foreach ($Update in $UpdateHistory) {
+			[regex]::match($Update.Title, '(KB[0-9]{6,7})').value | Where-Object { $_ -ne "" } | foreach {
+				$KB = New-Object -TypeName PSObject
+				$KB | Add-Member -MemberType NoteProperty -Name KB -Value $_
+				$KB | Add-Member -MemberType NoteProperty -Name Title -Value $Update.Title
+				$KB | Add-Member -MemberType NoteProperty -Name Description -Value $Update.Description
+				$KB | Add-Member -MemberType NoteProperty -Name Date -Value $Update.Date
+				$KBs += $KB
+			}
+		}
+		Write-Host
+		Write-Host -Nonewline "Major Update Check - Recently installed Security Rollups:"
+		$KBsro = $KBs | Select Title | Select-String -Pattern "Rollup" | Select -First 4 Line | Format-Table -hidetableheaders
+		$KBsro
+		$KBscu = $KBs | Select Title | Select-String -Pattern "Cumulative Update" | Select -First 4 Line | Format-Table -hidetableheaders
+		$KBscuers
+		$KBscu
+	}
  else {
-        Write-Host
-        Write-Host -Nonewline "Recently installed Security Rollups: No Security Rollups Detected"
-    }
-    #End of Major Updates (Security Rollups)
+		Write-Host
+		Write-Host -Nonewline "Recently installed Security Rollups: No Security Rollups Detected"
+	}
+	#End of Major Updates (Security Rollups)
 
-    #SQL Server Version Check
-    If (Test-Path 'HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server') {
-        Write-Host
-        Write-Host "SQL Server Updates Check:"
-        Write-Host "----------------SQL Server Detected-------------------"
-        $inst = (get-itemproperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server").InstalledInstances
-        foreach ($i in $inst) {
-            $path = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL").$i
-            $SQLName = (Get-ItemProperty -path "registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Microsoft SQL Server\$path")."(default)"
-            $Version = ((Get-ItemProperty -path "registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Microsoft SQL Server\$path\Setup").Version)
-            $SQLSP = ((Get-ItemProperty -path "registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Microsoft SQL Server\$path\Setup").SP)
-            $SQLEd = ((Get-ItemProperty -path "registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Microsoft SQL Server\$path\Setup").Edition)
-            $PatchLevel = (Get-ItemProperty -path "registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Microsoft SQL Server\$path\Setup").PatchLevel
-            Write-Host SQL Database Instance Name: $SQLName ($SQLEd)
-            Write-Host -NoNewLine "SQL Service Pack Build Version | Patch: "
-            $SQLweb = New-Object Net.WebClient
-            $SQLstring = $SQLweb.DownloadString("https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Maintenance-Checks/SQL_SP_Current_Build_Numbers.txt")
-            if (($SQLstring -match $Version) -or ($SQLstring -match $PatchLevel)) {
-                Write-Host -ForegroundColor Green "$Version | $PatchLevel `(Service Pack $SQLSP`) and it is up to date!"
-            }
-            else {
-                Write-Host -ForegroundColor Red "$Version | $PatchLevel `(Service Pack $SQLSP`) and it is NOT up to date!"
-            }
-            Write-Host "------------------------------------------------------"
-        }
-        Write-Host "Check https://sqlserverbuilds.blogspot.com for details"
-    }
+	#SQL Server Version Check
+	If (Test-Path 'HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server') {
+		Write-Host
+		Write-Host "SQL Server Updates Check:"
+		Write-Host "----------------SQL Server Detected-------------------"
+		$inst = (get-itemproperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server").InstalledInstances
+		foreach ($i in $inst) {
+			$path = (Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Microsoft SQL Server\Instance Names\SQL").$i
+			$SQLName = (Get-ItemProperty -path "registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Microsoft SQL Server\$path")."(default)"
+			$Version = ((Get-ItemProperty -path "registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Microsoft SQL Server\$path\Setup").Version)
+			$SQLSP = ((Get-ItemProperty -path "registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Microsoft SQL Server\$path\Setup").SP)
+			$SQLEd = ((Get-ItemProperty -path "registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Microsoft SQL Server\$path\Setup").Edition)
+			$PatchLevel = (Get-ItemProperty -path "registry::HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Microsoft SQL Server\$path\Setup").PatchLevel
+			Write-Host SQL Database Instance Name: $SQLName ($SQLEd)
+			Write-Host -NoNewLine "SQL Service Pack Build Version | Patch: "
+			$SQLweb = New-Object Net.WebClient
+			$SQLstring = $SQLweb.DownloadString("https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Maintenance-Checks/SQL_SP_Current_Build_Numbers.txt")
+			if (($SQLstring -match $Version) -or ($SQLstring -match $PatchLevel)) {
+				Write-Host -ForegroundColor Green "$Version | $PatchLevel `(Service Pack $SQLSP`) and it is up to date!"
+			}
+			else {
+				Write-Host -ForegroundColor Red "$Version | $PatchLevel `(Service Pack $SQLSP`) and it is NOT up to date!"
+			}
+			Write-Host "------------------------------------------------------"
+		}
+		Write-Host "Check https://sqlserverbuilds.blogspot.com for details"
+	}
  else {
-        Write-Host "SQL Server Updates Check:"
-        Write-Host "SQL Server not detected"
-    }
-    #End of SQL Server Version Check
+		Write-Host "SQL Server Updates Check:"
+		Write-Host "SQL Server not detected"
+	}
+	#End of SQL Server Version Check
 
-    #Restore Test
-    Write-Host
-    Write-Host 'Restore Test: Not available at this time. Please complete manually.'
-    #End of Restore Test
+	#Restore Test
+	Write-Host
+	Write-Host 'Restore Test: Not available at this time. Please complete manually.'
+	#End of Restore Test
 
-    #Review Drive Shares
-    Write-Host
-    Write-Host "Network Share Check:"
-    $NetShares = Get-CimInstance -Query "SELECT * FROM Win32_Share Where Type=0" | where { $_.Name -notlike "*$" } | Format-Table Name, Path | Out-String
-    $NetShares = $NetShares.Trim()
-    Write-Host $NetShares
-    #End of Review Drive Shares
+	#Review Drive Shares
+	Write-Host
+	Write-Host "Network Share Check:"
+	$NetShares = Get-CimInstance -Query "SELECT * FROM Win32_Share Where Type=0" | where { $_.Name -notlike "*$" } | Format-Table Name, Path | Out-String
+	$NetShares = $NetShares.Trim()
+	Write-Host $NetShares
+	#End of Review Drive Shares
 
-    #Previous Versions Enabled
-    Write-Host
-    Write-Host "Shadow Copy Previous Versions Check:"
-    $SCPV = vssadmin list shadowstorage | Select-String -Pattern "For volume:"
-    If ($SCPV) {
-        Write-Host -ForegroundColor Green "Shadow Copy Exists"$SCPV
-    }
-    Else { Write-Host -ForegroundColor Red "No Shadow Copy Exists" }
-    #End of Previous Versions Enabled
+	#Previous Versions Enabled
+	Write-Host
+	Write-Host "Shadow Copy Previous Versions Check:"
+	$SCPV = vssadmin list shadowstorage | Select-String -Pattern "For volume:"
+	If ($SCPV) {
+		Write-Host -ForegroundColor Green "Shadow Copy Exists"$SCPV
+	}
+	Else { Write-Host -ForegroundColor Red "No Shadow Copy Exists" }
+	#End of Previous Versions Enabled
 
-    #Pagefile Sufficient Size
-    Write-Host
-    $physicalmem = Get-CimInstance Win32_OperatingSystem | % { $_.TotalVisibleMemorySize }
-    $physicalmem = $physicalmem / 1024
-    $physicalmemvis = [math]::round($physicalmem, 0) #Ensures original RAM ammount is shown
-    $Physicalmem *= .99 #Sets phyical Mem variable to a percentage of reality to reduce false errors
-    $Physicalmem = [math]::round($physicalmem, 0)
-    $PagefileSet = (@(Get-CimInstance Win32_PageFileSetting | Select MaximumSize | Where-Object { $_ }))
-    #$PagefileSum | Foreach { $PagefileSet += $_}
-    $PagefileSum = [int]::0
-    foreach ($PageFile in $PagefileSet) {
-        $PageFile = [int]($PageFile -replace '\D+(\d+)\D+', '$1')
-        $PagefileSum = $PagefileSum + $PageFile
-    }
-    $PagefileSum = [math]::round($PagefileSum, 0)
-    if ( $PagefileSum -eq 0 ) {
-        $Pagefilesize = Get-CimInstance Win32_pagefileusage | % { $_.AllocatedBaseSize }
-        $PagefileSum = [math]::round($Pagefilesize, 0)
-    }
-    Write-Host "Pagefile Size Check:"
-    Write-Host -NoNewLine "RAM = $physicalmemvis MB | PageFile = $PagefileSum MB - "
-    if ( $PagefileSum -lt 4096 -or $Physicalmem -gt $PagefileSum ) {
-        Write-Host -ForegroundColor Red "The PageFile is too small!"
-    }
+	#Pagefile Sufficient Size
+	Write-Host
+	$physicalmem = Get-CimInstance Win32_OperatingSystem | % { $_.TotalVisibleMemorySize }
+	$physicalmem = $physicalmem / 1024
+	$physicalmemvis = [math]::round($physicalmem, 0) #Ensures original RAM ammount is shown
+	$Physicalmem *= .99 #Sets phyical Mem variable to a percentage of reality to reduce false errors
+	$Physicalmem = [math]::round($physicalmem, 0)
+	$PagefileSet = (@(Get-CimInstance Win32_PageFileSetting | Select MaximumSize | Where-Object { $_ }))
+	#$PagefileSum | Foreach { $PagefileSet += $_}
+	$PagefileSum = [int]::0
+	foreach ($PageFile in $PagefileSet) {
+		$PageFile = [int]($PageFile -replace '\D+(\d+)\D+', '$1')
+		$PagefileSum = $PagefileSum + $PageFile
+	}
+	$PagefileSum = [math]::round($PagefileSum, 0)
+	if ( $PagefileSum -eq 0 ) {
+		$Pagefilesize = Get-CimInstance Win32_pagefileusage | % { $_.AllocatedBaseSize }
+		$PagefileSum = [math]::round($Pagefilesize, 0)
+	}
+	Write-Host "Pagefile Size Check:"
+	Write-Host -NoNewLine "RAM = $physicalmemvis MB | PageFile = $PagefileSum MB - "
+	if ( $PagefileSum -lt 4096 -or $Physicalmem -gt $PagefileSum ) {
+		Write-Host -ForegroundColor Red "The PageFile is too small!"
+	}
  else {
-        Write-Host -ForegroundColor Green "The PageFile is a good size"
-    }
-    #End of Pagefile Sufficient Size
+		Write-Host -ForegroundColor Green "The PageFile is a good size"
+	}
+	#End of Pagefile Sufficient Size
 
-    #Time Sync Correct
-    Write-Host
-    Write-Host "Time Sync Correct Check:"
-    Write-Host -NoNewLine 'W32TM '
-    $32tm = w32tm /query /status | Select-String -Pattern "Source:"
-    Write-Host $32tm
-    #End of Time Sync Correct
+	#Time Sync Correct
+	Write-Host
+	Write-Host "Time Sync Correct Check:"
+	Write-Host -NoNewLine 'W32TM '
+	$32tm = w32tm /query /status | Select-String -Pattern "Source:"
+	Write-Host $32tm
+	#End of Time Sync Correct
 
-    #DNS Settings Correct
-    Function ConvertTo-BinaryIP( [String]$IP ) {
+	#DNS Settings Correct
+	Function ConvertTo-BinaryIP( [String]$IP ) {
 
-        $IPAddress = [Net.IPAddress]::Parse($IP)
+		$IPAddress = [Net.IPAddress]::Parse($IP)
 
-        Return [String]::Join('.',
-            $( $IPAddress.GetAddressBytes() | % {
-                    [Convert]::ToString($_, 2).PadLeft(8, '0') } ))
-    }
+		Return [String]::Join('.',
+			$( $IPAddress.GetAddressBytes() | % {
+					[Convert]::ToString($_, 2).PadLeft(8, '0') } ))
+	}
 
 
-    Function IsPrivateNetwork( [String]$IP) {
-        If ($IP.Contains("/")) {
-            $Temp = $IP.Split("/")
-            $IP = $Temp[0]
-        }
-        $BinaryIP = ConvertTo-BinaryIP $IP; $Private = $False
-        Switch -RegEx ($BinaryIP) {
-            "^1111" { $Class = "E"; $SubnetBitMap = "1111" }
-            "^1110" { $Class = "D"; $SubnetBitMap = "1110" }
-            "^110" {
-                $Class = "C"
-                If ($BinaryIP -Match "^11000000.10101000") { $Private = $True }
-            }
-            "^10" {
-                $Class = "B"
-                If ($BinaryIP -Match "^10101100.0001") { $Private = $True } 
-            }
-            "^0" {
-                $Class = "A"
-                If ($BinaryIP -Match "^00001010") { $Private = $True }
-                If ($BinaryIP -Match "^01111111.00000000.00000000.00000001") { $Private = $True }
-            }
-        }
-        return $Private
-    }
+	Function IsPrivateNetwork( [String]$IP) {
+		If ($IP.Contains("/")) {
+			$Temp = $IP.Split("/")
+			$IP = $Temp[0]
+		}
+		$BinaryIP = ConvertTo-BinaryIP $IP; $Private = $False
+		Switch -RegEx ($BinaryIP) {
+			"^1111" { $Class = "E"; $SubnetBitMap = "1111" }
+			"^1110" { $Class = "D"; $SubnetBitMap = "1110" }
+			"^110" {
+				$Class = "C"
+				If ($BinaryIP -Match "^11000000.10101000") { $Private = $True }
+			}
+			"^10" {
+				$Class = "B"
+				If ($BinaryIP -Match "^10101100.0001") { $Private = $True } 
+			}
+			"^0" {
+				$Class = "A"
+				If ($BinaryIP -Match "^00001010") { $Private = $True }
+				If ($BinaryIP -Match "^01111111.00000000.00000000.00000001") { $Private = $True }
+			}
+		}
+		return $Private
+	}
 
-    $DNSIPs = @(Get-DnsClientServerAddress | Select-Object -ExpandProperty ServerAddresses | Where { $_ -notmatch ':' } | Sort-Object | Get-Unique)
-    $PrivateDNS = $DNSIPs | ForEach { IsPrivateNetwork $_ }
-    Write-Host
-    Write-Host 'DNS Settings Correct Check:'
-    Write-Host 'The Configured DNS Servers are'
+	$DNSIPs = @(Get-DnsClientServerAddress | Select-Object -ExpandProperty ServerAddresses | Where { $_ -notmatch ':' } | Sort-Object | Get-Unique)
+	$PrivateDNS = $DNSIPs | ForEach { IsPrivateNetwork $_ }
+	Write-Host
+	Write-Host 'DNS Settings Correct Check:'
+	Write-Host 'The Configured DNS Servers are'
 
-    $DNSIPs | ForEach { If (IsPrivateNetwork $_) { Write-Host -ForegroundColor Green $_ } else { Write-Host -ForegroundColor Red $_ } }
-    If ($PrivateDNS -like $False) {
-        Write-Host -ForegroundColor Red "External DNS servers are configured"
-    }
+	$DNSIPs | ForEach { If (IsPrivateNetwork $_) { Write-Host -ForegroundColor Green $_ } else { Write-Host -ForegroundColor Red $_ } }
+	If ($PrivateDNS -like $False) {
+		Write-Host -ForegroundColor Red "External DNS servers are configured"
+	}
  else {
-        Write-Host -ForegroundColor Green "No external DNS server are configured"
-    }
-    #End of DNS Settings Correct
-    Write-Host
+		Write-Host -ForegroundColor Green "No external DNS server are configured"
+	}
+	#End of DNS Settings Correct
+	Write-Host
 }#End of LongMaintenance function
 
 Function NetworkDevices {
 
-    #UPS Check
-    Write-Host 'UPS Check:'
-    $Model = Get-CimInstance -Class Win32_ComputerSystem |  Format-Table -HideTableHeaders Model | Out-String
-    if ($Model -notlike "*Virtual*") {
-        if (@(Get-CimInstance Win32_Battery).Count -ne 0) {
-            Write-Host -ForegroundColor Green 'An Uninterruptible Power Supply (UPS) was detected'
-            $BatteryStatus = @(Get-CimInstance Win32_Battery | FT Name, Status, EstimatedRunTime | Where-Object { $_ } | Out-String)
-            $BatteryStatus.TrimEnd()
-        }
-        else {
-            if (@(Get-CimInstance Win32_PnPSignedDriver | Where DeviceClass -like "Battery" | Select Description | Format-Table -HideTableHeaders | Where-Object { $_ } | Out-String) -ne 0) {
-                Write-Host -ForegroundColor Green 'An Uninterruptible Power Supply (UPS) was detected'
-                $BatteryStatus = @(Get-CimInstance Win32_PnPSignedDriver | Where DeviceClass -like "Battery" | Select Description | Format-Table -HideTableHeaders | Where-Object { $_ } | Out-String)
-                $BatteryStatus.Trim()
-            }
-            else {
-                Write-Host -ForegroundColor Red 'An Uninterruptible Power Supply (UPS) was not detected'
-            }
-        }
-    }
-    #End of UPS Check
+	#UPS Check
+	Write-Host 'UPS Check:'
+	$Model = Get-CimInstance -Class Win32_ComputerSystem |  Format-Table -HideTableHeaders Model | Out-String
+	if ($Model -notlike "*Virtual*") {
+		if (@(Get-CimInstance Win32_Battery).Count -ne 0) {
+			Write-Host -ForegroundColor Green 'An Uninterruptible Power Supply (UPS) was detected'
+			$BatteryStatus = @(Get-CimInstance Win32_Battery | FT Name, Status, EstimatedRunTime | Where-Object { $_ } | Out-String)
+			$BatteryStatus.TrimEnd()
+		}
+		else {
+			if (@(Get-CimInstance Win32_PnPSignedDriver | Where DeviceClass -like "Battery" | Select Description | Format-Table -HideTableHeaders | Where-Object { $_ } | Out-String) -ne 0) {
+				Write-Host -ForegroundColor Green 'An Uninterruptible Power Supply (UPS) was detected'
+				$BatteryStatus = @(Get-CimInstance Win32_PnPSignedDriver | Where DeviceClass -like "Battery" | Select Description | Format-Table -HideTableHeaders | Where-Object { $_ } | Out-String)
+				$BatteryStatus.Trim()
+			}
+			else {
+				Write-Host -ForegroundColor Red 'An Uninterruptible Power Supply (UPS) was not detected'
+			}
+		}
+	}
+	#End of UPS Check
 
-    #Warranty Check
-    Write-Host
-    Write-Host 'Warranty check:'
-    $Manufact = Get-CimInstance -Class Win32_ComputerSystem | Select-Object Manufacturer | Format-Table -HideTableHeaders Manufacturer | Out-String
-    #Clean up whitespace
-    $Manufact = $Manufact -replace '(^\s+|\s+$)', '' -replace '\s+', ' '
-    ###########################################################################################################################################################################
-    If ( $Manufact -like "*Dell*") {
-        Install-Module -Name Get-DellWarranty -Force
-        'l73e091fbc84eb4ca480893549f0525313' | Out-File $env:appdata\Microsoft\Windows\PowerShell\DellKey.txt -Force
-        'd18ab8b38afd4b889e11a4baea74586e' | Out-File $env:appdata\Microsoft\Windows\PowerShell\DellSec.txt -Force
-        Get-DellWarranty -Show
-    } Else {
-        Write-Host 'Unable to determine the warranty, please check manually.'
-    }
-    #End of Warranty Check
+	#Warranty Check
+	Write-Host
+	Write-Host 'Warranty check:'
+	$Manufact = Get-CimInstance -Class Win32_ComputerSystem | Select-Object Manufacturer | Format-Table -HideTableHeaders Manufacturer | Out-String
+	#Clean up whitespace
+	$Manufact = $Manufact -replace '(^\s+|\s+$)', '' -replace '\s+', ' '
+	###########################################################################################################################################################################
+	If ( $Manufact -like "*Dell*") {
+		Install-Module -Name Get-DellWarranty -Force
+		'l73e091fbc84eb4ca480893549f0525313' | Out-File $env:appdata\Microsoft\Windows\PowerShell\DellKey.txt -Force
+		'd18ab8b38afd4b889e11a4baea74586e' | Out-File $env:appdata\Microsoft\Windows\PowerShell\DellSec.txt -Force
+		Get-DellWarranty -Show
+	} Else {
+		Write-Host 'Unable to determine the warranty, please check manually.'
+	}
+	#End of Warranty Check
 
-    #Server Backup - Datto BDR
-    Write-Host
-    Write-Host 'Server Backup - Datto BDR Check:'
-    DattoBDRCheck #Function
-    #End of Server Backup - Datto BDR
+	#Server Backup - Datto BDR
+	Write-Host
+	Write-Host 'Server Backup - Datto BDR Check:'
+	DattoBDRCheck #Function
+	#End of Server Backup - Datto BDR
 
-    <#
+	<#
 Server Backup - Full Image
 
 Server Backup - Critical Data
@@ -703,339 +703,339 @@ Backup Retention
 Backup Space
 TODO: Parse Invoke-WebRequest https://device.dattobackup.com and link to the Datto
 #>
-    Write-Host
-    Write-Host "For further backup answers, try going to device.dattobackup.com"
-    Write-Host
+	Write-Host
+	Write-Host "For further backup answers, try going to device.dattobackup.com"
+	Write-Host
 } #End of NetworkDevices function
 
 Function DomainGroupPolicy {
-    #Test AD Functionality
-    $Null = (Get-Command -Name Get-ADUser)
-    if ($LastExitCode) {
-        Write-Host -ForegroundColor Yello "This section is only available on a server that has access to Active Directory"
-        Pause
-        Return
-    }
-    #End of Test AD Functionality
+	#Test AD Functionality
+	$Null = (Get-Command -Name Get-ADUser)
+	if ($LastExitCode) {
+		Write-Host -ForegroundColor Yello "This section is only available on a server that has access to Active Directory"
+		Pause
+		Return
+	}
+	#End of Test AD Functionality
 
-    #Administrator User
-    Write-Host 'Administrator User Check:'
-    $adminUserEnabled = (Get-ADUser 'Administrator').Enabled
-    If ($adminUserEnabled -eq $True) { $adminUserEnabled = 'Enabled'; $ForColor = 'Red' }; If ($adminUserEnabled -eq $False) { $adminUserEnabled = 'Disabled'; $ForColor = 'Green' }
-    Write-Host -ForegroundColor $ForColor "The Administrator account is" $adminUserEnabled
-    #End of Administrator User
+	#Administrator User
+	Write-Host 'Administrator User Check:'
+	$adminUserEnabled = (Get-ADUser 'Administrator').Enabled
+	If ($adminUserEnabled -eq $True) { $adminUserEnabled = 'Enabled'; $ForColor = 'Red' }; If ($adminUserEnabled -eq $False) { $adminUserEnabled = 'Disabled'; $ForColor = 'Green' }
+	Write-Host -ForegroundColor $ForColor "The Administrator account is" $adminUserEnabled
+	#End of Administrator User
 
-    #Computers in Correct OUs
-    Write-Host
-    Write-Host 'Computers in Correct OUs Check:'
-    $PCsInBaseOU = @(Get-ADComputer -Filter * -SearchBase ('CN=Computers,' + (Get-ADDomain).DistinguishedName)).Name
-    If ($PCsInBaseOU) {
-        Write-Host -ForegroundColor Red "Computers in the base `"Computers`" OU:"; $PCsInBaseOU
-    }
+	#Computers in Correct OUs
+	Write-Host
+	Write-Host 'Computers in Correct OUs Check:'
+	$PCsInBaseOU = @(Get-ADComputer -Filter * -SearchBase ('CN=Computers,' + (Get-ADDomain).DistinguishedName)).Name
+	If ($PCsInBaseOU) {
+		Write-Host -ForegroundColor Red "Computers in the base `"Computers`" OU:"; $PCsInBaseOU
+	}
  else { Write-Host -ForegroundColor Green "No computers were found in the base `"Computers`" OU." }
-    #End of Computers in Correct OUs
+	#End of Computers in Correct OUs
 
-    #Users in Correct OUs
-    Write-Host
-    Write-Host 'Users in Correct OUs Check:'
-    $UsersInBaseOU = @(Get-ADUser -Filter 'GivenName -like "*" -and Name -notlike "*admin*" -and Enabled -eq $True' -SearchBase ('CN=Users,' + (Get-ADDomain).DistinguishedName)).Name
-    If ($UsersInBaseOU) {
-        Write-Host -ForegroundColor Red "Users in the base `"Users`" OU:"; $UsersInBaseOU
-    }
+	#Users in Correct OUs
+	Write-Host
+	Write-Host 'Users in Correct OUs Check:'
+	$UsersInBaseOU = @(Get-ADUser -Filter 'GivenName -like "*" -and Name -notlike "*admin*" -and Enabled -eq $True' -SearchBase ('CN=Users,' + (Get-ADDomain).DistinguishedName)).Name
+	If ($UsersInBaseOU) {
+		Write-Host -ForegroundColor Red "Users in the base `"Users`" OU:"; $UsersInBaseOU
+	}
  else { Write-Host -ForegroundColor Green "No Users were found in the base `"Users`" OU." }
-    #End of Users in Correct OUs
+	#End of Users in Correct OUs
 
-    #No Non-Expiring Passwords
-    Write-Host
-    Write-Host 'No Non-Expiring Passwords Check:'
-    $NonExpiringPasswords = @((get-aduser -filter 'GivenName -like "*" -and Enabled -eq $True' -properties Name, PasswordNeverExpires | where { ($_.passwordNeverExpires -eq $true) -and ($_.DistinguishedName -notlike '*Service*') }).Name)
-    If ($NonExpiringPasswords) {
-        Write-Host -ForegroundColor Red "Logon accounts with non-expiring passwords"; $NonExpiringPasswords
-    }
+	#No Non-Expiring Passwords
+	Write-Host
+	Write-Host 'No Non-Expiring Passwords Check:'
+	$NonExpiringPasswords = @((get-aduser -filter 'GivenName -like "*" -and Enabled -eq $True' -properties Name, PasswordNeverExpires | where { ($_.passwordNeverExpires -eq $true) -and ($_.DistinguishedName -notlike '*Service*') }).Name)
+	If ($NonExpiringPasswords) {
+		Write-Host -ForegroundColor Red "Logon accounts with non-expiring passwords"; $NonExpiringPasswords
+	}
  else { Write-Host -ForegroundColor Green 'No Non-Expiring Passwords were found.' }
-    #End of No Non-Expiring Passwords
+	#End of No Non-Expiring Passwords
 
-    #Domain Admin Users
-    $DomainAdminsEnabled = Get-ADGroupMember "Domain Admins" | Where { $_.objectClass -eq "user" } | ForEach-Object SamAccountName | Get-ADUser | Where { $_.Enabled -eq $True } | Select Name
-    $DomainAdminsDisabled = Get-ADGroupMember "Domain Admins" | Where { $_.objectClass -eq "user" } | ForEach-Object SamAccountName | Get-ADUser | Where { $_.Enabled -eq $False } | Select Name
-    $DomainAdminsOther = Get-ADGroupMember "Domain Admins" | Where { $_.objectClass -ne "user" } | Format-Table objectClass, Name
+	#Domain Admin Users
+	$DomainAdminsEnabled = Get-ADGroupMember "Domain Admins" | Where { $_.objectClass -eq "user" } | ForEach-Object SamAccountName | Get-ADUser | Where { $_.Enabled -eq $True } | Select Name
+	$DomainAdminsDisabled = Get-ADGroupMember "Domain Admins" | Where { $_.objectClass -eq "user" } | ForEach-Object SamAccountName | Get-ADUser | Where { $_.Enabled -eq $False } | Select Name
+	$DomainAdminsOther = Get-ADGroupMember "Domain Admins" | Where { $_.objectClass -ne "user" } | Format-Table objectClass, Name
 
-    If ($DomainAdminsEnabled) {
-        Write-Host
-        Write-Host "Enabled Domain Admin user accounts:"
-        $DomainAdminsEnabled.Name
-    }
+	If ($DomainAdminsEnabled) {
+		Write-Host
+		Write-Host "Enabled Domain Admin user accounts:"
+		$DomainAdminsEnabled.Name
+	}
 
-    If ($DomainAdminsDisabled) {
-        Write-Host
-        Write-Host -ForeGroundColor yellow "Disabled Domain Admin user accounts:"
-        $DomainAdminsDisabled.Name
-    }
+	If ($DomainAdminsDisabled) {
+		Write-Host
+		Write-Host -ForeGroundColor yellow "Disabled Domain Admin user accounts:"
+		$DomainAdminsDisabled.Name
+	}
 
-    If ($DomainAdminsOther) {
-        Write-Host
-        Write-Host -ForeGroundColor red "Non-User Domain Admin objects:"
-        $DomainAdminsOther
-    }
-    #End of Domain Admin Users
+	If ($DomainAdminsOther) {
+		Write-Host
+		Write-Host -ForeGroundColor red "Non-User Domain Admin objects:"
+		$DomainAdminsOther
+	}
+	#End of Domain Admin Users
 
-    #Saving Files
-    Write-Host
-    Write-Host 'Saving Files Check:'
-    Write-Host 'Please review GPO and site procedures to answer this question'
-    #End of Saving Files
+	#Saving Files
+	Write-Host
+	Write-Host 'Saving Files Check:'
+	Write-Host 'Please review GPO and site procedures to answer this question'
+	#End of Saving Files
 
-    Write-Host
+	Write-Host
 } #End of DomainGroupPolicy function
 
 Function DefaultDomainPolicy {
 
 
-    #Test AD Functionality
-    $Null = (Get-Command -Name Get-ADUser)
-    if ($LastExitCode) {
-        Write-Host -ForegroundColor Yello "This section is only available on a server that has access to Active Directory"
-        Pause
-        Return
-    }
-    #End of Test AD Functionality
+	#Test AD Functionality
+	$Null = (Get-Command -Name Get-ADUser)
+	if ($LastExitCode) {
+		Write-Host -ForegroundColor Yello "This section is only available on a server that has access to Active Directory"
+		Pause
+		Return
+	}
+	#End of Test AD Functionality
 
-    Write-Host -ForegroundColor Yellow 'Disclaimer: These settings will not reflect any fine-grained password policies created in AD'
+	Write-Host -ForegroundColor Yellow 'Disclaimer: These settings will not reflect any fine-grained password policies created in AD'
 
-    #Pull in Password Questions
-    $Pass = Get-ADDefaultDomainPasswordPolicy
-    #$Pass.MinPasswordAge = @(PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command '(Get-ADDefaultDomainPasswordPolicy).MinPasswordAge | ConvertTo-CSV') | convertfrom-csv -Delimiter ','
-    #$Pass.MaxPasswordAge = @(PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command '(Get-ADDefaultDomainPasswordPolicy).MaxPasswordAge | ConvertTo-CSV') | convertfrom-csv -Delimiter ','
-    #$Pass.LockoutDuration = @(PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command '(Get-ADDefaultDomainPasswordPolicy).LockoutDuration | ConvertTo-CSV') | convertfrom-csv -Delimiter ','
-    If ($Pass.ComplexityEnabled -eq $True) { $Pass.ComplexityEnabled = 'Enabled' }; If ($Pass.ComplexityEnabled -eq $False) { $Pass.ComplexityEnabled = 'Disabled' }
-    If ($Pass.ReversibleEncryptionEnabled -eq $True) { $Pass.ReversibleEncryptionEnabled = 'Enabled' }; If ($Pass.ReversibleEncryptionEnabled -eq $False) { $Pass.ReversibleEncryptionEnabled = 'Disabled' }
-    #End of Pull in Password Questions
+	#Pull in Password Questions
+	$Pass = Get-ADDefaultDomainPasswordPolicy
+	#$Pass.MinPasswordAge = @(PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command '(Get-ADDefaultDomainPasswordPolicy).MinPasswordAge | ConvertTo-CSV') | convertfrom-csv -Delimiter ','
+	#$Pass.MaxPasswordAge = @(PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command '(Get-ADDefaultDomainPasswordPolicy).MaxPasswordAge | ConvertTo-CSV') | convertfrom-csv -Delimiter ','
+	#$Pass.LockoutDuration = @(PowerShell.exe -NoProfile -ExecutionPolicy Bypass -Command '(Get-ADDefaultDomainPasswordPolicy).LockoutDuration | ConvertTo-CSV') | convertfrom-csv -Delimiter ','
+	If ($Pass.ComplexityEnabled -eq $True) { $Pass.ComplexityEnabled = 'Enabled' }; If ($Pass.ComplexityEnabled -eq $False) { $Pass.ComplexityEnabled = 'Disabled' }
+	If ($Pass.ReversibleEncryptionEnabled -eq $True) { $Pass.ReversibleEncryptionEnabled = 'Enabled' }; If ($Pass.ReversibleEncryptionEnabled -eq $False) { $Pass.ReversibleEncryptionEnabled = 'Disabled' }
+	#End of Pull in Password Questions
 
-    #Generate Default Group Policy xml file and variable
-    Get-GPO -Name 'Default Domain Policy' | Get-GPOReport -ReportType XML -Path C:\Ambitions\DDP_GPO.xml
-    [xml]$GPO = Get-GPOReport -Name 'Default Domain Policy' -ReportType XML
-    #End of Generate Default Group Policy xml file
+	#Generate Default Group Policy xml file and variable
+	Get-GPO -Name 'Default Domain Policy' | Get-GPOReport -ReportType XML -Path C:\Ambitions\DDP_GPO.xml
+	[xml]$GPO = Get-GPOReport -Name 'Default Domain Policy' -ReportType XML
+	#End of Generate Default Group Policy xml file
 
-    #Limited Content
-    Write-Host
-    Write-Host 'Limited Content Check:'
-    Write-Host 'Manually check the GPO for this question. Below is test'
-    #Check for user config
-    If ($GPO.GPO.User.ExtensionData -ne $Null) {
-        #Write-Host User Configuration exists in the Default Domain Policy
-        [bool]$LimitedContent = $True
-    }
+	#Limited Content
+	Write-Host
+	Write-Host 'Limited Content Check:'
+	Write-Host 'Manually check the GPO for this question. Below is test'
+	#Check for user config
+	If ($GPO.GPO.User.ExtensionData -ne $Null) {
+		#Write-Host User Configuration exists in the Default Domain Policy
+		[bool]$LimitedContent = $True
+	}
  else {
-        #Write-Host No User Configuration exists in the Default Domain Policy
-    }
-    #Check for other configs
-    [array]$GoodSettings = "Security", "Public Key", "Windows Firewall", "Registry"
-    $GPO.GPO.Computer.ExtensionData.Extension.Get_ParentNode().Name | ForEach-Object { If ($GoodSettings -contains $_) {
-            #Write-Host GPO OK
-        }
-        else {
-            #Write-Host GPO not ok
-            [bool]$LimitedContent = $True
-        } }
-    #Write Results
-    If ([bool]$LimitedContent -eq $True) {
-        Write-Host -ForeGroundColor red "Default Domain GPO potentially has settings not in Computer Configuration/Policies/Windows Settings/Security Settings"
-    }
+		#Write-Host No User Configuration exists in the Default Domain Policy
+	}
+	#Check for other configs
+	[array]$GoodSettings = "Security", "Public Key", "Windows Firewall", "Registry"
+	$GPO.GPO.Computer.ExtensionData.Extension.Get_ParentNode().Name | ForEach-Object { If ($GoodSettings -contains $_) {
+			#Write-Host GPO OK
+		}
+		else {
+			#Write-Host GPO not ok
+			[bool]$LimitedContent = $True
+		} }
+	#Write Results
+	If ([bool]$LimitedContent -eq $True) {
+		Write-Host -ForeGroundColor red "Default Domain GPO potentially has settings not in Computer Configuration/Policies/Windows Settings/Security Settings"
+	}
  else {
-        Write-Host -ForeGroundColor green "Default Domain GPO potentially only has settings in Computer Configuration/Policies/Windows Settings/Security Settings"
-    }
-    #End of Limited Content
+		Write-Host -ForeGroundColor green "Default Domain GPO potentially only has settings in Computer Configuration/Policies/Windows Settings/Security Settings"
+	}
+	#End of Limited Content
 
-    #Password History
-    Write-Host
-    Write-Host 'Password History Check:'
-    If ([int]$Pass.PasswordHistoryCount -ge 10) { $ForColor = 'green' } else { $ForColor = 'red' }
-    Write-Host -ForegroundColor $ForColor 'The password history requirement is set to remember at least the last' $Pass.PasswordHistoryCount 'passwords.'
-    #End of Password History
+	#Password History
+	Write-Host
+	Write-Host 'Password History Check:'
+	If ([int]$Pass.PasswordHistoryCount -ge 10) { $ForColor = 'green' } else { $ForColor = 'red' }
+	Write-Host -ForegroundColor $ForColor 'The password history requirement is set to remember at least the last' $Pass.PasswordHistoryCount 'passwords.'
+	#End of Password History
 
-    #Minimum Password Age
-    Write-Host
-    Write-Host 'Minimum Password Age Check:'
-    If ([int]$Pass.MinPasswordAge.Days -ge 1) { $ForColor = 'green' } else { $ForColor = 'red' }
-    Write-Host -ForegroundColor $ForColor 'The minimum password age is set to' $Pass.MinPasswordAge.Days 'Days' $Pass.MinPasswordAge.Hours 'Hours'
-    #End of Minimum Password Age
+	#Minimum Password Age
+	Write-Host
+	Write-Host 'Minimum Password Age Check:'
+	If ([int]$Pass.MinPasswordAge.Days -ge 1) { $ForColor = 'green' } else { $ForColor = 'red' }
+	Write-Host -ForegroundColor $ForColor 'The minimum password age is set to' $Pass.MinPasswordAge.Days 'Days' $Pass.MinPasswordAge.Hours 'Hours'
+	#End of Minimum Password Age
 
-    #Maximum Password Age
-    Write-Host
-    Write-Host 'Maximum Password Age Check:'
-    If ([int]$Pass.MaxPasswordAge.Days -le 365 -and $Pass.MaxPasswordAge.Days -ne 0) { $ForColor = 'green' } else { $ForColor = 'red' }
-    Write-Host -ForegroundColor $ForColor 'The maximum password age is set to' $Pass.MaxPasswordAge.Days 'Days' $Pass.MaxPasswordAge.Hours 'Hours'
-    #End of Maximum Password Age
+	#Maximum Password Age
+	Write-Host
+	Write-Host 'Maximum Password Age Check:'
+	If ([int]$Pass.MaxPasswordAge.Days -le 365 -and $Pass.MaxPasswordAge.Days -ne 0) { $ForColor = 'green' } else { $ForColor = 'red' }
+	Write-Host -ForegroundColor $ForColor 'The maximum password age is set to' $Pass.MaxPasswordAge.Days 'Days' $Pass.MaxPasswordAge.Hours 'Hours'
+	#End of Maximum Password Age
 
-    #Minimum Password Length
-    Write-Host
-    Write-Host 'Minimum Password Length Check:'
-    If ([int]$Pass.MinPasswordLength -ge 8) { $ForColor = 'green' } else { $ForColor = 'red' }
-    Write-Host -ForegroundColor $ForColor 'The minimum password length is set to' $Pass.MinPasswordLength 'characters'
-    #End of Minimum Password Length
+	#Minimum Password Length
+	Write-Host
+	Write-Host 'Minimum Password Length Check:'
+	If ([int]$Pass.MinPasswordLength -ge 8) { $ForColor = 'green' } else { $ForColor = 'red' }
+	Write-Host -ForegroundColor $ForColor 'The minimum password length is set to' $Pass.MinPasswordLength 'characters'
+	#End of Minimum Password Length
 
-    #Complex Passwords
-    Write-Host
-    Write-Host 'Complex Passwords Check:'
-    If ($Pass.ComplexityEnabled -like 'Enabled') { $ForColor = 'green' } else { $ForColor = 'red' }
-    Write-Host -ForegroundColor $ForColor 'Complex passwords requirements are set to' $Pass.ComplexityEnabled
-    #End of Complex Passwords
+	#Complex Passwords
+	Write-Host
+	Write-Host 'Complex Passwords Check:'
+	If ($Pass.ComplexityEnabled -like 'Enabled') { $ForColor = 'green' } else { $ForColor = 'red' }
+	Write-Host -ForegroundColor $ForColor 'Complex passwords requirements are set to' $Pass.ComplexityEnabled
+	#End of Complex Passwords
 
-    #Reversible Encryption Off
-    Write-Host
-    Write-Host 'Reversible Encryption Off Check:'
-    If ($Pass.ReversibleEncryptionEnabled -like 'Disabled') { $ForColor = 'green' } else { $ForColor = 'red' }
-    Write-Host -ForegroundColor $ForColor 'The setting Store Password Using Reversible Encryption is set to' $Pass.ReversibleEncryptionEnabled
-    #End of Reversible Encryption Off
+	#Reversible Encryption Off
+	Write-Host
+	Write-Host 'Reversible Encryption Off Check:'
+	If ($Pass.ReversibleEncryptionEnabled -like 'Disabled') { $ForColor = 'green' } else { $ForColor = 'red' }
+	Write-Host -ForegroundColor $ForColor 'The setting Store Password Using Reversible Encryption is set to' $Pass.ReversibleEncryptionEnabled
+	#End of Reversible Encryption Off
 
-    #Account Lockout Policy
-    Write-Host
-    Write-Host 'Account Lockout Policy Check:'
-    If (([int]$Pass.LockoutThreshold -le 10) -and ([int]$Pass.LockoutThreshold -ne 0) -and ([int]$Pass.LockoutDuration.TotalMinutes -ge 5)) { $ForColor = 'green' } else { $ForColor = 'red' }
-    Write-Host -ForegroundColor $ForColor 'The account lockout policy actives after' $Pass.LockoutThreshold 'failed logins and the lockout time is' $Pass.LockoutDuration.Days 'Days' $Pass.LockoutDuration.Hours 'Hours' $Pass.LockoutDuration.Minutes 'Minutes'
-    #End of Account Lockout Policy
+	#Account Lockout Policy
+	Write-Host
+	Write-Host 'Account Lockout Policy Check:'
+	If (([int]$Pass.LockoutThreshold -le 10) -and ([int]$Pass.LockoutThreshold -ne 0) -and ([int]$Pass.LockoutDuration.TotalMinutes -ge 5)) { $ForColor = 'green' } else { $ForColor = 'red' }
+	Write-Host -ForegroundColor $ForColor 'The account lockout policy actives after' $Pass.LockoutThreshold 'failed logins and the lockout time is' $Pass.LockoutDuration.Days 'Days' $Pass.LockoutDuration.Hours 'Hours' $Pass.LockoutDuration.Minutes 'Minutes'
+	#End of Account Lockout Policy
 
-    #User Logon Restrictions
-    Write-Host
-    Write-Host 'User Logon Restrictions Check:'
-    $LogonRestrictions = Select-String -Path C:\Ambitions\DDP_GPO.xml -Pattern "TicketValidateClient" -context 0, 1
-    [void] ($LogonRestrictions -match '<q1:SettingBoolean>((?:[a-z][a-z]+))</q1:SettingBoolean>')
-    If ($matches[1] -eq $True) { $LogonRestrictions = 'Enabled'; $ForColor = 'green' }; If ($matches[1] -eq $False) { $LogonRestrictions = 'Disabled'; $ForColor = 'red' }
-    Write-host -ForegroundColor $ForColor 'Kerberos "Enforce user logon restrictions" is set to' $LogonRestrictions
-    #End of User Logon Restrictions
+	#User Logon Restrictions
+	Write-Host
+	Write-Host 'User Logon Restrictions Check:'
+	$LogonRestrictions = Select-String -Path C:\Ambitions\DDP_GPO.xml -Pattern "TicketValidateClient" -context 0, 1
+	[void] ($LogonRestrictions -match '<q1:SettingBoolean>((?:[a-z][a-z]+))</q1:SettingBoolean>')
+	If ($matches[1] -eq $True) { $LogonRestrictions = 'Enabled'; $ForColor = 'green' }; If ($matches[1] -eq $False) { $LogonRestrictions = 'Disabled'; $ForColor = 'red' }
+	Write-host -ForegroundColor $ForColor 'Kerberos "Enforce user logon restrictions" is set to' $LogonRestrictions
+	#End of User Logon Restrictions
 
-    #Guest Accounts Disabled
-    Write-Host
-    Write-Host 'Guest Accounts Disabled Check:'
-    $Guest = Select-String -Path C:\Ambitions\DDP_GPO.xml -Pattern "Guest" -context 0, 1
-    [void] ($Guest -match '>(\d)<')
-    If ($Guest) {
-        If ($matches[1] -eq '1') { $Guest = 'Enabled'; $ForColor = 'red' }; If ($matches[1] -eq '0') { $Guest = 'Disabled'; $ForColor = 'green' }
-        Write-host -ForegroundColor $ForColor 'Guest Accounts are set to' $Guest
-    } Else {
-        Write-host -ForegroundColor Red 'Guest Accounts are not configured.'
-    }
-    #End of Guest Accounts Disabled
+	#Guest Accounts Disabled
+	Write-Host
+	Write-Host 'Guest Accounts Disabled Check:'
+	$Guest = Select-String -Path C:\Ambitions\DDP_GPO.xml -Pattern "Guest" -context 0, 1
+	[void] ($Guest -match '>(\d)<')
+	If ($Guest) {
+		If ($matches[1] -eq '1') { $Guest = 'Enabled'; $ForColor = 'red' }; If ($matches[1] -eq '0') { $Guest = 'Disabled'; $ForColor = 'green' }
+		Write-host -ForegroundColor $ForColor 'Guest Accounts are set to' $Guest
+	} Else {
+		Write-host -ForegroundColor Red 'Guest Accounts are not configured.'
+	}
+	#End of Guest Accounts Disabled
 
-    #Password Hash Not Stored
-    Write-Host
-    Write-Host 'Password Hash Not Stored Check:'
-    $PassHash = Select-String -Path C:\Ambitions\DDP_GPO.xml -Pattern "Do not store LAN Manager hash value on next password change" -context 0, 2
-    [void] ($PassHash -match '<q1:DisplayBoolean>((?:[a-z][a-z]+))</q1:DisplayBoolean>')
-    If ($matches[1] -eq $True) { $PassHash = 'Enabled'; $ForColor = 'green' }; If ($matches[1] -eq $False) { $PassHash = 'Disabled'; $ForColor = 'red' }
-    Write-host -ForegroundColor $ForColor '"Do not store LAN Manager hash value on next password change" is set to' $PassHash
-    #End of Password Hash Not Stored
+	#Password Hash Not Stored
+	Write-Host
+	Write-Host 'Password Hash Not Stored Check:'
+	$PassHash = Select-String -Path C:\Ambitions\DDP_GPO.xml -Pattern "Do not store LAN Manager hash value on next password change" -context 0, 2
+	[void] ($PassHash -match '<q1:DisplayBoolean>((?:[a-z][a-z]+))</q1:DisplayBoolean>')
+	If ($matches[1] -eq $True) { $PassHash = 'Enabled'; $ForColor = 'green' }; If ($matches[1] -eq $False) { $PassHash = 'Disabled'; $ForColor = 'red' }
+	Write-host -ForegroundColor $ForColor '"Do not store LAN Manager hash value on next password change" is set to' $PassHash
+	#End of Password Hash Not Stored
 
-    #LAN Manager Authentication Level
-    Write-Host
-    Write-Host 'LAN Manager Authentication Level Check:'
-    $NTLM = Select-String -Path C:\Ambitions\DDP_GPO.xml -Pattern "LmCompatibilityLevel" -context 0, 1
-    [void] ($NTLM -match '>(\d)<')
-    If ($matches[1] -eq 0) { $NTLM_Ans = "Send LM & NTLM responses"; $ForColor = 'Red' }
-    If ($matches[1] -eq 1) { $NTLM_Ans = "Send LM & NTLM - Use NTLMv2 session security if negotiated"; $ForColor = 'Red' }
-    If ($matches[1] -eq 2) { $NTLM_Ans = "Send NTLM response response only"; $ForColor = 'Red' }
-    If ($matches[1] -eq 3) { $NTLM_Ans = "Send NTLMv2 response only"; $ForColor = 'Red' }
-    If ($matches[1] -eq 4) { $NTLM_Ans = "Send NTLMv2 response only, Refuse LM"; $ForColor = 'Red' }
-    If ($matches[1] -eq 5) { $NTLM_Ans = "Send NTLMv2 response only, Refuse LM & NTLM"; $ForColor = 'Green' }
-    If (!$NTLM) { $NTLM_Ans = "Setting not found!" ; $ForColor = 'Red' }
-    Write-host -ForegroundColor $ForColor '"LAN Manager Authentication Level" is set to:' $NTLM_Ans
-    #End of LAN Manager Authentication Level
-    Write-Host
+	#LAN Manager Authentication Level
+	Write-Host
+	Write-Host 'LAN Manager Authentication Level Check:'
+	$NTLM = Select-String -Path C:\Ambitions\DDP_GPO.xml -Pattern "LmCompatibilityLevel" -context 0, 1
+	[void] ($NTLM -match '>(\d)<')
+	If ($matches[1] -eq 0) { $NTLM_Ans = "Send LM & NTLM responses"; $ForColor = 'Red' }
+	If ($matches[1] -eq 1) { $NTLM_Ans = "Send LM & NTLM - Use NTLMv2 session security if negotiated"; $ForColor = 'Red' }
+	If ($matches[1] -eq 2) { $NTLM_Ans = "Send NTLM response response only"; $ForColor = 'Red' }
+	If ($matches[1] -eq 3) { $NTLM_Ans = "Send NTLMv2 response only"; $ForColor = 'Red' }
+	If ($matches[1] -eq 4) { $NTLM_Ans = "Send NTLMv2 response only, Refuse LM"; $ForColor = 'Red' }
+	If ($matches[1] -eq 5) { $NTLM_Ans = "Send NTLMv2 response only, Refuse LM & NTLM"; $ForColor = 'Green' }
+	If (!$NTLM) { $NTLM_Ans = "Setting not found!" ; $ForColor = 'Red' }
+	Write-host -ForegroundColor $ForColor '"LAN Manager Authentication Level" is set to:' $NTLM_Ans
+	#End of LAN Manager Authentication Level
+	Write-Host
 } #End of DefaultDomainPolicy function
 
 Function NetworkPolicies {
-    #Test AD Functionality
-    $Null = (Get-Command -Name Get-GPOReport)
-    if ($LastExitCode) {
-        Write-Host -ForegroundColor Yello "This section is only available on a server that has access to Group Policy"
-        Pause
-        Return
-    }
-    #End of Test AD Functionality
+	#Test AD Functionality
+	$Null = (Get-Command -Name Get-GPOReport)
+	if ($LastExitCode) {
+		Write-Host -ForegroundColor Yello "This section is only available on a server that has access to Group Policy"
+		Pause
+		Return
+	}
+	#End of Test AD Functionality
 
-    ((Get-GPOReport -all -ReportType xml | ForEach { ([xml]$_).gpo }).Where( { $_.LinksTo }) | ForEach ($_) { Get-GPOReport -Name $_.Name -ReportType XML | Out-File -FilePath C:\Ambitions\Enabled_GPO_All.xml -Append })
+	((Get-GPOReport -all -ReportType xml | ForEach { ([xml]$_).gpo }).Where( { $_.LinksTo }) | ForEach ($_) { Get-GPOReport -Name $_.Name -ReportType XML | Out-File -FilePath C:\Ambitions\Enabled_GPO_All.xml -Append })
 
-    #TODO - Automatic Updates Disabled
+	#TODO - Automatic Updates Disabled
 
-    #TODO - Power Plan Policy
+	#TODO - Power Plan Policy
 
-    #Automatic Screen Lock
-    $ScreenLock = Select-String -Path C:\Ambitions\Enabled_GPO_All.xml -Pattern "Screen saver timeout" -context 0, 1
-    [void] ([string]$ScreenLock -match '<q2:State>((?:[a-z][a-z]+))</q2:State>')
-    If ($matches) { $ScreenLock = $matches[1] } else { $ScreenLock = 'Not Set' }
-    Write-host "Screen lock =" ($ScreenLock)
-    #TODO - Include time
-    #End of Automatic Screen Lock
+	#Automatic Screen Lock
+	$ScreenLock = Select-String -Path C:\Ambitions\Enabled_GPO_All.xml -Pattern "Screen saver timeout" -context 0, 1
+	[void] ([string]$ScreenLock -match '<q2:State>((?:[a-z][a-z]+))</q2:State>')
+	If ($matches) { $ScreenLock = $matches[1] } else { $ScreenLock = 'Not Set' }
+	Write-host "Screen lock =" ($ScreenLock)
+	#TODO - Include time
+	#End of Automatic Screen Lock
 
 
 
 } #End of NetworkPolicies function
 #Main Menu
 function Show-Menu {
-    param (
-        [string]$Title = 'Maintenance Section Selection'
-    )
-    Clear-Host
-    Write-Host "================ $Title ================"
-    Write-Host
-    Write-Host "1: Maintenance"
-    Write-Host
-    Write-Host "2: Long Maintenance"
-    Write-Host
-    Write-Host "3: Network Devices"
-    Write-Host
-    Write-Host "4: Domain Group Policy"
-    Write-Host
-    Write-Host "5: Default Domain Policy"
-    Write-Host
-    Write-Host "6: Network Policies"
-    Write-Host
-    Write-Host "Q: Press 'Q' to quit"
-    Write-Host
+	param (
+		[string]$Title = 'Maintenance Section Selection'
+	)
+	Clear-Host
+	Write-Host "================ $Title ================"
+	Write-Host
+	Write-Host "1: Maintenance"
+	Write-Host
+	Write-Host "2: Long Maintenance"
+	Write-Host
+	Write-Host "3: Network Devices"
+	Write-Host
+	Write-Host "4: Domain Group Policy"
+	Write-Host
+	Write-Host "5: Default Domain Policy"
+	Write-Host
+	Write-Host "6: Network Policies"
+	Write-Host
+	Write-Host "Q: Press 'Q' to quit"
+	Write-Host
 }
 #Make things big
 mode con: cols=100 lines=70
 do {
-    Show-Menu -Title 'Maintenance Section Selection'
-    $selection = Read-Host "Please make a selection"
-    switch ($selection) {
-        '1' {
-            cls
-            '================ You chose option #1: Maintenance ================'
-            Write-Host
-            Maintenance
-        } '2' {
-            cls
-            '================ You chose option #2: Long Maintenance ================'
-            Write-Host
-            LongMaintenance
-        } '3' {
-            cls
-            '================ You chose option #3: Network Devices ================'
-            Write-Host
-            NetworkDevices
-        } '4' {
-            cls
-            '================ You chose option #4: Domain Group Policy ================'
-            Write-Host
-            DomainGroupPolicy
-        } '5' {
-            cls
-            '================ You chose option #5: Default Domain Policy ================'
-            Write-Host
-            DefaultDomainPolicy
-        } '6' {
-            cls
-            '================ You chose option #6: Network Policies ================'
-            Write-Host 'Coming soon to a computer screen near you!'
+	Show-Menu -Title 'Maintenance Section Selection'
+	$selection = Read-Host "Please make a selection"
+	switch ($selection) {
+		'1' {
+			cls
+			'================ You chose option #1: Maintenance ================'
+			Write-Host
+			Maintenance
+		} '2' {
+			cls
+			'================ You chose option #2: Long Maintenance ================'
+			Write-Host
+			LongMaintenance
+		} '3' {
+			cls
+			'================ You chose option #3: Network Devices ================'
+			Write-Host
+			NetworkDevices
+		} '4' {
+			cls
+			'================ You chose option #4: Domain Group Policy ================'
+			Write-Host
+			DomainGroupPolicy
+		} '5' {
+			cls
+			'================ You chose option #5: Default Domain Policy ================'
+			Write-Host
+			DefaultDomainPolicy
+		} '6' {
+			cls
+			'================ You chose option #6: Network Policies ================'
+			Write-Host 'Coming soon to a computer screen near you!'
 
-            #NetworkPolicies
-        } 'q' {
-            cls
-            exit
-        }
-    }
-    pause
+			#NetworkPolicies
+		} 'q' {
+			cls
+			exit
+		}
+	}
+	pause
 } until ($selection -eq 'q')
 #End of Main Menu -eq 'q')
 #End of Main Menu

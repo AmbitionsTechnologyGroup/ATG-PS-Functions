@@ -1,399 +1,399 @@
-    <#
-    Automated server reboot script
-    Ambitions Technology Group - (505)234-7777
-    RCS
-    13MAY2020
-    Broke out prerequisite checks to show just what file is missing.
-    15MAR2019
-    Resolved issues with the default title
-    14FEB2019
-    Added functionality to shutdown "all remaining vms" on a host. Use the server name "allremainingvms" listed with a host in the csv file
-    Added functionality to ensure one server is accessible before continueing. Use the action "ConfirmStart"
-    06FEB2019
-    Swapped out Hipchat functionality for Microsoft Teams Functionality.
-    11MAY2018
-    Prerequisite checks
-    #>
-    [CmdletBinding()]
-    Param(
-    [switch]$ServicesCheck,
-    [switch]$ForceReboots
-    )
+	<#
+	Automated server reboot script
+	Ambitions Technology Group - (505)234-7777
+	RCS
+	13MAY2020
+	Broke out prerequisite checks to show just what file is missing.
+	15MAR2019
+	Resolved issues with the default title
+	14FEB2019
+	Added functionality to shutdown "all remaining vms" on a host. Use the server name "allremainingvms" listed with a host in the csv file
+	Added functionality to ensure one server is accessible before continueing. Use the action "ConfirmStart"
+	06FEB2019
+	Swapped out Hipchat functionality for Microsoft Teams Functionality.
+	11MAY2018
+	Prerequisite checks
+	#>
+	[CmdletBinding()]
+	Param(
+	[switch]$ServicesCheck,
+	[switch]$ForceReboots
+	)
 
-    #Function to send messages to Teams. Set $date, $server, and $message variables
-    function Send-To-Teams{
-        $date = Get-Date -Format g
-        $uri = "$([System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String("aHR0cHM6Ly9hbWJpdGlvbnNncm91cC53ZWJob29rLm9mZmljZS5jb20vd2ViaG9va2IyLzg5N2QyYjRjLTUwYzYtNDljYi1hNjk0LTUwZTNjNzI2NWJkY0BjZjRiZGQwNi1iMDNkLTRiYWYtODU2NS0xMjY1NDY5YTg3NGYvSW5jb21pbmdXZWJob29rLzk5ODk4YWQ4MDNkMTQxYmU5OGI5NjY4Njg0ZTNiNjU5LzA0ZDMzMjQ3LWVlNzItNDFhZi1hNWFlLTFjNDI4MTI2MjQ0MQ==")))"
+	#Function to send messages to Teams. Set $date, $server, and $message variables
+	function Send-To-Teams{
+		$date = Get-Date -Format g
+		$uri = "$([System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String("aHR0cHM6Ly9hbWJpdGlvbnNncm91cC53ZWJob29rLm9mZmljZS5jb20vd2ViaG9va2IyLzg5N2QyYjRjLTUwYzYtNDljYi1hNjk0LTUwZTNjNzI2NWJkY0BjZjRiZGQwNi1iMDNkLTRiYWYtODU2NS0xMjY1NDY5YTg3NGYvSW5jb21pbmdXZWJob29rLzk5ODk4YWQ4MDNkMTQxYmU5OGI5NjY4Njg0ZTNiNjU5LzA0ZDMzMjQ3LWVlNzItNDFhZi1hNWFlLTFjNDI4MTI2MjQ0MQ==")))"
 
-        $body = ConvertTo-Json -Depth 4 @{
-            themeColor = $color
-            title = $title
-            text = "$env:computername at $env:userdomain says"
-            sections = @(
-                @{
-                    facts = @(
-                        @{
-                        name = 'Date'
-                        value = $date
-                        },
-                        @{
-                        name = 'Server'
-                        value = $server
-                        },
-                        @{
-                        name = 'Message'
-                        value = $message
-                        }
-                    )
-                }
-            )
-        }
-        Invoke-RestMethod -uri $uri -Method Post -body $body -ContentType 'application/json'
-    }
-    #Sets default title and color for notifications
-    $title = $env:userdomain + ': Scripted Server Reboot Notification'
-    $color = '808080'
+		$body = ConvertTo-Json -Depth 4 @{
+			themeColor = $color
+			title = $title
+			text = "$env:computername at $env:userdomain says"
+			sections = @(
+				@{
+					facts = @(
+						@{
+						name = 'Date'
+						value = $date
+						},
+						@{
+						name = 'Server'
+						value = $server
+						},
+						@{
+						name = 'Message'
+						value = $message
+						}
+					)
+				}
+			)
+		}
+		Invoke-RestMethod -uri $uri -Method Post -body $body -ContentType 'application/json'
+	}
+	#Sets default title and color for notifications
+	$title = $env:userdomain + ': Scripted Server Reboot Notification'
+	$color = '808080'
 
 
 #Prerequisiste checks
-    If (($ServicesCheck) -and ($ForceReboots)) {
-        Write-Host -foregroundcolor red "The switches -ServicesCheck and -ForceReboots are mutually exclusive, please only use one or the other"
-        Exit
-    }
-    #If((whoami) -ne "nt authority\system"){Write-Error -message "This script must be run as SYSTEM. Follow configuration instructions at https://ambitions.itglue.com/DOC-806129-1544208" -Category SecurityError;Exit}
-    If (-not (Test-Path "C:\Ambitions\scripts\server_reboot_user.txt")) {
-        $message = "Needed file server_reboot_user.txt is missing. Follow configuration instructions at https://ambitions.itglue.com/DOC-806129-1544208"
-        Write-Error -message $message -Category ObjectNotFound
-        $color = 'ff0000'
-        Send-To-Teams
-        Exit
-    }
+	If (($ServicesCheck) -and ($ForceReboots)) {
+		Write-Host -foregroundcolor red "The switches -ServicesCheck and -ForceReboots are mutually exclusive, please only use one or the other"
+		Exit
+	}
+	#If((whoami) -ne "nt authority\system"){Write-Error -message "This script must be run as SYSTEM. Follow configuration instructions at https://ambitions.itglue.com/DOC-806129-1544208" -Category SecurityError;Exit}
+	If (-not (Test-Path "C:\Ambitions\scripts\server_reboot_user.txt")) {
+		$message = "Needed file server_reboot_user.txt is missing. Follow configuration instructions at https://ambitions.itglue.com/DOC-806129-1544208"
+		Write-Error -message $message -Category ObjectNotFound
+		$color = 'ff0000'
+		Send-To-Teams
+		Exit
+	}
 
-    If (-not (Test-Path "C:\Ambitions\scripts\Server_Reboot_Cred.txt")) {
-        $message = "Needed files are missing. Follow configuration instructions at https://ambitions.itglue.com/DOC-806129-1544208"
-        Write-Error -message $message -Category ObjectNotFound
-        $color = 'ff0000'
-        Send-To-Teams
-        Exit
-    }
+	If (-not (Test-Path "C:\Ambitions\scripts\Server_Reboot_Cred.txt")) {
+		$message = "Needed files are missing. Follow configuration instructions at https://ambitions.itglue.com/DOC-806129-1544208"
+		Write-Error -message $message -Category ObjectNotFound
+		$color = 'ff0000'
+		Send-To-Teams
+		Exit
+	}
 
-    If (-not (Test-Path "C:\Ambitions\scripts\Server_Reboots.csv")) {
-        $message = "Needed file Server_Reboot_Cred.txt is missing. Follow configuration instructions at https://ambitions.itglue.com/DOC-806129-1544208"
-        Write-Error -message $message -Category ObjectNotFound
-        $color = 'ff0000'
-        Send-To-Teams
-        Exit
-    }
+	If (-not (Test-Path "C:\Ambitions\scripts\Server_Reboots.csv")) {
+		$message = "Needed file Server_Reboot_Cred.txt is missing. Follow configuration instructions at https://ambitions.itglue.com/DOC-806129-1544208"
+		Write-Error -message $message -Category ObjectNotFound
+		$color = 'ff0000'
+		Send-To-Teams
+		Exit
+	}
 
-    If (-not (Test-Path "C:\Ambitions\scripts\Invoke-StartService.ps1")) {
-        $message = "Needed file is Invoke-StartService.ps1 missing. Follow configuration instructions at https://ambitions.itglue.com/DOC-806129-1544208"
-        Write-Error -message $message -Category ObjectNotFound
-        $color = 'ff0000'
-        Send-To-Teams
-        Exit
-    }
+	If (-not (Test-Path "C:\Ambitions\scripts\Invoke-StartService.ps1")) {
+		$message = "Needed file is Invoke-StartService.ps1 missing. Follow configuration instructions at https://ambitions.itglue.com/DOC-806129-1544208"
+		Write-Error -message $message -Category ObjectNotFound
+		$color = 'ff0000'
+		Send-To-Teams
+		Exit
+	}
 #End of Prerequisite checks
 
-    #To store a password securely, run
-    #"AReallyC00lP@55w0rd" | ConvertTo-SecureString -AsPlainText -Force | ConvertFrom-SecureString | Out-File "C:\Ambitions\Scripts\Server_Reboot_Cred.txt"
-    $filePath = "C:\Ambitions\Scripts\server_reboots.csv"
-    $username = Get-Content 'C:\Ambitions\Scripts\server_reboot_user.txt'
-    $password = Get-Content 'C:\Ambitions\Scripts\Server_Reboot_Cred.txt' | ConvertTo-SecureString
-    $cred = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $username,$password
-    $ChangeLgPath = "C:\Ambitions\reboot.log"
-    #import CSV
-    $data = Import-Csv $filePath
-    #Sort by sequence
-    $objdata = $data | Sort SEQUENCE
-    #Enable-PSRemoting -Force
-    #Uptime Check
-    Write-Host
-    $os = Get-WmiObject win32_operatingsystem
-    $uptime = (Get-Date) - ($os.ConvertToDateTime($os.lastbootuptime))
-    $UptimeDays = [math]::Round($uptime.Days)
-    $UptimeHours = [math]::Round($uptime.Hours)
-    $RecentBoot = 60
-    If ((($Uptime.TotalMinutes -ge $RecentBoot) -And !($ServicesCheck)) -or ($ForceReboots)) {
-        Write-Host "Server has been up for $Uptime , Rebooting servers"
-            $date = Get-Date -Format g
-            $color = 'ff8c00'
-            $message = "Uptime: $Uptime. An automated server reboot is starting, stay tuned for further information"
-            $server = "Reboot script host: $env:computername"
-            Send-To-Teams
-        #Warn users of impending reboot
-        ForEach ($d in $objdata) {
-            $sequence = $d.SEQUENCE | Out-String
-            $sequence = [int]$sequence
-            $server = $d.SRVR
-            $action = $d.Action
-            $vmhost = $d.Host
-            $NoWait = $Null
-            $NoWait = $d.NoWait
-            If ($server -ne "allremainingvms"){
-                If (($env:computername.StartsWith($server,"CurrentCultureIgnoreCase")) -or ($server.StartsWith($env:computername,"CurrentCultureIgnoreCase"))) {
-                    Write-Host 'WhatIf: msg * "This server will be restarting momentarily. Please immediately save your work and log out."'
-                } Else {
-                    #Informing users of $server of reboot.
-                    Write-Host "WhatIf: Invoke-Command -ComputerName $server -Credential $cred -scriptblock {msg * 'This server will be restarting momentarily. Please immediately save your work and log out.' }"
-                }
-            }
-        }
-        #Update the Datto agent on remote servers, Warn users of impending reboot
-        #Download latest datto update script
-        #Forces downloads to use TLS1.2
-        [System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192
-        <#(New-Object System.Net.WebClient).DownloadFile("https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Datto-Agent-Update/DattoAgentUpdate.txt", "C:\Ambitions\scripts\DattoAgentUpdate.ps1")
-        Unblock-File -Path "C:\Ambitions\scripts\DattoAgentUpdate.ps1"
-        ForEach ($d in $objdata) {
-            $sequence = $d.SEQUENCE | Out-String
-            $sequence = [int]$sequence
-            $server = $d.SRVR
-            $action = $d.Action
-            $vmhost = $d.Host
-            $NoWait = $d.NoWait
-            $DattoUpdate = {}
-            
-            If ($server -ne "allremainingvms"){
-                Write-Host "Datto update assessment is being performed on $server"
-                $color = '0000ff'
-                $message = "Datto update assessment is being performed on $server"
-                Send-To-Teams
-                #If command is running locally, use "Start-VM -Name #$server"
-                If (($env:computername.StartsWith($server,"CurrentCultureIgnoreCase")) -or ($server.StartsWith($env:computername,"CurrentCultureIgnoreCase"))) {
-                    Write-Host "WhatIf: & C:\Ambitions\scripts\DattoAgentUpdate.ps1"
-                } Else {
-                    #If command is running remotely, use "Invoke-Command -ComputerName $vmhost -ScriptBlock { "Start-VM -Name #$server" }"
-                    Write-Host "WhatIf: Invoke-Command -ComputerName $server -Credential $cred -FilePath C:\Ambitions\scripts\DattoAgentUpdate.ps1"
-                }
-            } Else {
-                Write-Host "Datto update assessment is being skipped on End User Client VMs"
-                $color = '0000ff'
-                $message = "Datto update assessment is being skipped on End User Client VMs"
-                Send-To-Teams
-            }
-        }#>
+	#To store a password securely, run
+	#"AReallyC00lP@55w0rd" | ConvertTo-SecureString -AsPlainText -Force | ConvertFrom-SecureString | Out-File "C:\Ambitions\Scripts\Server_Reboot_Cred.txt"
+	$filePath = "C:\Ambitions\Scripts\server_reboots.csv"
+	$username = Get-Content 'C:\Ambitions\Scripts\server_reboot_user.txt'
+	$password = Get-Content 'C:\Ambitions\Scripts\Server_Reboot_Cred.txt' | ConvertTo-SecureString
+	$cred = New-Object -TypeName System.Management.Automation.PSCredential -ArgumentList $username,$password
+	$ChangeLgPath = "C:\Ambitions\reboot.log"
+	#import CSV
+	$data = Import-Csv $filePath
+	#Sort by sequence
+	$objdata = $data | Sort SEQUENCE
+	#Enable-PSRemoting -Force
+	#Uptime Check
+	Write-Host
+	$os = Get-WmiObject win32_operatingsystem
+	$uptime = (Get-Date) - ($os.ConvertToDateTime($os.lastbootuptime))
+	$UptimeDays = [math]::Round($uptime.Days)
+	$UptimeHours = [math]::Round($uptime.Hours)
+	$RecentBoot = 60
+	If ((($Uptime.TotalMinutes -ge $RecentBoot) -And !($ServicesCheck)) -or ($ForceReboots)) {
+		Write-Host "Server has been up for $Uptime , Rebooting servers"
+			$date = Get-Date -Format g
+			$color = 'ff8c00'
+			$message = "Uptime: $Uptime. An automated server reboot is starting, stay tuned for further information"
+			$server = "Reboot script host: $env:computername"
+			Send-To-Teams
+		#Warn users of impending reboot
+		ForEach ($d in $objdata) {
+			$sequence = $d.SEQUENCE | Out-String
+			$sequence = [int]$sequence
+			$server = $d.SRVR
+			$action = $d.Action
+			$vmhost = $d.Host
+			$NoWait = $Null
+			$NoWait = $d.NoWait
+			If ($server -ne "allremainingvms"){
+				If (($env:computername.StartsWith($server,"CurrentCultureIgnoreCase")) -or ($server.StartsWith($env:computername,"CurrentCultureIgnoreCase"))) {
+					Write-Host 'WhatIf: msg * "This server will be restarting momentarily. Please immediately save your work and log out."'
+				} Else {
+					#Informing users of $server of reboot.
+					Write-Host "WhatIf: Invoke-Command -ComputerName $server -Credential $cred -scriptblock {msg * 'This server will be restarting momentarily. Please immediately save your work and log out.' }"
+				}
+			}
+		}
+		#Update the Datto agent on remote servers, Warn users of impending reboot
+		#Download latest datto update script
+		#Forces downloads to use TLS1.2
+		[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192
+		<#(New-Object System.Net.WebClient).DownloadFile("https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Datto-Agent-Update/DattoAgentUpdate.txt", "C:\Ambitions\scripts\DattoAgentUpdate.ps1")
+		Unblock-File -Path "C:\Ambitions\scripts\DattoAgentUpdate.ps1"
+		ForEach ($d in $objdata) {
+			$sequence = $d.SEQUENCE | Out-String
+			$sequence = [int]$sequence
+			$server = $d.SRVR
+			$action = $d.Action
+			$vmhost = $d.Host
+			$NoWait = $d.NoWait
+			$DattoUpdate = {}
+			
+			If ($server -ne "allremainingvms"){
+				Write-Host "Datto update assessment is being performed on $server"
+				$color = '0000ff'
+				$message = "Datto update assessment is being performed on $server"
+				Send-To-Teams
+				#If command is running locally, use "Start-VM -Name #$server"
+				If (($env:computername.StartsWith($server,"CurrentCultureIgnoreCase")) -or ($server.StartsWith($env:computername,"CurrentCultureIgnoreCase"))) {
+					Write-Host "WhatIf: & C:\Ambitions\scripts\DattoAgentUpdate.ps1"
+				} Else {
+					#If command is running remotely, use "Invoke-Command -ComputerName $vmhost -ScriptBlock { "Start-VM -Name #$server" }"
+					Write-Host "WhatIf: Invoke-Command -ComputerName $server -Credential $cred -FilePath C:\Ambitions\scripts\DattoAgentUpdate.ps1"
+				}
+			} Else {
+				Write-Host "Datto update assessment is being skipped on End User Client VMs"
+				$color = '0000ff'
+				$message = "Datto update assessment is being skipped on End User Client VMs"
+				Send-To-Teams
+			}
+		}#>
 
-        #Reboot, or shutdown the servers in order
-        #Stop-Process -Name "iexplore"
-        ForEach ($d in $objdata) {
-            $sequence = $d.SEQUENCE | Out-String
-            $sequence = [int]$sequence
-            $server = $d.SRVR
-            $action = $d.Action
-            $vmhost = $d.Host
-            $NoWait = $d.NoWait
-            $Wait = "-Wait"
-            Write-Host "------------------------"
-            Write-Host "SEQUENCE: $sequence"
-            Write-Host "$Action : $server"
-            Write-Host "Host: $vmhost"
-            #$server | Get-Member Get-Content
-            #Reboot Actions
-            If ($action -eq "Reboot") {
-                If (($env:computername.StartsWith($server,"CurrentCultureIgnoreCase")) -or ($server.StartsWith($env:computername,"CurrentCultureIgnoreCase"))) {
-                    #Log the reboot
-                    $date = Get-Date -Format g
-                    $ChangeLgPath = "C:\Ambitions\reboot.log"
-                    $color = 'd8d800'
-                    $message = "Initiating reboot of local server"
-                    Send-To-Teams
-                    Add-Content -Path $ChangeLgPath "$date`tScripted`tScheduled automatic reboot of local server"
-                    #Reboot
-                    Write-Host "WhatIf: Restart-Computer -Force"
-                } Else {
-                    #Log the reboot
-                    Invoke-Command -ComputerName $server -Credential $cred -ScriptBlock {
-                        #Log the major system Change
-                        $date = Get-Date -Format g
-                        $ChangeLgPath = "C:\Ambitions\reboot.log"
-                        Add-Content -Path $ChangeLgPath "$date`tScripted`tScheduled automatic reboot" -Force
-                    }
-                    If ($NoWait -like "NoWait") {
-                        #Reboot w/o waiting
-                        Write-Host "$server will be rebooted without waiting"
-                        $color = 'd8d800'
-                        $message = "$server will be rebooted without waiting"
-                        Send-To-Teams
-                        Write-Host "WhatIf: Restart-Computer -ComputerName $server -Credential $cred -Force -ErrorVariable Output"
-                        If ($Output) {
-                            $color = 'ff0000'
-                            $message = 'An error occured: ' + $Output
-                        } Else {
-                            $color = '0000ff'
-                            $message = "The reboot initiated successfully without issue."
-                        }
-                        Send-To-Teams
-                        Add-Content -Path $ChangeLgPath "$date`tScripted`t$Output" -Force
-                    } Else {
-                        Write-Host "$server will be rebooted and the script will wait to proceed until it's back online"
-                        $color = 'd8d800'
-                        $message = "$server will be rebooted and the script will wait to proceed until it's back online"
-                        Send-To-Teams
-                        Write-Host "WhatIf: Restart-Computer -ComputerName $server -Credential $cred -Force -Wait -ErrorVariable Output"
-                        If ($Output) {
-                            $color = 'ff0000'
-                            $message = 'An error occured: ' + $Output
-                        } Else {
-                            $color = '0000ff'
-                            $message = "The restart of $server completed successfully without issue."
-                        }
-                        Send-To-Teams
-                        Add-Content -Path $ChangeLgPath "$date`tScripted`t$Output" -Force
-                    }
-                }
-            }
-            #Shutdown Actions
-            If ($action -eq "Shutdown") {
-                If ($server -ne "allremainingvms"){
-                    Write-Host "Shutting down $server"
-                    $color = 'd8d800'
-                    $message = "Shutting down $server"
-                    Send-To-Teams
-                    Invoke-Command -ComputerName $server -Credential $cred -ScriptBlock {
-                        #Log the major system Change
-                        $date = Get-Date -Format g
-                        $ChangeLgPath = "C:\Ambitions\reboot.log"
-                        Add-Content -Path $ChangeLgPath "$date`tScripted`tScheduled automatic VM shutdown" -Force
-                    }
-                    Write-Host "WhatIf: Stop-Computer -ComputerName $server -Credential $cred -Force -ErrorVariable Output"
-                    If ($Output) {
-                        $color = 'ff0000'
-                        $message = 'An error occured: ' + $Output
-                    } Else {
-                        $color = '0000ff'
-                        $message = "The shutdown completed successfully without issue."
-                    }
-                    Send-To-Teams
-                    Add-Content -Path $ChangeLgPath "$date`tScripted`t$Output" -Force
-                    Write-Host "WhatIf: Wait until computer finishes shutting down unless NoWait is specified."
-                    <#If ($NoWait -notlike "NoWait") {
-                        Write-Host "Waiting until the server is fully offline"
-                        do {
-                            Start-Sleep -s 5
-                        } until (!(Test-Connection $server -Quiet -Count 1))
-                        Start-Sleep -s 120
-                    }#>
-                } ElseIf (($env:computername.StartsWith($vmhost,"CurrentCultureIgnoreCase")) -or ($vmhost.StartsWith($env:computername,"CurrentCultureIgnoreCase"))) {
-                    #Log the shutdown
-                    $date = Get-Date -Format g
-                    $ChangeLgPath = "C:\Ambitions\reboot.log"
-                    $color = 'd8d800'
-                    $message = "Initiating shutdown of all remain VMs on host $vmhost"
-                    Send-To-Teams
-                    Add-Content -Path $ChangeLgPath "$date`tScripted`tInitiating shutdown of all remain VMs on host $vmhost"
-                    #Shutdown remaining VMs
-                    # Shutdown VMs
-                        (Get-VM | Where {$_.State -eq 'Running' -and $_.AutomaticStartAction -eq 'Start'}) | Sort-Object -Property AutomaticStartDelay -Descending | ForEach-Object {
-                            $color = 'd8d800'
-                            $message = "Initiating shutdown of " + $_.Name
-                            Send-To-Teams
-                            Write-Host "WhatIf: $_ | Stop-VM -Force"
-                            Start-Sleep -Seconds 15
-                        }
-                    } Else {
-                    #Log the reboot
-                    Invoke-Command -ComputerName $vmhost -Credential $cred -ScriptBlock {
-                        #Function to send messages to Teams. Set $date, $server, and $message variables
-                        function Send-To-Teams{
-                            $server = $env:computername
-                            $date = Get-Date -Format g
-                            $uri = "https://ambitionsgroup.webhook.office.com/webhookb2/550873db-002f-458d-bc34-4e1b2f85f255@cf4bdd06-b03d-4baf-8565-1265469a874f/IncomingWebhook/f5492acfda244dd8a344c14770df1351/04d33247-ee72-41af-a5ae-1c4281262441"
-                            
-                            $body = ConvertTo-Json -Depth 4 @{
-                                themeColor = $color
-                                title = $title
-                                text = "$env:computername at $env:userdomain says"
-                                sections = @(
-                                    @{
-                                        facts = @(
-                                            @{
-                                            name = 'Date'
-                                            value = $date
-                                            },
-                                            @{
-                                            name = 'Server'
-                                            value = $server
-                                            },
-                                            @{
-                                            name = 'Message'
-                                            value = $message
-                                            }
-                                        )
-                                    }
-                                )
-                            }
-                            Invoke-RestMethod -uri $uri -Method Post -body $body -ContentType 'application/json'
-                        }
-                        $title = $env:userdomain + ': Scripted Server Reboot Notification'
-                        #Log the shutdown
-                        $date = Get-Date -Format g
-                        $ChangeLgPath = "C:\Ambitions\reboot.log"
-                        $color = 'd8d800'
-                        $message = "Initiating shutdown of all remain VMs on host $vmhost"
-                        Send-To-Teams
-                        Add-Content -Path $ChangeLgPath "$date`tScripted`tInitiating shutdown of all remain VMs on host $vmhost"
-                        #Shutdown remaining VMs
-                        # Shutdown VMs
-                        (Get-VM | Where {$_.State -eq 'Running' -and $_.AutomaticStartAction -eq 'Start'}) | Sort-Object -Property AutomaticStartDelay -Descending | ForEach-Object {
-                            $color = 'd8d800'
-                            $message = "Initiating shutdown of " + $_.Name
-                            Send-To-Teams
-                            Write-Host "WhatIf: $_ | Stop-VM -Force"
-                            #Start-Sleep -Seconds 15
-                        }
-                    }
-                }
-            }
-            #ConfirmStart VM Actions - Confirms the $server responds to ping until the $timeout minutes have passed.
-            If ($action -eq "ConfirmStart") {
-                $color = 'd8d800'
-                $message = "Waiting and confirming that $server is online before continuing"
-                Send-To-Teams
-                $timeout = new-timespan -Minutes 20
-                $sw = [diagnostics.stopwatch]::StartNew()
-                Write-Host "WhatIf: Waiting for $server to come back online"
-                #do {$ping = test-connection -comp $server -Quiet} until (($ping) -or ($sw.elapsed -ge $timeout))
-                $color = '0000ff'
-                #$message = "Verified $server is online or timeout has been reached, continuing"
-                Send-To-Teams
-            }
-        }
-    } Else {
-    #Following will happen If the server has been rebooted recently.
-        $date = Get-Date -Format g
-        $color = 'ff8c00'
-        $message = "Uptime: $Uptime. Starting automatic services that are stopped."
-        $server = "Reboot script host $env:computername"
-        Send-To-Teams
-        #Start Automatic Services that aren't started
-        $filePath = "C:\Ambitions\Scripts\server_reboots.csv"
-        #import CSV
-        $data = Import-Csv $filePath
-        #Sort by sequence
-        $objdata = $data | Sort SEQUENCE
-        ForEach ($d in $objdata) {
-            $sequence = $d.SEQUENCE | Out-String
-            $sequence = [int]$sequence
-            $server = $d.SRVR
-            $date = Get-Date -Format g
-            $ChangeLgPath = "C:\Ambitions\reboot.log"
-            Add-Content -Path $ChangeLgPath "$date`tScripted`tStarting Automatic Services on $server" -Force
-            $color = '0000ff'
-            If ($server -ne "allremainingvms"){
-                If (($env:computername.StartsWith($server,"CurrentCultureIgnoreCase")) -or ($server.StartsWith($env:computername,"CurrentCultureIgnoreCase"))) {
-                    $message = (& C:\Ambitions\Scripts\Invoke-StartService.ps1 -ErrorVariable Output)
-                } Else {
-                    [String]$message = (Invoke-Command -ErrorVariable Output -ComputerName $server -Credential $cred -FilePath C:\Ambitions\Scripts\Invoke-StartService.ps1)
-                }
-                If ($Output) {
-                    $color = 'ff0000'
-                    $message = 'An error occured: ' + $Output
-                }
-                Send-To-Teams
-            }
-        }
-    }
-    $title = 'Hey! Server Reboots are done at ' + $env:userdomain
-    $color = '00cd00'
-    $message = "Server Reboot Script has finished"
-    Send-To-Teams
+		#Reboot, or shutdown the servers in order
+		#Stop-Process -Name "iexplore"
+		ForEach ($d in $objdata) {
+			$sequence = $d.SEQUENCE | Out-String
+			$sequence = [int]$sequence
+			$server = $d.SRVR
+			$action = $d.Action
+			$vmhost = $d.Host
+			$NoWait = $d.NoWait
+			$Wait = "-Wait"
+			Write-Host "------------------------"
+			Write-Host "SEQUENCE: $sequence"
+			Write-Host "$Action : $server"
+			Write-Host "Host: $vmhost"
+			#$server | Get-Member Get-Content
+			#Reboot Actions
+			If ($action -eq "Reboot") {
+				If (($env:computername.StartsWith($server,"CurrentCultureIgnoreCase")) -or ($server.StartsWith($env:computername,"CurrentCultureIgnoreCase"))) {
+					#Log the reboot
+					$date = Get-Date -Format g
+					$ChangeLgPath = "C:\Ambitions\reboot.log"
+					$color = 'd8d800'
+					$message = "Initiating reboot of local server"
+					Send-To-Teams
+					Add-Content -Path $ChangeLgPath "$date`tScripted`tScheduled automatic reboot of local server"
+					#Reboot
+					Write-Host "WhatIf: Restart-Computer -Force"
+				} Else {
+					#Log the reboot
+					Invoke-Command -ComputerName $server -Credential $cred -ScriptBlock {
+						#Log the major system Change
+						$date = Get-Date -Format g
+						$ChangeLgPath = "C:\Ambitions\reboot.log"
+						Add-Content -Path $ChangeLgPath "$date`tScripted`tScheduled automatic reboot" -Force
+					}
+					If ($NoWait -like "NoWait") {
+						#Reboot w/o waiting
+						Write-Host "$server will be rebooted without waiting"
+						$color = 'd8d800'
+						$message = "$server will be rebooted without waiting"
+						Send-To-Teams
+						Write-Host "WhatIf: Restart-Computer -ComputerName $server -Credential $cred -Force -ErrorVariable Output"
+						If ($Output) {
+							$color = 'ff0000'
+							$message = 'An error occured: ' + $Output
+						} Else {
+							$color = '0000ff'
+							$message = "The reboot initiated successfully without issue."
+						}
+						Send-To-Teams
+						Add-Content -Path $ChangeLgPath "$date`tScripted`t$Output" -Force
+					} Else {
+						Write-Host "$server will be rebooted and the script will wait to proceed until it's back online"
+						$color = 'd8d800'
+						$message = "$server will be rebooted and the script will wait to proceed until it's back online"
+						Send-To-Teams
+						Write-Host "WhatIf: Restart-Computer -ComputerName $server -Credential $cred -Force -Wait -ErrorVariable Output"
+						If ($Output) {
+							$color = 'ff0000'
+							$message = 'An error occured: ' + $Output
+						} Else {
+							$color = '0000ff'
+							$message = "The restart of $server completed successfully without issue."
+						}
+						Send-To-Teams
+						Add-Content -Path $ChangeLgPath "$date`tScripted`t$Output" -Force
+					}
+				}
+			}
+			#Shutdown Actions
+			If ($action -eq "Shutdown") {
+				If ($server -ne "allremainingvms"){
+					Write-Host "Shutting down $server"
+					$color = 'd8d800'
+					$message = "Shutting down $server"
+					Send-To-Teams
+					Invoke-Command -ComputerName $server -Credential $cred -ScriptBlock {
+						#Log the major system Change
+						$date = Get-Date -Format g
+						$ChangeLgPath = "C:\Ambitions\reboot.log"
+						Add-Content -Path $ChangeLgPath "$date`tScripted`tScheduled automatic VM shutdown" -Force
+					}
+					Write-Host "WhatIf: Stop-Computer -ComputerName $server -Credential $cred -Force -ErrorVariable Output"
+					If ($Output) {
+						$color = 'ff0000'
+						$message = 'An error occured: ' + $Output
+					} Else {
+						$color = '0000ff'
+						$message = "The shutdown completed successfully without issue."
+					}
+					Send-To-Teams
+					Add-Content -Path $ChangeLgPath "$date`tScripted`t$Output" -Force
+					Write-Host "WhatIf: Wait until computer finishes shutting down unless NoWait is specified."
+					<#If ($NoWait -notlike "NoWait") {
+						Write-Host "Waiting until the server is fully offline"
+						do {
+							Start-Sleep -s 5
+						} until (!(Test-Connection $server -Quiet -Count 1))
+						Start-Sleep -s 120
+					}#>
+				} ElseIf (($env:computername.StartsWith($vmhost,"CurrentCultureIgnoreCase")) -or ($vmhost.StartsWith($env:computername,"CurrentCultureIgnoreCase"))) {
+					#Log the shutdown
+					$date = Get-Date -Format g
+					$ChangeLgPath = "C:\Ambitions\reboot.log"
+					$color = 'd8d800'
+					$message = "Initiating shutdown of all remain VMs on host $vmhost"
+					Send-To-Teams
+					Add-Content -Path $ChangeLgPath "$date`tScripted`tInitiating shutdown of all remain VMs on host $vmhost"
+					#Shutdown remaining VMs
+					# Shutdown VMs
+						(Get-VM | Where {$_.State -eq 'Running' -and $_.AutomaticStartAction -eq 'Start'}) | Sort-Object -Property AutomaticStartDelay -Descending | ForEach-Object {
+							$color = 'd8d800'
+							$message = "Initiating shutdown of " + $_.Name
+							Send-To-Teams
+							Write-Host "WhatIf: $_ | Stop-VM -Force"
+							Start-Sleep -Seconds 15
+						}
+					} Else {
+					#Log the reboot
+					Invoke-Command -ComputerName $vmhost -Credential $cred -ScriptBlock {
+						#Function to send messages to Teams. Set $date, $server, and $message variables
+						function Send-To-Teams{
+							$server = $env:computername
+							$date = Get-Date -Format g
+							$uri = "https://ambitionsgroup.webhook.office.com/webhookb2/550873db-002f-458d-bc34-4e1b2f85f255@cf4bdd06-b03d-4baf-8565-1265469a874f/IncomingWebhook/f5492acfda244dd8a344c14770df1351/04d33247-ee72-41af-a5ae-1c4281262441"
+							
+							$body = ConvertTo-Json -Depth 4 @{
+								themeColor = $color
+								title = $title
+								text = "$env:computername at $env:userdomain says"
+								sections = @(
+									@{
+										facts = @(
+											@{
+											name = 'Date'
+											value = $date
+											},
+											@{
+											name = 'Server'
+											value = $server
+											},
+											@{
+											name = 'Message'
+											value = $message
+											}
+										)
+									}
+								)
+							}
+							Invoke-RestMethod -uri $uri -Method Post -body $body -ContentType 'application/json'
+						}
+						$title = $env:userdomain + ': Scripted Server Reboot Notification'
+						#Log the shutdown
+						$date = Get-Date -Format g
+						$ChangeLgPath = "C:\Ambitions\reboot.log"
+						$color = 'd8d800'
+						$message = "Initiating shutdown of all remain VMs on host $vmhost"
+						Send-To-Teams
+						Add-Content -Path $ChangeLgPath "$date`tScripted`tInitiating shutdown of all remain VMs on host $vmhost"
+						#Shutdown remaining VMs
+						# Shutdown VMs
+						(Get-VM | Where {$_.State -eq 'Running' -and $_.AutomaticStartAction -eq 'Start'}) | Sort-Object -Property AutomaticStartDelay -Descending | ForEach-Object {
+							$color = 'd8d800'
+							$message = "Initiating shutdown of " + $_.Name
+							Send-To-Teams
+							Write-Host "WhatIf: $_ | Stop-VM -Force"
+							#Start-Sleep -Seconds 15
+						}
+					}
+				}
+			}
+			#ConfirmStart VM Actions - Confirms the $server responds to ping until the $timeout minutes have passed.
+			If ($action -eq "ConfirmStart") {
+				$color = 'd8d800'
+				$message = "Waiting and confirming that $server is online before continuing"
+				Send-To-Teams
+				$timeout = new-timespan -Minutes 20
+				$sw = [diagnostics.stopwatch]::StartNew()
+				Write-Host "WhatIf: Waiting for $server to come back online"
+				#do {$ping = test-connection -comp $server -Quiet} until (($ping) -or ($sw.elapsed -ge $timeout))
+				$color = '0000ff'
+				#$message = "Verified $server is online or timeout has been reached, continuing"
+				Send-To-Teams
+			}
+		}
+	} Else {
+	#Following will happen If the server has been rebooted recently.
+		$date = Get-Date -Format g
+		$color = 'ff8c00'
+		$message = "Uptime: $Uptime. Starting automatic services that are stopped."
+		$server = "Reboot script host $env:computername"
+		Send-To-Teams
+		#Start Automatic Services that aren't started
+		$filePath = "C:\Ambitions\Scripts\server_reboots.csv"
+		#import CSV
+		$data = Import-Csv $filePath
+		#Sort by sequence
+		$objdata = $data | Sort SEQUENCE
+		ForEach ($d in $objdata) {
+			$sequence = $d.SEQUENCE | Out-String
+			$sequence = [int]$sequence
+			$server = $d.SRVR
+			$date = Get-Date -Format g
+			$ChangeLgPath = "C:\Ambitions\reboot.log"
+			Add-Content -Path $ChangeLgPath "$date`tScripted`tStarting Automatic Services on $server" -Force
+			$color = '0000ff'
+			If ($server -ne "allremainingvms"){
+				If (($env:computername.StartsWith($server,"CurrentCultureIgnoreCase")) -or ($server.StartsWith($env:computername,"CurrentCultureIgnoreCase"))) {
+					$message = (& C:\Ambitions\Scripts\Invoke-StartService.ps1 -ErrorVariable Output)
+				} Else {
+					[String]$message = (Invoke-Command -ErrorVariable Output -ComputerName $server -Credential $cred -FilePath C:\Ambitions\Scripts\Invoke-StartService.ps1)
+				}
+				If ($Output) {
+					$color = 'ff0000'
+					$message = 'An error occured: ' + $Output
+				}
+				Send-To-Teams
+			}
+		}
+	}
+	$title = 'Hey! Server Reboots are done at ' + $env:userdomain
+	$color = '00cd00'
+	$message = "Server Reboot Script has finished"
+	Send-To-Teams

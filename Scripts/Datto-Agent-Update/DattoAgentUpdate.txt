@@ -12,19 +12,19 @@ Start-transcript -path C:\Ambitions\DattoUpdate.log -force -append
 #Script logic
 #Determine if Shadowsnap agent is installed
 #If so
-#    Designate #Designate Registry key to read version number from hklm:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ShadowSnap
-#    Designate download update location https://www.datto.com/downloads/shadowsnap-installer.exe
-#    Designate download location to be C:\Ambitions\shadowsnap-installer.exe
-#    Designate which services to work with "ShadowProtect Service, StorageCraft ImageReady, StorageCraft Raw Agent, and StorageCraft Shadow Copy Provider"
-#    Wait to continue if a Shadowsnap agent backup is running
+#	Designate #Designate Registry key to read version number from hklm:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ShadowSnap
+#	Designate download update location https://www.datto.com/downloads/shadowsnap-installer.exe
+#	Designate download location to be C:\Ambitions\shadowsnap-installer.exe
+#	Designate which services to work with "ShadowProtect Service, StorageCraft ImageReady, StorageCraft Raw Agent, and StorageCraft Shadow Copy Provider"
+#	Wait to continue if a Shadowsnap agent backup is running
 #
 #Determine if Datto Windows agent is installed
 #If so
-#    Designate #Designate Registry key to read version number from hklm:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\DattoWindowsAgent
-#    Designate download update location https://www.datto.com/downloads/DattoWindowsAgent.exe
-#    Designate download location to be C:\Ambitions\DattoWindowsAgent.exe
-#    Designate which services to work with "Datto Backup Agent Service and DattoProvider"
-#    Wait to continue if a Datto Windows agent backup is running
+#	Designate #Designate Registry key to read version number from hklm:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\DattoWindowsAgent
+#	Designate download update location https://www.datto.com/downloads/DattoWindowsAgent.exe
+#	Designate download location to be C:\Ambitions\DattoWindowsAgent.exe
+#	Designate which services to work with "Datto Backup Agent Service and DattoProvider"
+#	Wait to continue if a Datto Windows agent backup is running
 #
 #If server does not have either, exit!
 #
@@ -40,7 +40,7 @@ Start-transcript -path C:\Ambitions\DattoUpdate.log -force -append
 #Create Prerequisite folder
 If(!(test-path C:\Ambitions))
 {
-    New-Item -ItemType Directory -Force -Path C:\Ambitions
+	New-Item -ItemType Directory -Force -Path C:\Ambitions
 }
 
 #Get available versions
@@ -48,314 +48,314 @@ If(!(test-path C:\Ambitions))
 $OnlineDattoAgent = iwr https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Datto-Agent-Update/OnlineDattoAgent.json -UseBasicParsing | ConvertFrom-Json
 
 Function Set-ShadowSnapVariables {
-    #Designate Registry key to read version number from
-    $Global:RegKeyVer = "hklm:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ShadowSnap"
-    #Designate name of agent
-    $Global:agent = "ShadowSnap Agent"
-    #Designate download location
-    $Global:download = "http://download.ambitionsgroup.com/shadowsnap-installer.exe"
-    #Designate save location
-    $Global:installer = "C:\Ambitions\shadowsnap-installer.exe"
-    #Designate which services to work with
-    $Global:services = @("ShadowProtect Service", "StorageCraft ImageReady", "StorageCraft Raw Agent", "StorageCraft Shadow Copy Provider")
-    #Website to look at for the latest version number
-    $Global:OnlineDattoVersion = $OnlineDattoAgent.ShadowSnapAgent.Version
-    $Global:InstalledVer = (Get-ItemProperty "$RegKeyVer" -Name "DisplayVersion" -ErrorAction SilentlyContinue).DisplayVersion
-    Function DattoPattern {Set-Variable -Name OnlineDattoversion -Value ((Select-String -Path "C:\Ambitions\dattowebver.txt" -Pattern "current version")[-1]) -Scope Global}
-    #Wait to continue if a backup is running
-    While (Get-Process sbrun -ErrorAction SilentlyContinue) {
-        Write-Host "A backup is running at $(get-date). Waiting 1 minute."
-        start-sleep 60
-    }
-    Write-Host "No backup is running, continuing update"
+	#Designate Registry key to read version number from
+	$Global:RegKeyVer = "hklm:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ShadowSnap"
+	#Designate name of agent
+	$Global:agent = "ShadowSnap Agent"
+	#Designate download location
+	$Global:download = "http://download.ambitionsgroup.com/shadowsnap-installer.exe"
+	#Designate save location
+	$Global:installer = "C:\Ambitions\shadowsnap-installer.exe"
+	#Designate which services to work with
+	$Global:services = @("ShadowProtect Service", "StorageCraft ImageReady", "StorageCraft Raw Agent", "StorageCraft Shadow Copy Provider")
+	#Website to look at for the latest version number
+	$Global:OnlineDattoVersion = $OnlineDattoAgent.ShadowSnapAgent.Version
+	$Global:InstalledVer = (Get-ItemProperty "$RegKeyVer" -Name "DisplayVersion" -ErrorAction SilentlyContinue).DisplayVersion
+	Function DattoPattern {Set-Variable -Name OnlineDattoversion -Value ((Select-String -Path "C:\Ambitions\dattowebver.txt" -Pattern "current version")[-1]) -Scope Global}
+	#Wait to continue if a backup is running
+	While (Get-Process sbrun -ErrorAction SilentlyContinue) {
+		Write-Host "A backup is running at $(get-date). Waiting 1 minute."
+		start-sleep 60
+	}
+	Write-Host "No backup is running, continuing update"
 }
 
 Function Set-DattoAgentVariables {
-    #Designate Registry key to read version number from
-    $Global:FileVer = "C:\Program Files\Datto\Datto Windows Agent\DattoBackupAgent.exe"
-    #Designate name of agent
-    $Global:agent = "Datto Windows Agent"
-    #Designate download location
-    $Global:download = "https://cf-dl.datto.com/dwa/DattoWindowsAgent.exe"
-    #Designate save location
-    $Global:installer = "C:\Ambitions\DattoWindowsAgent.exe"
-    #Designate which services to work with
-    $Global:services = @("Datto Backup Agent Service")
-    #Website to look at for the latest version number
-    $Global:OnlineDattoVersion = $OnlineDattoAgent.DattoWindowsAgent.Version
-    $Global:InstalledVer = (Get-Item $FileVer -ErrorAction SilentlyContinue).VersionInfo.ProductVersion
-    Function DattoPattern {Set-Variable -Name OnlineDattoversion -Value ((Select-String -Path "C:\Ambitions\dattowebver.txt" -Pattern "<strong>Agent Version")[0]) -Scope Global}
-    #Wait to continue if a backup is running
-    While (vssadmin list writers | Select-String "Waiting" | Select-String "for responses." -NotMatch) {
-        Write-Host "A backup is running at $(get-date). Waiting 1 minute."; Start-Sleep 60
-    }
-    Write-Host "No backup is running, continuing update"
+	#Designate Registry key to read version number from
+	$Global:FileVer = "C:\Program Files\Datto\Datto Windows Agent\DattoBackupAgent.exe"
+	#Designate name of agent
+	$Global:agent = "Datto Windows Agent"
+	#Designate download location
+	$Global:download = "https://cf-dl.datto.com/dwa/DattoWindowsAgent.exe"
+	#Designate save location
+	$Global:installer = "C:\Ambitions\DattoWindowsAgent.exe"
+	#Designate which services to work with
+	$Global:services = @("Datto Backup Agent Service")
+	#Website to look at for the latest version number
+	$Global:OnlineDattoVersion = $OnlineDattoAgent.DattoWindowsAgent.Version
+	$Global:InstalledVer = (Get-Item $FileVer -ErrorAction SilentlyContinue).VersionInfo.ProductVersion
+	Function DattoPattern {Set-Variable -Name OnlineDattoversion -Value ((Select-String -Path "C:\Ambitions\dattowebver.txt" -Pattern "<strong>Agent Version")[0]) -Scope Global}
+	#Wait to continue if a backup is running
+	While (vssadmin list writers | Select-String "Waiting" | Select-String "for responses." -NotMatch) {
+		Write-Host "A backup is running at $(get-date). Waiting 1 minute."; Start-Sleep 60
+	}
+	Write-Host "No backup is running, continuing update"
 }
 
 Function Uninstall-ShadowSnap {
-    If (-Not (Get-Command "pwsh" -ErrorAction SilentlyContinue)) {
-        Invoke-WebRequest tinyurl.com/get-atgps -UseBasicParsing | Invoke-Expression
-        Update-PWSH
-    }
+	If (-Not (Get-Command "pwsh" -ErrorAction SilentlyContinue)) {
+		Invoke-WebRequest tinyurl.com/get-atgps -UseBasicParsing | Invoke-Expression
+		Update-PWSH
+	}
 
-    $ShadowProtectFolder = "${env:ProgramFiles(x86)}\StorageCraft\ShadowProtect"
+	$ShadowProtectFolder = "${env:ProgramFiles(x86)}\StorageCraft\ShadowProtect"
 
-    If (Get-Service -Name vsnapvss -ErrorAction SilentlyContinue) {
-        Stop-Service -Name VSNAPVSS -Force
-        pwsh -NoProfile -Command {Remove-Service -Name VSNAPVSS -Verbose}
-    }
+	If (Get-Service -Name vsnapvss -ErrorAction SilentlyContinue) {
+		Stop-Service -Name VSNAPVSS -Force
+		pwsh -NoProfile -Command {Remove-Service -Name VSNAPVSS -Verbose}
+	}
 
-    If (Test-Path -Path $ShadowProtectFolder -PathType Container) {
-        $vssinsDownloadPath = "$ShadowProtectFolder\vssins64.exe"
-        If (!(Get-Item $vssinsDownloadPath -ErrorAction SilentlyContinue)) {
-            $vssinsURL = "http://download.ambitionsgroup.com/Software/ShadowProtect_Uninstall_Tools/vssins64.exe"
-            (New-Object System.Net.WebClient).DownloadFile($vssinsURL, $vssinsDownloadPath)
-        }
-        & $vssinsDownloadPath -u
+	If (Test-Path -Path $ShadowProtectFolder -PathType Container) {
+		$vssinsDownloadPath = "$ShadowProtectFolder\vssins64.exe"
+		If (!(Get-Item $vssinsDownloadPath -ErrorAction SilentlyContinue)) {
+			$vssinsURL = "http://download.ambitionsgroup.com/Software/ShadowProtect_Uninstall_Tools/vssins64.exe"
+			(New-Object System.Net.WebClient).DownloadFile($vssinsURL, $vssinsDownloadPath)
+		}
+		& $vssinsDownloadPath -u
 
-        If (Get-Service -Name "StorageCraft ImageReady" -ErrorAction SilentlyContinue) {
-            Stop-Service -Name "StorageCraft ImageReady" -Force
-            pwsh -NoProfile -Command {Remove-Service -Name "StorageCraft ImageReady" -Verbose}
-            & "$ShadowProtectFolder\ShadowProtectSvc.exe" -UnregServer
-        }
-        regsvr32 /u /s "$ShadowProtectFolder\sbimgmnt.dll"
-    }
+		If (Get-Service -Name "StorageCraft ImageReady" -ErrorAction SilentlyContinue) {
+			Stop-Service -Name "StorageCraft ImageReady" -Force
+			pwsh -NoProfile -Command {Remove-Service -Name "StorageCraft ImageReady" -Verbose}
+			& "$ShadowProtectFolder\ShadowProtectSvc.exe" -UnregServer
+		}
+		regsvr32 /u /s "$ShadowProtectFolder\sbimgmnt.dll"
+	}
 
-    If (Test-Path -Path "HKLM:\SYSTEM\CurrentControlSet\services\Storagecraft Imageready" -PathType Container) {
-        Set-Location -Path "HKLM:\SYSTEM\CurrentControlSet\services\Storagecraft Imageready"
-        New-ItemProperty . -name DeleteFlag -value 1 -PropertyType "DWord" -Force
-    }
+	If (Test-Path -Path "HKLM:\SYSTEM\CurrentControlSet\services\Storagecraft Imageready" -PathType Container) {
+		Set-Location -Path "HKLM:\SYSTEM\CurrentControlSet\services\Storagecraft Imageready"
+		New-ItemProperty . -name DeleteFlag -value 1 -PropertyType "DWord" -Force
+	}
 
-    If (Test-Path -Path "HKLM:\SYSTEM\CurrentControlSet\services\sbmount" -PathType Container) {
-        Set-Location -Path "HKLM:\SYSTEM\CurrentControlSet\services\sbmount"
-        New-ItemProperty . -name DeleteFlag -value 1 -PropertyType "DWord" -Force
-        Set-ItemProperty . -name "Start" -value 4
-    }
+	If (Test-Path -Path "HKLM:\SYSTEM\CurrentControlSet\services\sbmount" -PathType Container) {
+		Set-Location -Path "HKLM:\SYSTEM\CurrentControlSet\services\sbmount"
+		New-ItemProperty . -name DeleteFlag -value 1 -PropertyType "DWord" -Force
+		Set-ItemProperty . -name "Start" -value 4
+	}
 
-    Set-Location -Path ${env:ProgramFiles(x86)}
+	Set-Location -Path ${env:ProgramFiles(x86)}
 
-    If (Test-Path -Path $ShadowProtectFolder -PathType Container) {
-        $stcinstDownloadPath = "$ShadowProtectFolder\stcinst.exe"
-        If (!(Get-Item $stcinstDownloadPath -ErrorAction SilentlyContinue)) {
-            $stcinstURL = "http://download.ambitionsgroup.com/Software/ShadowProtect_Uninstall_Tools/stcinst.exe"
-            (New-Object System.Net.WebClient).DownloadFile($stcinstURL, $stcinstDownloadPath)
-        }
-        & $stcinstDownloadPath -u
-    }
-    If (!(Test-Path HKCR:)) { New-PSDrive -Name HKCR -PSProvider Registry -Root HKEY_CLASSES_ROOT }
-    $ShadowRegistry = @(
-        "HKCR:\CLSID\{1BF3E52E-FEB4-4162-ACD5-A8D3A1E9D6BC}"
-        "HKCR:\CLSID\{E4EB5095-F587-4159-A1D8-2710692FD243}"
-        "HKCR:\.spf"
-        "HKCR:\.spi"
-        "HKCR:\spf.sbmntwiz"
-        "HKCR:\spi.sbmntwiz"
-        "HKCR:\TypeLib\{C24C31A9-EC6E-4102-8350-5626094EB481}"
-        "HKCR:\Wow6432Node\TypeLib\{C24C31A9-EC6E-4102-8350-5626094EB481}"
-        "HKLM:\SOFTWARE\Classes\CLSID\{1BF3E52E-FEB4-4162-ACD5-A8D3A1E9D6BC}"
-        "HKLM:\SOFTWARE\Classes\CLSID\{E4EB5095-F587-4159-A1D8-2710692FD243}"
-        "HKLM:\SOFTWARE\Classes\spf.sbmntwiz"
-        "HKLM:\SOFTWARE\Classes\spi.sbmntwiz"
-        "HKLM:\SOFTWARE\Classes\TypeLib\{C24C31A9-EC6E-4102-8350-5626094EB481}"
-        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ShadowSnap"
-        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{26F74578-1285-4C09-80C0-29106C357BFD}"
-        "HKLM:\SOFTWARE\Wow6432Node\Classes\TypeLib\{C24C31A9-EC6E-4102-8350-5626094EB481}"
-        "HKLM:\SYSTEM\ControlSet001\Services\EventLog\Application\ShadowProtectSvc"
-        "HKLM:\SYSTEM\ControlSet001\Services\EventLog\Application\VSNAPVSS"
-        "HKLM:\SYSTEM\ControlSet001\Services\stc_raw_agent"
-        "HKLM:\SYSTEM\ControlSet001\Services\StorageCraft ImageReady"
-        "HKLM:\SYSTEM\ControlSet001\Services\VSNAPVSS"
-        "HKLM:\SYSTEM\ControlSet002\Services\EventLog\Application\ShadowProtectSvc"
-        "HKLM:\SYSTEM\ControlSet002\Services\EventLog\Application\VSNAPVSS"
-        "HKLM:\SYSTEM\ControlSet002\Services\stc_raw_agent"
-        "HKLM:\SYSTEM\ControlSet002\Services\StorageCraft ImageReady"
-        "HKLM:\SYSTEM\ControlSet002\Services\VSNAPVSS"
-        "HKLM:\SYSTEM\CurrentControlSet\Services\EventLog\Application\ShadowProtectSvc"
-        "HKLM:\SYSTEM\CurrentControlSet\Services\EventLog\Application\VSNAPVSS"
-        "HKLM:\SYSTEM\CurrentControlSet\Services\stc_raw_agent"
-        "HKLM:\SYSTEM\CurrentControlSet\Services\StorageCraft ImageReady"
-        "HKLM:\SYSTEM\CurrentControlSet\Services\VSNAPVSS"
-        "HKLM:\SYSTEM\CurrentControlSet\Control\Class\{0A2D3D86-E1F2-4165-AB5C-E63D32C0BDE}"
-        "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ShadowProtect"
-        "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\ShadowProtect"
-        "HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\{26F74578-1285-4C09-80C0-29106C357BFD}"
-    )
+	If (Test-Path -Path $ShadowProtectFolder -PathType Container) {
+		$stcinstDownloadPath = "$ShadowProtectFolder\stcinst.exe"
+		If (!(Get-Item $stcinstDownloadPath -ErrorAction SilentlyContinue)) {
+			$stcinstURL = "http://download.ambitionsgroup.com/Software/ShadowProtect_Uninstall_Tools/stcinst.exe"
+			(New-Object System.Net.WebClient).DownloadFile($stcinstURL, $stcinstDownloadPath)
+		}
+		& $stcinstDownloadPath -u
+	}
+	If (!(Test-Path HKCR:)) { New-PSDrive -Name HKCR -PSProvider Registry -Root HKEY_CLASSES_ROOT }
+	$ShadowRegistry = @(
+		"HKCR:\CLSID\{1BF3E52E-FEB4-4162-ACD5-A8D3A1E9D6BC}"
+		"HKCR:\CLSID\{E4EB5095-F587-4159-A1D8-2710692FD243}"
+		"HKCR:\.spf"
+		"HKCR:\.spi"
+		"HKCR:\spf.sbmntwiz"
+		"HKCR:\spi.sbmntwiz"
+		"HKCR:\TypeLib\{C24C31A9-EC6E-4102-8350-5626094EB481}"
+		"HKCR:\Wow6432Node\TypeLib\{C24C31A9-EC6E-4102-8350-5626094EB481}"
+		"HKLM:\SOFTWARE\Classes\CLSID\{1BF3E52E-FEB4-4162-ACD5-A8D3A1E9D6BC}"
+		"HKLM:\SOFTWARE\Classes\CLSID\{E4EB5095-F587-4159-A1D8-2710692FD243}"
+		"HKLM:\SOFTWARE\Classes\spf.sbmntwiz"
+		"HKLM:\SOFTWARE\Classes\spi.sbmntwiz"
+		"HKLM:\SOFTWARE\Classes\TypeLib\{C24C31A9-EC6E-4102-8350-5626094EB481}"
+		"HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ShadowSnap"
+		"HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\{26F74578-1285-4C09-80C0-29106C357BFD}"
+		"HKLM:\SOFTWARE\Wow6432Node\Classes\TypeLib\{C24C31A9-EC6E-4102-8350-5626094EB481}"
+		"HKLM:\SYSTEM\ControlSet001\Services\EventLog\Application\ShadowProtectSvc"
+		"HKLM:\SYSTEM\ControlSet001\Services\EventLog\Application\VSNAPVSS"
+		"HKLM:\SYSTEM\ControlSet001\Services\stc_raw_agent"
+		"HKLM:\SYSTEM\ControlSet001\Services\StorageCraft ImageReady"
+		"HKLM:\SYSTEM\ControlSet001\Services\VSNAPVSS"
+		"HKLM:\SYSTEM\ControlSet002\Services\EventLog\Application\ShadowProtectSvc"
+		"HKLM:\SYSTEM\ControlSet002\Services\EventLog\Application\VSNAPVSS"
+		"HKLM:\SYSTEM\ControlSet002\Services\stc_raw_agent"
+		"HKLM:\SYSTEM\ControlSet002\Services\StorageCraft ImageReady"
+		"HKLM:\SYSTEM\ControlSet002\Services\VSNAPVSS"
+		"HKLM:\SYSTEM\CurrentControlSet\Services\EventLog\Application\ShadowProtectSvc"
+		"HKLM:\SYSTEM\CurrentControlSet\Services\EventLog\Application\VSNAPVSS"
+		"HKLM:\SYSTEM\CurrentControlSet\Services\stc_raw_agent"
+		"HKLM:\SYSTEM\CurrentControlSet\Services\StorageCraft ImageReady"
+		"HKLM:\SYSTEM\CurrentControlSet\Services\VSNAPVSS"
+		"HKLM:\SYSTEM\CurrentControlSet\Control\Class\{0A2D3D86-E1F2-4165-AB5C-E63D32C0BDE}"
+		"HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\ShadowProtect"
+		"HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\ShadowProtect"
+		"HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall\{26F74578-1285-4C09-80C0-29106C357BFD}"
+	)
 
-    If (!(Test-Path HKCR:)) { New-PSDrive -Name HKCR -PSProvider Registry -Root HKEY_CLASSES_ROOT }
-    $ShadowRegistry | ForEach-Object {
-        Write-Host $_
-        If (Test-Path $_ -ErrorAction SilentlyContinue) {
-            Remove-Item -Recurse -Path $_
-        }
-    }
-    Remove-ItemProperty -Path "HKLM:\SYSTEM\ControlSet001\Control\Session Manager\Environment" -Name "SS_INSTALL_PATH" -ErrorAction SilentlyContinue
-    Remove-ItemProperty -Path "HKLM:\SYSTEM\ControlSet002\Control\Session Manager\Environment" -Name "SS_INSTALL_PATH" -ErrorAction SilentlyContinue
-    Remove-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" -Name "SS_INSTALL_PATH" -ErrorAction SilentlyContinue
+	If (!(Test-Path HKCR:)) { New-PSDrive -Name HKCR -PSProvider Registry -Root HKEY_CLASSES_ROOT }
+	$ShadowRegistry | ForEach-Object {
+		Write-Host $_
+		If (Test-Path $_ -ErrorAction SilentlyContinue) {
+			Remove-Item -Recurse -Path $_
+		}
+	}
+	Remove-ItemProperty -Path "HKLM:\SYSTEM\ControlSet001\Control\Session Manager\Environment" -Name "SS_INSTALL_PATH" -ErrorAction SilentlyContinue
+	Remove-ItemProperty -Path "HKLM:\SYSTEM\ControlSet002\Control\Session Manager\Environment" -Name "SS_INSTALL_PATH" -ErrorAction SilentlyContinue
+	Remove-ItemProperty -Path "HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment" -Name "SS_INSTALL_PATH" -ErrorAction SilentlyContinue
 
-    Remove-Item -Recurse $ShadowProtectFolder -ErrorAction SilentlyContinue
+	Remove-Item -Recurse $ShadowProtectFolder -ErrorAction SilentlyContinue
 }
 
 
 
 Function Unblock-Install {
-    #Stop Services
-    Foreach ($service in $services) {
-        Write-Host "Stopping service $service"
-        Stop-Service -displayname "$service" -Force -ErrorAction SilentlyContinue
-    }
-    #Let services have time to fully stop
-    Start-Sleep -s 5
-    #Kill any hung services
-    Stop-Process -processname raw_agent_svc, ShadowProtect, ShadowProtectSvc, vsnapvss, DattoBackupAgent -Force -ErrorAction SilentlyContinue
+	#Stop Services
+	Foreach ($service in $services) {
+		Write-Host "Stopping service $service"
+		Stop-Service -displayname "$service" -Force -ErrorAction SilentlyContinue
+	}
+	#Let services have time to fully stop
+	Start-Sleep -s 5
+	#Kill any hung services
+	Stop-Process -processname raw_agent_svc, ShadowProtect, ShadowProtectSvc, vsnapvss, DattoBackupAgent -Force -ErrorAction SilentlyContinue
 }
 
 Function Get-UpdateDownload {
-    #Download update
-    Write-Host "Downloading the update from $download to $installer"
-    (New-Object System.Net.WebClient).DownloadFile("$download", "$installer")
+	#Download update
+	Write-Host "Downloading the update from $download to $installer"
+	(New-Object System.Net.WebClient).DownloadFile("$download", "$installer")
 
-    #Test if the new and old files match
-    If (Test-Path "$installer.old") {
-        If ((Get-FileHash "$installer").hash  -eq (Get-FileHash "$installer.old").hash) {
-            Write-Host "This update has already been downloaded, canceling update."
-            Remove-Item -path "$installer.old"
-            #Exit the script
-            #Stop-transcript
-        } Else {
-            Write-Host "The download is newer, proceeding with update."
-            Remove-Item -path "$installer.old"
-        }
-    }
+	#Test if the new and old files match
+	If (Test-Path "$installer.old") {
+		If ((Get-FileHash "$installer").hash  -eq (Get-FileHash "$installer.old").hash) {
+			Write-Host "This update has already been downloaded, canceling update."
+			Remove-Item -path "$installer.old"
+			#Exit the script
+			#Stop-transcript
+		} Else {
+			Write-Host "The download is newer, proceeding with update."
+			Remove-Item -path "$installer.old"
+		}
+	}
 }
 Function Update-Agent {
-    #Install agent silently (wait till finished)
-    Write-Host Installing the new update
-    & "$installer" /S /norestart
-    # Let installer have time to fully wrap up
-    Start-Sleep -s 30
-    #Configure services
-    Foreach ($service in $services) {
-        Write-Host "Setting auto-restart for service $service"
-        #Get service name from Display Name
-        $servicename = (Get-Service -DisplayName "$service" | Format-Table -hidetableheaders Name | Out-String)
-        $servicename = $servicename -replace '(^\s+|\s+$)','' -replace '\s+',' '
-        #Set services to auto restart if stopped
-        sc.exe failure $servicename actions= restart/180000/restart/180000/""/180000 reset= 86400
-        #Start services
-        Write-Host "Starting service $service"
-        Start-Service -displayname "$service"
-    }
-    #Show if services are running
-    Foreach ($service in $services) {
-        Get-Service -displayname "$service"
-    }
+	#Install agent silently (wait till finished)
+	Write-Host Installing the new update
+	& "$installer" /S /norestart
+	# Let installer have time to fully wrap up
+	Start-Sleep -s 30
+	#Configure services
+	Foreach ($service in $services) {
+		Write-Host "Setting auto-restart for service $service"
+		#Get service name from Display Name
+		$servicename = (Get-Service -DisplayName "$service" | Format-Table -hidetableheaders Name | Out-String)
+		$servicename = $servicename -replace '(^\s+|\s+$)','' -replace '\s+',' '
+		#Set services to auto restart if stopped
+		sc.exe failure $servicename actions= restart/180000/restart/180000/""/180000 reset= 86400
+		#Start services
+		Write-Host "Starting service $service"
+		Start-Service -displayname "$service"
+	}
+	#Show if services are running
+	Foreach ($service in $services) {
+		Get-Service -displayname "$service"
+	}
 }
 
 Function Install-DWAAgent {
-    #Install agent silently (wait till finished)
-    Write-Host Installing the new update
-    & "$installer" /install /quiet /norestart
-    # Let installer have time to fully wrap up
-    Start-Sleep -s 30
-    #Configure services
-    Foreach ($service in $services) {
-        Write-Host "Setting auto-restart for service $service"
-        #Get service name from Display Name
-        $servicename = (Get-Service -DisplayName "$service" | Format-Table -hidetableheaders Name | Out-String)
-        $servicename = $servicename -replace '(^\s+|\s+$)','' -replace '\s+',' '
-        #Set services to auto restart if stopped
-        sc.exe failure $servicename actions= restart/180000/restart/180000/""/180000 reset= 86400
-        #Start services
-        Write-Host "Starting service $service"
-        Start-Service -displayname "$service"
-    }
-    #Show if services are running
-    Foreach ($service in $services) {
-        Get-Service -displayname "$service"
-    }
+	#Install agent silently (wait till finished)
+	Write-Host Installing the new update
+	& "$installer" /install /quiet /norestart
+	# Let installer have time to fully wrap up
+	Start-Sleep -s 30
+	#Configure services
+	Foreach ($service in $services) {
+		Write-Host "Setting auto-restart for service $service"
+		#Get service name from Display Name
+		$servicename = (Get-Service -DisplayName "$service" | Format-Table -hidetableheaders Name | Out-String)
+		$servicename = $servicename -replace '(^\s+|\s+$)','' -replace '\s+',' '
+		#Set services to auto restart if stopped
+		sc.exe failure $servicename actions= restart/180000/restart/180000/""/180000 reset= 86400
+		#Start services
+		Write-Host "Starting service $service"
+		Start-Service -displayname "$service"
+	}
+	#Show if services are running
+	Foreach ($service in $services) {
+		Get-Service -displayname "$service"
+	}
 }
 
 Function Get-NewVersionNumber {
-    #Get Version number
-    If ($agent -eq "ShadowSnap Agent") {
-        $Global:NewInstalledVer = (Get-ItemProperty "$RegKeyVer" -Name "DisplayVersion" -ErrorAction SilentlyContinue).DisplayVersion
-        $NewInstalledVer = $NewInstalledVer -replace '(^\s+|\s+$)','' -replace '\s+',' '
-    }
-    If ($agent -eq "Datto Windows Agent") {
-        $Global:NewInstalledVer = (Get-Item $FileVer).VersionInfo.ProductVersion
-        $NewInstalledVer = $NewInstalledVer -replace '(^\s+|\s+$)','' -replace '\s+',' '
-    }
+	#Get Version number
+	If ($agent -eq "ShadowSnap Agent") {
+		$Global:NewInstalledVer = (Get-ItemProperty "$RegKeyVer" -Name "DisplayVersion" -ErrorAction SilentlyContinue).DisplayVersion
+		$NewInstalledVer = $NewInstalledVer -replace '(^\s+|\s+$)','' -replace '\s+',' '
+	}
+	If ($agent -eq "Datto Windows Agent") {
+		$Global:NewInstalledVer = (Get-Item $FileVer).VersionInfo.ProductVersion
+		$NewInstalledVer = $NewInstalledVer -replace '(^\s+|\s+$)','' -replace '\s+',' '
+	}
 }
 
 #Determine if Shadowsnap agent is installed
 If (Get-Service "StorageCraft Raw Agent" -ErrorAction SilentlyContinue)
 {
-    Set-ShadowSnapVariables
+	Set-ShadowSnapVariables
 }
 
 #Determine if Datto Windows agent is installed
 If (Get-Service "Datto Backup Agent Service" -ErrorAction SilentlyContinue)
 {
-    Set-DattoAgentVariables
+	Set-DattoAgentVariables
 }
 
 #If neither agent is installed, EXIT!
 If (!$agent) {
-    Write-Host "No agent is installed, EXITING!"
-    #Exit the script
-    #Stop-transcript
+	Write-Host "No agent is installed, EXITING!"
+	#Exit the script
+	#Stop-transcript
 } ElseIf ($agent -match "ShadowSnap Agent") {
-    Write-Host -ForegroundColor Red 'The'$agent' is deprecated and will be updated to use the Datto Windows Agent.'
-    #Log the attempt
-    $date = Get-Date
-    $date = $date.ToShortDateString()
-    Add-Content C:\Ambitions\DattoUpdateLog.txt "$date | Scripted | The $agent is deprecated and will be updated to use the Datto Windows Agent. Check DattoUpdate.log"
-    Unblock-Install
-    Get-VSSWriter | Restart-VSSWriter
-    Uninstall-ShadowSnap
-    Get-VSSWriter | Restart-VSSWriter
-    Uninstall-ShadowSnap
-    Get-VSSWriter | Restart-VSSWriter
-    Set-DattoAgentVariables
-    Unblock-Install
-    Get-UpdateDownload
-    Update-Agent
+	Write-Host -ForegroundColor Red 'The'$agent' is deprecated and will be updated to use the Datto Windows Agent.'
+	#Log the attempt
+	$date = Get-Date
+	$date = $date.ToShortDateString()
+	Add-Content C:\Ambitions\DattoUpdateLog.txt "$date | Scripted | The $agent is deprecated and will be updated to use the Datto Windows Agent. Check DattoUpdate.log"
+	Unblock-Install
+	Get-VSSWriter | Restart-VSSWriter
+	Uninstall-ShadowSnap
+	Get-VSSWriter | Restart-VSSWriter
+	Uninstall-ShadowSnap
+	Get-VSSWriter | Restart-VSSWriter
+	Set-DattoAgentVariables
+	Unblock-Install
+	Get-UpdateDownload
+	Update-Agent
 
-    Write-Host "Datto Windows agent has been installed over the ShadowSnap Agent."
-    #Log the major system Change
-    $date = Get-Date
-    $date = $date.ToShortDateString()
-    Add-Content C:\Ambitions\DattoUpdateLog.txt "$date | Scripted | Datto Windows agent version $NewInstalledVer has been installed over ShadowSnap Agent version $InstalledVer. Check DattoUpdate.log"
+	Write-Host "Datto Windows agent has been installed over the ShadowSnap Agent."
+	#Log the major system Change
+	$date = Get-Date
+	$date = $date.ToShortDateString()
+	Add-Content C:\Ambitions\DattoUpdateLog.txt "$date | Scripted | Datto Windows agent version $NewInstalledVer has been installed over ShadowSnap Agent version $InstalledVer. Check DattoUpdate.log"
 
-    #Exit the script
-    Stop-transcript
+	#Exit the script
+	Stop-transcript
 
 } Else {
-    If ($InstalledVer -match $OnlineDattoVersion) {
-        Write-Host -ForegroundColor Green 'The'$agent' version '$InstalledVer' is currently installed and it is up to date'
-        #Log the attempt
-        $date = Get-Date
-        $date = $date.ToShortDateString()
-        Add-Content C:\Ambitions\DattoUpdateLog.txt "$date | Scripted | The $agent is already up to date with version $InstalledVer. Check DattoUpdate.log"
+	If ($InstalledVer -match $OnlineDattoVersion) {
+		Write-Host -ForegroundColor Green 'The'$agent' version '$InstalledVer' is currently installed and it is up to date'
+		#Log the attempt
+		$date = Get-Date
+		$date = $date.ToShortDateString()
+		Add-Content C:\Ambitions\DattoUpdateLog.txt "$date | Scripted | The $agent is already up to date with version $InstalledVer. Check DattoUpdate.log"
 
-        #Exit the script
-        Break
-        #Stop-transcript
-    } Else {
-        Write-Host -ForegroundColor Red 'The'$agent' Version '$InstalledVer' is currently installed and it is NOT up to date. The latest version available is '$OnlineDattoVersion
+		#Exit the script
+		Break
+		#Stop-transcript
+	} Else {
+		Write-Host -ForegroundColor Red 'The'$agent' Version '$InstalledVer' is currently installed and it is NOT up to date. The latest version available is '$OnlineDattoVersion
 
-        Unblock-Install
-        Get-UpdateDownload
-        Update-Agent
-        Get-NewVersionNumber
+		Unblock-Install
+		Get-UpdateDownload
+		Update-Agent
+		Get-NewVersionNumber
 
-        Write-Host $agent" version $NewInstalledVer has been installed over version $InstalledVer"
-        #Log the major system Change
-        $date = Get-Date
-        $date = $date.ToShortDateString()
-        Add-Content C:\Ambitions\DattoUpdateLog.txt "$date | Scripted | The $agent was updated from version $InstalledVer to $NewInstalledVer. Check DattoUpdate.log"
+		Write-Host $agent" version $NewInstalledVer has been installed over version $InstalledVer"
+		#Log the major system Change
+		$date = Get-Date
+		$date = $date.ToShortDateString()
+		Add-Content C:\Ambitions\DattoUpdateLog.txt "$date | Scripted | The $agent was updated from version $InstalledVer to $NewInstalledVer. Check DattoUpdate.log"
 
-        #Exit the script
-        Stop-transcript
-    }
+		#Exit the script
+		Stop-transcript
+	}
 }
