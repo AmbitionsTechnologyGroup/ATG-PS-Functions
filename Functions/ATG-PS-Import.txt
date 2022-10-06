@@ -575,23 +575,51 @@ Function Import-WindowsInstallerDrivers {
 
 	#Get Drivers
 	Write-Host "Downloading drivers from Intel"
-	$SourcePage = (Invoke-WebRequest -Uri "https://www.intel.com/content/www/us/en/download/19512/intel-rapid-storage-technology-driver-installation-software-with-intel-optane-memory-10th-and-11th-gen-platforms.html" -UseBasicParsing).Content -split '\n'
-	$PageLinkLines = ($SourcePage | Select-String -SimpleMatch "VMD.zip").Line
-	$URLStrings = @()
-	$PageLinkLines | ForEach-Object {
-		$URLStrings += ((Select-String '(http[s]?)(:\/\/)([^\s,]+)(?=")' -Input $($_.Replace(' ','%20'))).Matches.Value)
-	}
-	$URLStrings = $URLStrings | Where-Object {$_ -ne $Null}
 	$DownloadedFiles = @()
-	$URLStrings | ForEach-Object {
-		$OutFile = $($DriversDir + "\" + $(Split-Path $_.Replace('%20','') -Leaf))
-		$DownloadedFiles += $OutFile
-		Invoke-WebRequest -Uri $_ -UseBasicParsing -OutFile $OutFile
-		Clear-Variable OutFile -Force -ErrorAction SilentlyContinue
+	$URLs = @(
+		"https://www.intel.com/content/www/us/en/download/19512/intel-rapid-storage-technology-driver-installation-software-with-intel-optane-memory-10th-and-11th-gen-platforms.html"
+		"https://www.intel.com/content/www/us/en/download/720755/intel-rapid-storage-technology-driver-installation-software-with-intel-optane-memory-11th-and-12th-gen-platforms.html"
+	)
+	
+	$URLs | ForEach-Object {
+		$SourcePage = (Invoke-WebRequest -Uri $_ -UseBasicParsing).Content -split '\n'
+		$PageLinkLines = ($SourcePage | Select-String -SimpleMatch ".zip"| Select-String -SimpleMatch "Licenses" -NotMatch).Line
+		New-Variable -Name URLStrings -Value @() -Force
+		$PageLinkLines | ForEach-Object {
+			$URLStrings += ((Select-String '(http[s]?)(:\/\/)([^\s,]+)(?=")' -Input $($_.Replace(' ','%20'))).Matches.Value)
+		}
+		$URLStrings = $URLStrings | Where-Object {$_ -ne $Null}
+
+		$URLStrings | ForEach-Object {
+			$OutFile = $($DriversDir + "\" + $(Split-Path $_.Replace('%20','') -Leaf))
+			$DownloadedFiles += $OutFile
+			Invoke-WebRequest -Uri $_ -UseBasicParsing -OutFile $OutFile
+			Clear-Variable OutFile -Force -ErrorAction SilentlyContinue
+		}
+		Clear-Variable URLStrings -Force -ErrorAction SilentlyContinue
 	}
 
 	$DownloadedFiles | ForEach-Object {
 		Expand-Archive -Path $_ -DestinationPath $DriversDir -Force
+	}
+
+	Write-Host "Downloading drivers from Dell"
+	[uri]$DellUrls = "https://dl.dell.com/FOLDER08107340M/4/Intel-Rapid-Storage-Technology-Driver-and-Application_0F5G4_WIN64_19.2.0.1003_A01_03.EXE"
+
+	$DellUrls | ForEach-Object {
+		#Isolate file name from URL
+		[string]$File = $_.Segments[-1]
+		#Add a '\' to the end of the folder only if needed.
+		If ($DriversDir -notmatch '\\$'){	$DriversDir += '\'}
+		#Create full download path
+		[string]$FilePath = $DriversDir + $File
+		#Enabling SSL"
+		[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192
+		Write-Host "Downloading $_"
+		(New-Object System.Net.WebClient).DownloadFile($_, $FilePath)
+		$ExtractPath = $DriversDir + $([System.IO.Path]::GetFileNameWithoutExtension($FilePath))
+		& $FilePath /s /e=$ExtractPath
+		Clear-Variable OutFile -Force -ErrorAction SilentlyContinue
 	}
 
 	#Get USB drive WIM
