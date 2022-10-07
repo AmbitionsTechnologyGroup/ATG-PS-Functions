@@ -633,8 +633,8 @@ Function Import-WindowsInstallerDrivers {
 		} Until (Test-Path -Path $BootWimPath -ErrorAction SilentlyContinue)
 	}
 
-	#Move File from USB to local Computer
-	Write-Host "Copying installer to local computer"
+	#Move Boot File from USB to local Computer
+	Write-Host "Copying Boot.wim to local computer for processing"
 	$WIMBootWorkingFile = $WIMBootDir + "\boot.wim"
 	Write-Host "Copy-Item -Path $BootWimPath -Destination $WIMBootWorkingFile -Force"
 	Copy-Item -Path $BootWimPath -Destination $WIMBootWorkingFile -Force
@@ -649,7 +649,65 @@ Function Import-WindowsInstallerDrivers {
 		Dismount-WindowsImage -Path $MountDir -Save
 		Start-Sleep 1
 	}
-	Write-Host "Copying installer to USB drive"
+	Write-Host "Copying completed Boot.wim back to USB drive"
 	Write-Host "Copy-Item -Path $WIMBootWorkingFile -Destination $BootWimPath -Force"
 	Copy-Item -Path $WIMBootWorkingFile -Destination $BootWimPath -Force
+
+	#Move File from USB to local Computer
+	$Global:InstallEsdPath = $($USBDriveLetter + ":\sources\install.esd")
+	$Global:InstallWimPath = $($USBDriveLetter + ":\sources\install.wim")
+	Write-Host "Copying install.(esd/wim) to local computer for processing"
+	$EsdInstallWorkingFile = $WimInstallDir + "\install.esd"
+	$WIMInstallWorkingFile = $WimInstallDir + "\install.wim"
+
+	#Test for different file types
+	If (Test-Path -Path $InstallWimPath -ErrorAction SilentlyContinue) {
+		Write-Host "Copy-Item -Path $InstallWimPath -Destination $WIMInstallWorkingFile -Force"
+		Copy-Item -Path $InstallWimPath -Destination $WIMInstallWorkingFile -Force
+	} Else {
+		$ConverToEsd = $True
+		Write-Host "Copy-Item -Path $InstallEsdPath -Destination $EsdInstallWorkingFile -Force"
+		Copy-Item -Path $InstallEsdPath -Destination $EsdInstallWorkingFile -Force
+		$Image = (Get-WindowsImage -ImagePath $EsdInstallWorkingFile | Where-Object -Property ImageName -notmatch " N" | Where-Object -Property ImageName -notmatch "Education" | Where-Object -Property ImageName -notmatch "Single Language")
+		Write-Host "Converting ESD file to WIM file"
+		$Image | ForEach-Object {
+			Write-Host "Exporting Image $($_.ImageIndex) of $($Image.count)Dism"
+			<#Try { #Dont use the Powershell equivalent of "dism /export-image" as it'll cause errors when importing drivers.
+				Export-WindowsImage -SourceImagePath $EsdInstallWorkingFile -SourceIndex $($_.ImageIndex) -DestinationImagePath $WIMInstallWorkingFile -CheckIntegrity
+			} Catch { #>
+				dism /export-image /SourceImageFile:$EsdInstallWorkingFile /SourceIndex:$($_.ImageIndex) /DestinationImageFile:$WIMInstallWorkingFile /Compress:max /CheckIntegrity
+			#}
+		}
+	}
+
+	$Image = (Get-WindowsImage -ImagePath $WIMInstallWorkingFile)
+	$Image | ForEach-Object {
+		Write-Host "Mounting Install Image Index $($_.ImageIndex) - $($_.ImageName)"
+		Mount-WindowsImage -Path $MountDir -ImagePath $WIMInstallWorkingFile -Index $($_.ImageIndex)
+		Write-Host "Adding Drivers"
+		Add-WindowsDriver -Path $MountDir -Driver $DriversDir -Recurse -ForceUnsigned -Verbose
+		Write-Host "Dismounting Install Image Index $($_.ImageIndex) - $($_.ImageName)"
+		Dismount-WindowsImage -Path $MountDir -Save
+		Start-Sleep 1
+	}
+
+	If ($ConverToEsd) {
+		Remove-Item -Path $ESDInstallWorkingFile -Force
+		$Image = (Get-WindowsImage -ImagePath $WIMInstallWorkingFile)
+		Write-Host "Converting WIM file back to ESD file"
+		$Image | ForEach-Object {
+			Write-Host "Exporting Image $($_.ImageIndex) of $($Image.count)Dism"
+			<#Try { #Dont use the Powershell equivalent of "dism /export-image" as it'll cause errors when importing drivers.
+				Export-WindowsImage -SourceImagePath $EsdInstallWorkingFile -SourceIndex $($_.ImageIndex) -DestinationImagePath $WIMInstallWorkingFile -CheckIntegrity
+			} Catch { #>
+				dism /export-image /SourceImageFile:$WIMInstallWorkingFile /SourceIndex:$($_.ImageIndex) /DestinationImageFile:$ESDInstallWorkingFile /Compress:recovery /CheckIntegrity
+			#}
+		}
+	}
+
+	Write-Host "Copying completed Boot.wim back to USB drive"
+	Copy-Item -Path $WIMBootWorkingFile -Destination $BootWimPath -Force
+
+	Write-Host "Copying completed Install.esd back to USB drive"
+	Copy-Item -Path $ESDInstallWorkingFile -Destination $InstallEsdPath -Force
 }
