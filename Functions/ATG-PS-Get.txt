@@ -822,24 +822,24 @@ Function Get-UserMailboxAccess {
 		[Command]: Get-UserMailboxAccess -User Marcus
 
 		-----Results for Marcus Rael-----
-		Marcus Rael does not have direct access to any other mailboxes.
-		Marcus Rael does not have Send As access to any other mailboxes.
-		Marcus Rael does not have Send On Behalf access to any other mailboxes.
+		Marcus Smarcus does not have direct access to any other mailboxes.
+		Marcus Smarcus does not have Send As access to any other mailboxes.
+		Marcus Smarcus does not have Send On Behalf access to any other mailboxes.
 	.EXAMPLE
 		[Command]: Get-UserMailboxAccess -User Marcus
 
 		-----Results for Chelsea Sandoval-----
-		Chelsea Sandoval has mailbox access to:
-		Brian S. Colon    {FullAccess}
-		Christopher Ryan  {FullAccess}
-		David Roman       {FullAccess}
+		Chelsea Scott has mailbox access to:
+		Brian Davidson    {FullAccess}
+		Christopher McChrisFace  {FullAccess}
+		David Burger      {FullAccess}
 		Faxes             {FullAccess}
-		FirmTasks         {FullAccess}
-		Jordon George     {FullAccess}
-		Randy Autio       {FullAccess}
-		Simmone Contreras {FullAccess}
-		Chelsea Sandoval does not have Send As access to any other mailboxes.
-		Chelsea Sandoval does not have Send On Behalf access to any other mailboxes.
+		Tasks             {FullAccess}
+		George E. Boy     {FullAccess}
+		Randy Rascal      {FullAccess}
+		Simmone Biles     {FullAccess}
+		Chelsea Scott does not have Send As access to any other mailboxes.
+		Chelsea Scott does not have Send On Behalf access to any other mailboxes.
 	#>
 }
 
