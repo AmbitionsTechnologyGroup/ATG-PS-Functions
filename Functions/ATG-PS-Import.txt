@@ -703,11 +703,15 @@ Function Import-WindowsInstallerDrivers {
 				dism /export-image /SourceImageFile:$WIMInstallWorkingFile /SourceIndex:$($_.ImageIndex) /DestinationImageFile:$ESDInstallWorkingFile /Compress:recovery /CheckIntegrity
 			#}
 		}
+		Write-Host "Copying completed Install.esd back to USB drive"
+		Copy-Item -Path $ESDInstallWorkingFile -Destination $InstallEsdPath -Force
+	} Else {
+		Write-Host "Copying completed Install.wim back to USB drive"
+		Copy-Item -Path $WIMInstallWorkingFile -Destination $InstallWimPath -Force
 	}
 
 	Write-Host "Copying completed Boot.wim back to USB drive"
 	Copy-Item -Path $WIMBootWorkingFile -Destination $BootWimPath -Force
 
-	Write-Host "Copying completed Install.esd back to USB drive"
-	Copy-Item -Path $ESDInstallWorkingFile -Destination $InstallEsdPath -Force
+
 }
