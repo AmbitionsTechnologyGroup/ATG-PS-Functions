@@ -227,6 +227,26 @@ Function Install-UmbrellaDNS {
 	} ElseIf (!$SiteCode -and $IAmJOB) {Write-Warning "You can't run the installer as job without specifying the SiteCode Variable. You can't interact with a job."}
 }
 
+Function Install-UmbrellaDnsCert {
+	Write-Host "Checking Root Certificate"
+	$RootCertPath = "Cert:\LocalMachine\Root\C5091132E9ADF8AD3E33932AE60A5C8FA939E824" #Thumbprint of the Cert set to expire in 2036
+	If (!(Test-Path $RootCertPath -ea SilentlyContinue)) {
+		Write-Host "Downloading the Umbrella Root Cert"
+		$url = 'https://download.ambitionsgroup.com/Software/Cisco_Umbrella_Root_CA.cer'
+		$certFolder = $ENV:SystemDrive + '\Ambitions\UmbrellaClient\'
+		$certFilePath = $certFolder + 'Cisco_Umbrella_Root_CA.cer'
+		Remove-Item $certFilePath -ea SilentlyContinue
+		$null = (New-Item -ItemType Directory -Force -Path $certFolder)
+		(New-Object System.Net.WebClient).DownloadFile($url, $certFilePath)
+		Write-Host "Installing the Umbrella Root Cert"
+		#& certutil -addstore -enterprise -f "Root" $certFilePath
+		Import-Certificate -FilePath $certFilePath -CertStoreLocation Cert:\LocalMachine\Root\
+		If(Test-Path "C:\Program Files\Mozilla Firefox\defaults\pref\") {Write-Host "Configuring Firefox to use the Cert";Set-Content "C:\Program Files\Mozilla Firefox\defaults\pref\firefox-windows-truststore.js" "pref('security.enterprise_roots.enabled', true);"}
+	} Else {
+		Write-Host -ForegroundColor Green "The Umbrella Root Cert is already installed."
+	}
+}
+
 Function Install-WinGet {
 <#
 	.SYNOPSIS
