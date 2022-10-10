@@ -256,94 +256,16 @@ Function Install-WinGet {
 	.LINK
 		https://docs.microsoft.com/en-us/windows/package-manager/winget/
 #>
-	$WGLatestWeb = iwr https://github.com/microsoft/winget-cli/releases/latest -UseBasicParsing
-	$WGLatestLink = "https://github.com" + ($WGLatestWeb.Links | Where-Object {$_.href -like "*msixbundle*"}).href
+	If (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+	Set-PSRepository -Name 'PSGallery' -InstallationPolicy Trusted
+	Install-Script -Name winget-install -Force
+	winget-install.ps1
 
-	$GetWinGet = {
-		$WGLatestWeb = iwr https://github.com/microsoft/winget-cli/releases/latest -UseBasicParsing
-		$WGLatestLink = "https://github.com" + ($WGLatestWeb.Links | Where-Object {$_.href -like "*msixbundle*"}).href
-		Write-Host "Installing the latest version of winget from:`n $WGLatestLink"
-		$DownloadURL = $WGLatestLink
-		$DownloadLocation = "$env:TEMP\"
-		$LocalFilePath = Join-Path -Path $DownloadLocation -ChildPath "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle"
-		If (Test-Path $LocalFilePath) {Remove-Item -Path $LocalFilePath -Force -ErrorAction SilentlyContinue}
-		Write-Host "Downloading Desktop App Installer"
-		$progressPreference = 'silentlyContinue'
-		Invoke-WebRequest -Uri $DownloadURL -OutFile $LocalFilePath
+	& $($Env:LOCALAPPDATA + "\Microsoft\WindowsApps\winget.exe") source reset winget
+	& $($Env:LOCALAPPDATA + "\Microsoft\WindowsApps\winget.exe") source add --name winget --arg https://winget.azureedge.net/cache --type Microsoft.PreIndexed.Package
 
-		Add-AppxPackage -Path $LocalFilePath
-		Remove-Item -Path $LocalFilePath -Force -ErrorAction SilentlyContinue
-	}
-
-	$GetWinGetDependancies = {
-		Write-Host "Checking Dependancies"
-		## C++ Runtime framework packages for Desktop Bridge - https://docs.microsoft.com/en-us/troubleshoot/cpp/c-runtime-packages-desktop-bridge#how-to-install-and-update-desktop-framework-packages
-		## x86 version
-		$Installed_X86_VCLibs = Get-AppxPackage | Where-Object {$_.Name -Match "Microsoft.VCLibs.140.00.UWPDesktop" -and $_.Architecture -Match "X86"}
-		If (-not ($Installed_X86_VCLibs)) {
-			$DownloadURL = 'https://aka.ms/Microsoft.VCLibs.x86.14.00.Desktop.appx'
-			$DownloadLocation = "$env:TEMP\"
-			$LocalFilePath = Join-Path -Path $DownloadLocation -ChildPath "Microsoft.VCLibs.x86.14.00.Desktop.appx"
-			If (Test-Path $LocalFilePath) {Remove-Item -Path $LocalFilePath -Force -ErrorAction SilentlyContinue}
-			Write-Host "Downloading $DownloadURL"
-			$progressPreference = 'silentlyContinue'
-			Invoke-WebRequest -Uri $DownloadURL -OutFile $LocalFilePath
-			If ($PSVersionTable.PSEdition -eq "Core") {Import-module "Appx" -UseWindowsPowerShell}
-			Write-Host "Installing $LocalFilePath"
-			Add-AppxPackage -Path $LocalFilePath
-			Remove-Item -Path $LocalFilePath -Force -ErrorAction SilentlyContinue
-		}
-		## x64 version
-		If ([Environment]::Is64BitOperatingSystem){
-			$Installed_X64_VCLibs = Get-AppxPackage | Where-Object {$_.Name -Match "Microsoft.VCLibs.140.00.UWPDesktop" -and $_.Architecture -Match "X64"}
-			If (-not ($Installed_X64_VCLibs)) {
-				$DownloadURL = 'https://aka.ms/Microsoft.VCLibs.x64.14.00.Desktop.appx'
-				$DownloadLocation = "$env:TEMP\"
-				$LocalFilePath = Join-Path -Path $DownloadLocation -ChildPath "Microsoft.VCLibs.x64.14.00.Desktop.appx"
-				If (Test-Path $LocalFilePath) {Remove-Item -Path $LocalFilePath -Force -ErrorAction SilentlyContinue}
-				Write-Host "Downloading $DownloadURL"
-				$progressPreference = 'silentlyContinue'
-				Invoke-WebRequest -Uri $DownloadURL -OutFile $LocalFilePath
-				If ($PSVersionTable.PSEdition -eq "Core") {Import-module "Appx" -UseWindowsPowerShell}
-				Write-Host "Installing $LocalFilePath"
-				Add-AppxPackage -Path $LocalFilePath
-				Remove-Item -Path $LocalFilePath -Force -ErrorAction SilentlyContinue
-			}
-		}
-	}
-
-	If ($(whoami) -eq "nt authority\system") {
-		Write-Error "Due to the AppX nature of Winget, you cannot run this as the system user"
-	} ElseIf (!(Get-process -Name Explorer -IncludeUserName | Where-Object -Property UserName -EQ $(whoami))){
-		Write-Error "Due to the AppX nature of Winget, you cannot install WinGet when running the command as a user that is not logged in"
 	} Else {
-# Install WinGet
-		If (Get-Command winget -ErrorAction SilentlyContinue) {
-			Write-Host "WinGet is already installed."
-			$WGVersion = winget -v
-			If ($WGLatestLink -match $WGVersion) {
-				Write-Host "The installed version $WGVersion is up to date."
-			} Else {
-				Write-Host "The installed version $WGVersion is out of date."
-				If ($PSVersionTable.PSEdition -eq "Core") {Powershell.exe -NonInteractive -Command $GetWinGet} Else {$GetWinGet | IEX}
-				$WGVersion2 = winget -v
-				If ($WGVersion -ne $WGVersion2) {
-					Write-Host "Winget $WGVersion2 installed successfully"
-				} Else {
-					Write-Error "Winget did not install successfully"
-				}
-			}
-		} Else {
-			Write-Host "WinGet is not installed."
-			If ($PSVersionTable.PSEdition -eq "Core") {Powershell.exe -NonInteractive -Command $GetWinGetDependancies} Else {$GetWinGetDependancies | IEX}
-			If ($PSVersionTable.PSEdition -eq "Core") {Powershell.exe -NonInteractive -Command $GetWinGet} Else {$GetWinGet | IEX}
-			If (Get-Command winget -ErrorAction SilentlyContinue) {
-				$WGVersion = winget -v
-				Write-Host "Winget $WGVersion installed successfully"
-			} Else {
-				Write-Error "Winget did not install successfully"
-			}
-		}
+		Write-Host "Winget is already installed."
 	}
 }
 
