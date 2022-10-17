@@ -115,7 +115,7 @@ If ($IsInstalled) {
 	} #End of Create-Menu
 
 	# Check for preassigned site code, offer choices If not
-	If (Get-Variable -Name SiteCode -ErrorAction SilentlyContinue) { $Code = $SiteCode ; $Silent = $True }
+	#If (Get-Variable -Name SiteCode -ErrorAction SilentlyContinue) { $Code = $SiteCode ; $Silent = $True }
 	If ($Code) {
 		$SelectedSite = $SiteConfigs.Where( { $PSItem.Code -like $code })
 		If ($SelectedSite) {
