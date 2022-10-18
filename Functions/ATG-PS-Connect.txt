@@ -77,11 +77,14 @@ Function Connect-NetExtender {
 	)
 
 	If (([string]::IsNullOrWhiteSpace($DC)) -or (-not (Test-Connection -comp $DC -quiet))) {
-		If (!(Test-Path -LiteralPath 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe')) {
+		If (!(Test-Path -LiteralPath "${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe")) {
 			Install-NetExtender
 		}
 		Write-host "Initiating VPN connection"
-		echo y | & 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe' connect -s $VPNuri -u $VPNuser -p $VPNpassword -d $VPNdomain
+		echo y | & "${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe" connect -s $VPNuri -u $VPNuser -p $VPNpassword -d $VPNdomain
+		Write-Host ""
+		& "${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe" showstatus
+		Write-Host 'Try "Disconnect-NetExtender" or "Get-NetExtenderStatus"'
 	}
 <#
 	.SYNOPSIS

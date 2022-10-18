@@ -10,14 +10,16 @@ Function Disconnect-AllUsers {
 
 Function Disconnect-NetExtender {
 
-	If (([string]::IsNullOrWhiteSpace($DC)) -or (-not (Test-Connection -comp $DC -quiet))) {
-		If (!(Test-Path -LiteralPath 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe')) {
+		If (!(Test-Path -LiteralPath "${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe")) {
 			Write-Host "This command only works if you have Sonicwall NetExtender installed."
 		}
 		Write-host "Initiating VPN disconnection"
-		& 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe' disconnect
-		& 'C:\Program Files (x86)\SonicWALL\SSL-VPN\NetExtender\NEClI.exe' disconnect
-	}
+		& "${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe" disconnect
+		& "${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe" disconnect
+		Write-Host ""
+		& "${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe" showstatus
+		Write-Host 'Try "Connect-NetExtender" or "Get-NetExtenderStatus"'
+
 <#
 	.SYNOPSIS
 		Disconnects an existing SSLVPN connection to a site using Sonicwall NetExtender

@@ -622,6 +622,22 @@ Function Get-LoginHistory {
 	$FilteredOutput | Sort-Object -Property TimeCreated | Format-Table -AutoSize
 }
 
+Function Get-NetExtenderStatus {
+
+	If (!(Test-Path -LiteralPath "${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe")) {
+		Write-Host "This command only works if you have Sonicwall NetExtender installed."
+	}
+	& "${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe" showstatus
+	Write-Host 'Try "Connect-NetExtender" or "Disconnect-NetExtender"'
+
+<#
+.SYNOPSIS
+	Displays the connection status of Sonicwall NetExtender
+.EXAMPLE
+	Get-NetExtenderStatus
+#>
+}
+
 Function Get-SharedMailboxRestoreRequest {
 	Get-MailboxRestoreRequest | Get-MailboxRestoreRequestStatistics -IncludeReport | FT TargetAlias, Status, StatusDetail, PercentComplete, DataConsistencyScore -AutoSize
 	<#
