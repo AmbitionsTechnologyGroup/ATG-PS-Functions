@@ -1,3 +1,117 @@
+Function Uninstall-Application {
+	<#
+	.SYNOPSIS
+		Uninstall Application
+	.DESCRIPTION
+		Allows to Uninstall Application from system
+	.EXAMPLE
+		Uninstall-Application -AppToUninstall "Microsoft Office 2010 Primary Interop Assemblies"
+	.PARAMETER AppToUninstall
+		Application name (Or application name format)
+	#>
+
+	param(
+
+	  [Parameter(Mandatory=$False, ValueFromPipeline=$True,
+	  ValueFromPipelineByPropertyName=$True, HelpMessage='Enter the Application to uninstall.')]
+	  [Alias('Application')]
+	  [string] $AppToUninstall
+
+	)
+
+	Write-Host '[Scanning All App sources]'
+	Write-Host '--[Scanning Wmi Repository]'
+	$Global:WmiApps = (Get-WmiObject -Class Win32_Product).Name | Select-Object -Unique | Sort-Object
+	Write-Host '--[Scanning Native Powershell Repository]'
+	$Global:PowershellApps = (Get-Package -Provider Programs -IncludeWindowsInstaller).Name | Select-Object -Unique | Sort-Object
+	Write-Host '--[Scanning MSIExec UninstallString Repository]'
+	$Global:uninstallX86RegPath="HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall" | Select-Object -Unique | Sort-Object
+	$Global:uninstallX64RegPath="HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall" | Select-Object -Unique | Sort-Object
+	$Global:MsiApps = (Get-ChildItem $uninstallX86RegPath | ForEach-Object { Get-ItemProperty $_.PSPath }).DisplayName
+	$MsiApps += (Get-ChildItem $uninstallX64RegPath | ForEach-Object { Get-ItemProperty $_.PSPath }).DisplayName
+	$Global:AllApps = $WmiApps + $PowershellApps + $MsiApps | Select-Object -Unique | Sort-Object
+	$Global:Uninstalled = $False
+
+
+	Function Uninstall-WmiApp {
+		Write-Host -NoNewLine "Attempting Wmi method. "
+		$AppWmi = Get-WmiObject -Class Win32_Product -ErrorAction SilentlyContinue | Where-Object {$_.Name -match $AppToUninstall}
+		If ($AppWmi) {
+			If ($AppWmi) {
+				$AppWmi.Uninstall()
+				$AppWmi = Get-WmiObject -Class Win32_Product -ErrorAction SilentlyContinue | Where-Object {$_.Name -match $AppToUninstall}
+			}
+			If (-not $AppWmi) {
+				Write-Host -ForegroundColor Green "$AppToUninstall appears to have been successfully uninstalled via Wmi method."
+				$Global:Uninstalled = $True
+			} Else {
+				Write-Host -ForegroundColor Yellow "Uninstalling via `(Get-WmiObject`).Uninstall`(`) method didn`'t work."
+			}
+		}
+	}
+
+	Function Uninstall-PowershellApp {
+		Write-Host -NoNewLine "Attempting Uninstall-Package method. "
+		Get-Package -Provider Programs -IncludeWindowsInstaller | Where-Object -Property 'Name' -Match $AppToUninstall | Uninstall-Package -Force -AllVersions
+		If (-not (Get-Package -Provider Programs -IncludeWindowsInstaller | Where-Object -Property 'Name' -Match $AppToUninstall)){
+			Write-Host -ForegroundColor Green "$AppToUninstall appears to have been successfully uninstalled via Uninstall-Package method."
+			$Global:Uninstalled = $True
+		} Else {
+			Write-Host -ForegroundColor Yellow "Uninstalling via Uninstall-Package method didn't work."
+
+		}
+	}
+
+	Function Uninstall-MsiApp {
+		Write-Host -NoNewLine "Attempting MSI UninstallString method. "
+		$uninstallString=""
+		$uninstall32 = (Get-ChildItem $uninstallX86RegPath | ForEach-Object { Get-ItemProperty $_.PSPath } | ? { $_ -Match $AppToUninstall }).UninstallString
+		$uninstall64 = (Get-ChildItem $uninstallX64RegPath | ForEach-Object { Get-ItemProperty $_.PSPath } | ? { $_ -Match $AppToUninstall }).UninstallString
+		If($uninstall64) {$uninstallString=$uninstall64}
+		If($uninstall32) {$uninstallString=$uninstall32}
+		If(!$uninstallString) {
+			Write-Error "Application was is not found"
+		}
+		$uninstallString = $uninstallString -Replace "msiexec.exe","" -Replace "/I","" -Replace "/X",""
+		$uninstallString = $uninstallString.Trim()
+		Start-Process "msiexec.exe" -arg "/X $uninstallString /qb" -Wait
+		$MsiApps = (Get-ChildItem $uninstallX86RegPath | ForEach-Object { Get-ItemProperty $_.PSPath }).DisplayName
+		$MsiApps += (Get-ChildItem $uninstallX64RegPath | ForEach-Object { Get-ItemProperty $_.PSPath }).DisplayName
+		If (-not ($MsiApps -Match $AppToUninstall)) {
+			Write-Host -ForegroundColor Green "$AppToUninstall appears to have been successfully uninstalled via MSI UninstallString method."
+			$Global:Uninstalled = $True
+		} Else {
+			Write-Host -ForegroundColor Yellow "Uninstalling via Msi UninstallString method didn't work."
+		}
+	}
+
+	If (-Not $AppToUninstall) {
+		Write-Host "Review the applications available to uninstall, then enter it verbatim."
+		Write-Host -ForegroundColor Yellow "Note: You can use the '-AppToUninstall' options to specify the app without interaction or pipe in the name."
+		Pause
+		$AllApps | More
+		$AppToUninstall = Read-Host "App to Uninstall: "
+	}
+
+	If ($AppToUninstall){
+		If ($AllApps -Match $AppToUninstall) {
+			Write-Host "$AppToUninstall found. Attempting uninstall. "
+			If ($WmiApps -Match $AppToUninstall) {Uninstall-WmiApp}
+			If ((-Not $Uninstalled) -and ($PowershellApps -Match $AppToUninstall)) {Uninstall-PowershellApp}
+			If ((-Not $Uninstalled) -and ($MsiApps -Match $AppToUninstall)) {Uninstall-MsiApp}
+			If (-Not $Uninstalled) {Write-Host -ForegroundColor Red "Uninstall Failed. Please try uninstalling via Windows Settings Menus."}
+		} Else {
+			Write-Host -ForegroundColor Yellow "$AppToUninstall was not found."
+		}
+	} Else {
+		Write-Host -ForegroundColor Red "No application specified."
+	}
+	#Cleanup!
+	@("WmiApps", "PowershellApps", "uninstallX86RegPath", "uninstallX64RegPath", "MsiApps", "AllApps", "Uninstalled") | ForEach-Object {
+		Clear-Variable $_ -Force -ErrorAction SilentlyContinue
+	}
+}
+
 Function Uninstall-UmbrellaDNS {
 	$IsInstalled = Get-Service -Name Umbrella_RC -ErrorAction SilentlyContinue
 	$PreDNS = (Get-NetIPConfiguration | Where {$_.Netprofile.Ipv4Connectivity -Like "*Internet*"}).DnsServer.ServerAddresses
