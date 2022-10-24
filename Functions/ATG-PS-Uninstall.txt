@@ -74,7 +74,7 @@ Function Uninstall-Application {
 		}
 		$uninstallString = $uninstallString -Replace "msiexec.exe","" -Replace "/I","" -Replace "/X",""
 		$uninstallString = $uninstallString.Trim()
-		Start-Process "msiexec.exe" -arg "/X $uninstallString /qb" -Wait
+		Start-Process "msiexec.exe" -arg "/X $uninstallString /qn" -Wait
 		$MsiApps = (Get-ChildItem $uninstallX86RegPath | ForEach-Object { Get-ItemProperty $_.PSPath }).DisplayName
 		$MsiApps += (Get-ChildItem $uninstallX64RegPath | ForEach-Object { Get-ItemProperty $_.PSPath }).DisplayName
 		If (-not ($MsiApps -Match $AppToUninstall)) {
