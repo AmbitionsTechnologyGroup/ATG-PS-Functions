@@ -245,11 +245,11 @@ Function Global:Get-DellWarranty {
 	)
 	#$ServiceTags = $Null
 	If ((Test-Path "$env:appdata\Microsoft\Windows\PowerShell\DellKey.txt") -ne $true) {
-		Write-Host "Autentication Needed. Please refer to https://ambitions.itglue.com/806129/docs/10204492" -ForegroundColor White -BackgroundColor Red
+		Write-Host "Authentication Needed. Please refer to https://ambitions.itglue.com/806129/docs/10204492" -ForegroundColor White -BackgroundColor Red
 		Break
 	}
 	If ((Test-Path "$env:appdata\Microsoft\Windows\PowerShell\DellSec.txt") -ne $true) {
-		Write-Host "Autentication Needed. Please refer to https://ambitions.itglue.com/806129/docs/10204492" -ForegroundColor White -BackgroundColor Red
+		Write-Host "Authentication Needed. Please refer to https://ambitions.itglue.com/806129/docs/10204492" -ForegroundColor White -BackgroundColor Red
 		Break
 	}
 	$FinalObj = @()
