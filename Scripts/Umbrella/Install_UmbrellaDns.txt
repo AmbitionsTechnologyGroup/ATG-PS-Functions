@@ -56,14 +56,15 @@ If ($IsInstalled) {
 	#Dowload config file index
 	$SiteConfigs = @()
 	$SiteConfigs = (Invoke-WebRequest -uri "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Umbrella/UDNS-Client-Mapping.csv" -UseBasicParsing).Content | convertfrom-csv -Delimiter ','
-	$MSIUrl = "https://cisco-umbrella-client-downloads.s3.amazonaws.com/win/production/Setup.msi"
+	$MSIDetails = (Invoke-WebRequest https://disthost.umbrella.com/roaming/upgrade/win/production/manifest.json -UseBasicParsing) | ConvertFrom-Json
+	$MSIUrl = "https://disthost.umbrella.com/roaming/upgrade/win/production/" + $MSIDetails.downloadFilename
 
 	Function InstallAgent {
 		Write-Host
 		Write-Host ================ Umbrella DNS Agent Installation ================
 		Write-Host Downloading the agent for $SelectedSite.Site
 		$msiFolder = $ENV:SystemDrive + '\Ambitions\UmbrellaClient\'
-		$msiFilePath = $msiFolder + 'Setup.msi'
+		$msiFilePath = $msiFolder + $MSIDetails.downloadFilename
 		$Command = $SelectedSite.Command
 
 		$null = (New-Item -ItemType Directory -Force -Path $msiFolder)
