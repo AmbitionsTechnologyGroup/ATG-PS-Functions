@@ -406,7 +406,9 @@ Function Get-FileDownload {
 		The following downloads the file 'migwiz.zip' to 'C:\Ambitions'.
 		It then exports the FileName 'migwiz.zip' to the variable $DownloadFileName.
 		It also exports the full file path 'C:\Ambitions\migwiz.zip' to the variable '$DownloadFilePath'.
-		$DownloadFileName, $DownloadFilePath = Get-FileDownload -URL 'http://download.ambitionsgroup.com/Software/migwiz.zip' -SaveToFolder 'C:\Ambitions\'
+		$DownloadFileInfo = Get-FileDownload -URL 'http://download.ambitionsgroup.com/Software/migwiz.zip' -SaveToFolder 'C:\Ambitions\'
+		$DownloadFileName = $DownloadFileInfo[0]
+		$DownloadFilePath = $DownloadFileInfo[-1]
 	#>
 	param(
 		[Parameter(Mandatory = $True)]
@@ -421,6 +423,9 @@ Function Get-FileDownload {
 	
 	#Add a '\' to the end of the folder only if needed.
 	If ($SaveToFolder -notmatch '\\$'){	$SaveToFolder += '\'}
+
+	#Create the destination folder if it doesn't exist.
+	New-Item -Path $SaveToFolder -ItemType Directory -Force | Out-Null
 
 	#Create full download path
 	[string]$FilePath = $SaveToFolder + $FileName

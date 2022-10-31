@@ -28,7 +28,6 @@ Function Get-FileDownload {
 		[Parameter(Mandatory = $True)]
 		[uri]$URL,
 		[Parameter(Mandatory = $True)]
-		[ValidateScript({Test-Path $_ -PathType ‘Container’})]
 		[string]$SaveToFolder
 	)
 
@@ -39,7 +38,7 @@ Function Get-FileDownload {
 	If ($SaveToFolder -notmatch '\\$'){	$SaveToFolder += '\'}
 
 	#Create the destination folder if it doesn't exist.
-	New-Item -Path $SaveToFolder -ItemType Directory -Force
+	New-Item -Path $SaveToFolder -ItemType Directory -Force | Out-Null
 
 	#Create full download path
 	[string]$FilePath = $SaveToFolder + $FileName
@@ -51,7 +50,7 @@ Function Get-FileDownload {
 		Write-Output 'Unable to set PowerShell to use TLS 1.2 and TLS 1.1 due to old .NET Framework installed. If you see underlying connection closed or trust errors, you may need to upgrade to .NET Framework 4.5+ and PowerShell v3+.'
 	}
 
-	Write-Host "Begining download to $FilePath"
+	Write-Host "Beginning download to $FilePath"
 	Try {
 		Invoke-WebRequest -Uri $URL -OutFile $FilePath
 		Return $FileName, $FilePath
@@ -75,18 +74,20 @@ If ($OSName -Match 'Windows 10') {
 		$SHA1 = '1fffcb6284ccee1b15c06508ab0c4ab33bb10d8f' #Hey look! Microsoft include the SHA1 hash in the file name. How nice.
 		}
 
-		$DownloadFileName, $DownloadFilePath = Get-FileDownload -URL $Link -SaveToFolder 'C:\Temp\'
+		$DownloadFileInfo = Get-FileDownload -URL $Link -SaveToFolder 'C:\Temp\'
+		$DownloadFileName = $DownloadFileInfo[0]
+		$DownloadFilePath = $DownloadFileInfo[-1]
+
 		If ($DownloadFileName -Match (Get-FileHash -Path $DownloadFilePath -Algorithm SHA1).Hash) { #Makes sure the integrity is ok.
 			Write-Host -ForegroundColor Green "File integrity check PASSED. Beginning install."
 			Start-Process -FilePath "wusa.exe" -ArgumentList "$DownloadFilePath /quiet /norestart" -Wait
 			If (Get-HotFix -Id kb5020953 -ErrorAction SilentlyContinue) {
 				Write-Host -ForegroundColor Green "KB5020953 was successfully installed."
+				#Cleanup
+				Remove-Item -Path $DownloadFilePath -Force -ErrorAction SilentlyContinue
 			} Else {
 				Write-Host -ForegroundColor Red "KB5020953 FAILED to install."
 			}
-
-			#Cleanup
-			Remove-Item -Path $DownloadFilePath -Force -ErrorAction SilentlyContinue
 
 		} Else {
 			Write-Host -ForegroundColor Red "File integrity check FAILED."
