@@ -116,7 +116,7 @@ Function Get-ATGPS {
 	)
 	If ($Force) {
 		Write-Host "-Force specified. Force loading latest functions."
-		Start-Job -ScriptBlock { Invoke-WebRequest http://download.ambitionsgroup.com/Scripts/Update-ATGPS.txt -UseBasicParsing | Invoke-Expression } | Receive-Job -AutoRemoveJob -Wait
+		Start-Job -ScriptBlock { Invoke-WebRequest http://download.ambitionsgroup.com/Scripts/Update-ATGPS.txt -UseBasicParsing -Headers @{"Cache-Control"="no-cache"} | Invoke-Expression } | Receive-Job -AutoRemoveJob -Wait
 		$DestinationFiles | ForEach-Object {
 			If (Test-Path $_ -ErrorAction SilentlyContinue) {
 				Import-Module $_ -Global -Force
