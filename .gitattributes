@@ -1,1 +1,3 @@
 Functions/*.txt linguist-language=PowerShell
+OneOffs/*.txt linguist-language=PowerShell
+Scripts/**.txt linguist-language=PowerShell

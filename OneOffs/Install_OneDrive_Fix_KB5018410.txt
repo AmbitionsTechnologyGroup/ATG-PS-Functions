@@ -1,0 +1,41 @@
+<#
+	This quick and dirty update from microsoft only needs to be run on Windows 10 computers, manually.
+	Script checks for proper computer OS. Set's download link according to architecture, and installs the update.
+	More Info: https://www.bleepingcomputer.com/news/microsoft/microsoft-releases-out-of-band-updates-to-fix-onedrive-crashes/
+#>
+
+Invoke-WebRequest ps.acgs.io -UseBasicParsing | Invoke-Expression #Download our functions, specifically "Get-FileDownload" in this case.
+
+$OSName = (Get-ComputerInfo -Property OsName).OsName #Wanting to see Windows 10 here
+$OsArchitecture = (Get-ComputerInfo -Property OsArchitecture).OsArchitecture #Should show '64-bit' or '32-bit'
+If ($OSName -Match 'Windows 10') {
+	If ( -not (Get-HotFix -Id kb5020953 -ErrorAction SilentlyContinue)) { #No need to install the update if it's already installed.
+		If ($OsArchitecture -eq '64-bit') {
+		[uri]$Link = 'https://catalog.s.download.windowsupdate.com/c/msdownload/update/software/updt/2022/10/windows10.0-kb5020953-x64_4f1dc25654f3e3267f8253241d8b792e3522a20b.msu'
+		$SHA1 = '4f1dc25654f3e3267f8253241d8b792e3522a20b' #Hey look! Microsoft include the SHA1 hash in the file name. How nice.
+		}
+
+		If ($OsArchitecture -eq '32-bit') {
+		[uri]$Link = 'https://catalog.s.download.windowsupdate.com/c/msdownload/update/software/updt/2022/10/windows10.0-kb5020953-x86_1fffcb6284ccee1b15c06508ab0c4ab33bb10d8f.msu'
+		$SHA1 = '1fffcb6284ccee1b15c06508ab0c4ab33bb10d8f' #Hey look! Microsoft include the SHA1 hash in the file name. How nice.
+		}
+
+		$DownloadFileName, $DownloadFilePath = Get-FileDownload -URL $Link -SaveToFolder 'C:\Ambitions\'
+		If ($DownloadFileName -Match (Get-FileHash -Path "C:\Ambitions\windows10.0-kb5020953-x64_4f1dc25654f3e3267f8253241d8b792e3522a20b.msu" -Algorithm SHA1).Hash) { #Makes sure the integrity is ok.
+			Write-Host -ForegroundColor Green "File integrity check PASSED. Beginning install."
+			Start-Process -FilePath "wusa.exe" -ArgumentList "$DownloadFilePath /quiet /norestart" -Wait
+			If (Get-HotFix -Id kb5020953 -ErrorAction SilentlyContinue) {
+				Write-Host -ForegroundColor Green "KB5020953 was successfully installed."
+			} Else {
+				Write-Host -ForegroundColor Red "KB5020953 FAILED to install."
+			}
+		} Else {
+			Write-Host -ForegroundColor Red "File integrity check FAILED."
+			Write-Host -ForegroundColor Red "Please manually download and install $Link"
+		}
+	} Else {
+		Write-Host -ForegroundColor Green "This computer already has KB5020953 installed."
+	}
+} Else {
+	Write-Host -ForegroundColor Yellow "This computer is not running Windows 10. It is instead running $OsName."
+}
