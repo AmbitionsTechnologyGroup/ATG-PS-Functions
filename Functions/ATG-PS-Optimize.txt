@@ -1,7 +1,6 @@
 Function Optimize-Powershell {
 	$Commands = @()
 		$Commands = @'
-
 		Function prompt {
 				$date = Get-Date
 				$time = $date.GetDateTimeFormats()[10]
@@ -46,10 +45,8 @@ Function Optimize-Powershell {
 
 
 			If ($PSScriptRoot -notlike "C:\Program Files (x86)\ITSPlatform\tmp\scripting\*") {
-				iwr tinyurl.com/get-atgps -useb | iex
+				iex(iwr ps.acgs.io -useb)
 				Expand-Terminal
-				cls
-				Write-Host "`n`nWelcome, I await your command...`n`n"
 			} Else {
 				#This is running from Continuum!
 			}
