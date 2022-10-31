@@ -4,7 +4,63 @@
 	More Info: https://www.bleepingcomputer.com/news/microsoft/microsoft-releases-out-of-band-updates-to-fix-onedrive-crashes/
 #>
 
-Invoke-WebRequest ps.acgs.io -UseBasicParsing | Invoke-Expression #Download our functions, specifically "Get-FileDownload" in this case.
+Function Get-FileDownload {
+	<#
+	.SYNOPSIS
+		Takes a URL for a file and downloads it to the specified directory.
+		Parses the file name from the URL so you don't have to manually specify the file name.
+	.PARAMETER URL
+		URL of the file to download, i.e. 'http://download.ambitionsgroup.com/Software/migwiz.zip'
+	.PARAMETER URL
+		Folder of where to save the file, i.e. 'C:\Temp
+	.EXAMPLE
+		#The following downloads the variable "$Link" to "C:\Ambitions\"
+
+		Get-FileDownload -URL $Link -SaveToFolder 'C:\Ambitions\'
+
+	.EXAMPLE
+		The following downloads the file 'migwiz.zip' to 'C:\Ambitions'.
+		It then exports the FileName 'migwiz.zip' to the variable $DownloadFileName.
+		It also exports the full file path 'C:\Ambitions\migwiz.zip' to the variable '$DownloadFilePath'.
+		$DownloadFileName, $DownloadFilePath = Get-FileDownload -URL 'http://download.ambitionsgroup.com/Software/migwiz.zip' -SaveToFolder 'C:\Ambitions\'
+	#>
+	param(
+		[Parameter(Mandatory = $True)]
+		[uri]$URL,
+		[Parameter(Mandatory = $True)]
+		[ValidateScript({Test-Path $_ -PathType ‘Container’})]
+		[string]$SaveToFolder
+	)
+
+	#Isolate file name from URL
+	[string]$FileName = $URL.Segments[-1]
+
+	#Add a '\' to the end of the folder only if needed.
+	If ($SaveToFolder -notmatch '\\$'){	$SaveToFolder += '\'}
+
+	#Create full download path
+	[string]$FilePath = $SaveToFolder + $FileName
+
+	#Write-Host "Enabling SSL"
+	Try {
+		# Set TLS 1.2 (3072), then TLS 1.1 (768), then TLS 1.0 (192)
+		# Use integers because the enumeration values for TLS 1.2 and TLS 1.1 won't
+		# exist in .NET 4.0, even though they are addressable if .NET 4.5+ is
+		# installed (.NET 4.5 is an in-place upgrade).
+		[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192
+	} Catch {
+		Write-Output 'Unable to set PowerShell to use TLS 1.2 and TLS 1.1 due to old .NET Framework installed. If you see underlying connection closed or trust errors, you may need to upgrade to .NET Framework 4.5+ and PowerShell v3+.'
+	}
+
+	Write-Host "Begining download to $FilePath"
+	Try {
+		Invoke-WebRequest -Uri $URL -OutFile $FilePath
+		Return $FileName, $FilePath
+	} Catch {
+		(New-Object System.Net.WebClient).DownloadFile($URL, $FilePath)
+		Return $FileName, $FilePath
+	}
+}
 
 $OSName = (Get-ComputerInfo -Property OsName).OsName #Wanting to see Windows 10 here
 $OsArchitecture = (Get-ComputerInfo -Property OsArchitecture).OsArchitecture #Should show '64-bit' or '32-bit'
@@ -20,8 +76,8 @@ If ($OSName -Match 'Windows 10') {
 		$SHA1 = '1fffcb6284ccee1b15c06508ab0c4ab33bb10d8f' #Hey look! Microsoft include the SHA1 hash in the file name. How nice.
 		}
 
-		$DownloadFileName, $DownloadFilePath = Get-FileDownload -URL $Link -SaveToFolder 'C:\Ambitions\'
-		If ($DownloadFileName -Match (Get-FileHash -Path "C:\Ambitions\windows10.0-kb5020953-x64_4f1dc25654f3e3267f8253241d8b792e3522a20b.msu" -Algorithm SHA1).Hash) { #Makes sure the integrity is ok.
+		$DownloadFileName, $DownloadFilePath = Get-FileDownload -URL $Link -SaveToFolder 'C:\Temp\'
+		If ($DownloadFileName -Match (Get-FileHash -Path $DownloadFilePath -Algorithm SHA1).Hash) { #Makes sure the integrity is ok.
 			Write-Host -ForegroundColor Green "File integrity check PASSED. Beginning install."
 			Start-Process -FilePath "wusa.exe" -ArgumentList "$DownloadFilePath /quiet /norestart" -Wait
 			If (Get-HotFix -Id kb5020953 -ErrorAction SilentlyContinue) {
@@ -29,6 +85,7 @@ If ($OSName -Match 'Windows 10') {
 			} Else {
 				Write-Host -ForegroundColor Red "KB5020953 FAILED to install."
 			}
+
 		} Else {
 			Write-Host -ForegroundColor Red "File integrity check FAILED."
 			Write-Host -ForegroundColor Red "Please manually download and install $Link"
