@@ -55,7 +55,7 @@ If ($IsInstalled) {
 	Write-Host "DNS Servers: $PreDNS"
 	#Dowload config file index
 	$SiteConfigs = @()
-	$SiteConfigs = (Invoke-WebRequest -uri "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Umbrella/UDNS-Client-Mapping.csv" -UseBasicParsing).Content | convertfrom-csv -Delimiter ','
+	$SiteConfigs = (Invoke-WebRequest -uri "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Umbrella/UDNS-Client-Mapping.csv" -Headers @{"Cache-Control"="no-cache"} -UseBasicParsing).Content | convertfrom-csv -Delimiter ','
 	$MSIDetails = (Invoke-WebRequest https://disthost.umbrella.com/roaming/upgrade/win/production/manifest.json -UseBasicParsing) | ConvertFrom-Json
 	$MSIUrl = "https://disthost.umbrella.com/roaming/upgrade/win/production/" + $MSIDetails.downloadFilename
 
@@ -65,7 +65,7 @@ If ($IsInstalled) {
 		Write-Host Downloading the agent for $SelectedSite.Site
 		$msiFolder = $ENV:SystemDrive + '\Ambitions\UmbrellaClient\'
 		$msiFilePath = $msiFolder + $MSIDetails.downloadFilename
-		$Command = $SelectedSite.Command
+		$Command = "msiexec /i " + $msiFilePath + " /qn " + $SelectedSite.Command
 
 		$null = (New-Item -ItemType Directory -Force -Path $msiFolder)
 		If (Test-Path $msiFilePath) { Remove-Item $msiFilePath}
