@@ -389,6 +389,25 @@ Function Get-DomainInfo {
 }
 
 Function Get-FileDownload {
+	<#
+	.SYNOPSIS
+		Takes a URL for a file and downloads it to the specified directory.
+		Parses the file name from the URL so you don't have to manually specify the file name.
+	.PARAMETER URL
+		URL of the file to download, i.e. 'http://download.ambitionsgroup.com/Software/migwiz.zip'
+	.PARAMETER URL
+		Folder of where to save the file, i.e. 'C:\Temp
+	.EXAMPLE
+		#The following downloads the variable "$Link" to "C:\Ambitions\"
+		
+		Get-FileDownload -URL $Link -SaveToFolder 'C:\Ambitions\'
+
+	.EXAMPLE
+		The following downloads the file 'migwiz.zip' to 'C:\Ambitions'.
+		It then exports the FileName 'migwiz.zip' to the variable $DownloadFileName.
+		It also exports the full file path 'C:\Ambitions\migwiz.zip' to the variable '$DownloadFilePath'.
+		$DownloadFileName, $DownloadFilePath = Get-FileDownload -URL 'http://download.ambitionsgroup.com/Software/migwiz.zip' -SaveToFolder 'C:\Ambitions\'
+	#>
 	param(
 		[Parameter(Mandatory = $True)]
 		[uri]$URL,
@@ -398,15 +417,15 @@ Function Get-FileDownload {
 	)
 	
 	#Isolate file name from URL
-	[string]$File = $URL.Segments[-1]
+	[string]$FileName = $URL.Segments[-1]
 	
 	#Add a '\' to the end of the folder only if needed.
 	If ($SaveToFolder -notmatch '\\$'){	$SaveToFolder += '\'}
 
 	#Create full download path
-	[string]$FilePath = $SaveToFolder + $File
+	[string]$FilePath = $SaveToFolder + $FileName
 	
-	Write-Host "Enabling SSL"
+	#Write-Host "Enabling SSL"
 	Try {
 		# Set TLS 1.2 (3072), then TLS 1.1 (768), then TLS 1.0 (192)
 		# Use integers because the enumeration values for TLS 1.2 and TLS 1.1 won't
@@ -417,11 +436,13 @@ Function Get-FileDownload {
 		Write-Output 'Unable to set PowerShell to use TLS 1.2 and TLS 1.1 due to old .NET Framework installed. If you see underlying connection closed or trust errors, you may need to upgrade to .NET Framework 4.5+ and PowerShell v3+.'
 	}
 
-	#Time to download
+	Write-Host "Begining download to $FilePath"
 	Try {
 		Invoke-WebRequest -Uri $URL -OutFile $FilePath
+		Return $FileName, $FilePath
 	} Catch {
 		(New-Object System.Net.WebClient).DownloadFile($URL, $FilePath)
+		Return $FileName, $FilePath
 	}
 }
 
