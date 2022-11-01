@@ -414,7 +414,6 @@ Function Get-FileDownload {
 		[Parameter(Mandatory = $True)]
 		[uri]$URL,
 		[Parameter(Mandatory = $True)]
-		[ValidateScript({Test-Path $_ -PathType ‘Container’})]
 		[string]$SaveToFolder
 	)
 	
