@@ -1,12 +1,38 @@
 Function Optimize-Powershell {
 	$Commands = @()
 		$Commands = @'
+		Function Get-HorizontalLine {
+			param (
+				[string]$InputString = "-", 
+				[parameter(Mandatory = $false)][alias("c")]$Count = 1, 
+				[parameter(Mandatory = $false)][alias("fg")]$ForeColor=$null, 
+				[parameter(Mandatory = $false)][alias("bg")]$BackColor=$null
+			) 
+			$ColorSplat = @{}
+			if ($ForeColor -ne $null) { $ColorSplat.ForegroundColor = $ForeColor }
+			if ($BackColor -ne $null) { $ColorSplat.BackgroundColor = $BackColor }
+			
+			# How long to make the hr
+			$width = if ($host.Name -match "ISE") {
+				$host.UI.RawUI.BufferSize.Width - 1
+			} else { 
+				$host.UI.RawUI.BufferSize.Width - 4
+			}
+			# How many times to repeat $Character in full
+			$repetitions = [System.Math]::Floor($width/$InputString.Length)
+			# How many characters of $InputString to add to fill each line
+			$remainder = $width - ($InputString.Length * $repetitions)
+			# Make line(s)
+			1..$Count | % { 
+				Write-Host ($InputString * $repetitions) + $InputString.Substring(0,$remainder) @ColorSplat 
+			}
+		}
 		Function prompt {
 				$date = Get-Date
 				$time = $date.GetDateTimeFormats()[10]
 				$curdir = $ExecutionContext.SessionState.Path.CurrentLocation #.Path.Split('\')[-1]
 				If ($curdir.Length -eq 0) {$curdir = $ExecutionContext.SessionState.Drive.Current.Name+':\'}
-				Write-Host
+				Get-HorizontalLine -ForeColor Blue
 				Write-Host ''$env:USERNAME'@'$env:COMPUTERNAME' |' -NoNewLine -BackgroundColor Black -ForegroundColor Yellow
 				Write-Host ' DIR:'$curdir' |' -NoNewLine -BackgroundColor Black -ForegroundColor Yellow
 				Write-Host ''$time' ' -BackgroundColor Black -ForegroundColor Yellow
@@ -45,11 +71,11 @@ Function Optimize-Powershell {
 
 
 			If ($PSScriptRoot -notlike "C:\Program Files (x86)\ITSPlatform\tmp\scripting\*") {
-				iex(iwr ps.acgs.io -useb)
 				Expand-Terminal
 			} Else {
 				#This is running from Continuum!
 			}
+			iex(iwr ps.acgs.io -useb)
 '@
 
 	$WinVer = [System.Environment]::OSVersion.Version.Major
