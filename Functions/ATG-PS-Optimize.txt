@@ -69,13 +69,12 @@ Function Optimize-Powershell {
 					}
 				}
 
-
+				iex(iwr ps.acgs.io -useb)
 			If ($PSScriptRoot -notlike "C:\Program Files (x86)\ITSPlatform\tmp\scripting\*") {
 				Expand-Terminal
 			} Else {
 				#This is running from Continuum!
 			}
-			iex(iwr ps.acgs.io -useb)
 '@
 
 	$WinVer = [System.Environment]::OSVersion.Version.Major
