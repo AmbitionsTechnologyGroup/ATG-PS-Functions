@@ -284,7 +284,7 @@ Function Update-NTPDateTime {
 	
 	Set-Date $NTPDateTime
 	
-	If ($Offset -gt 10000) {
+	If ([Math]::Abs($Offset) -gt 10000) {
 	Write-Host "There was an offset of $($Offset / 1000) seconds."
 	} Else {
 		Write-Host "The offset was negligible."
