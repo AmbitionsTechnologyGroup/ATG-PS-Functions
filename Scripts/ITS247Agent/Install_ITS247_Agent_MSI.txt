@@ -196,6 +196,7 @@ Function Create-Menu {
 
 # Check for preassigned site code, offer choices If not
 If (Get-Variable -Name SiteCode -ErrorAction SilentlyContinue) { $Code = $SiteCode ; $Silent = $True }
+If ($Code = "Generic") {Clear-Variable Code -ErrorAction SilentlyContinue}
 If ($Code) {
 	$SelectedSite = $SiteConfigs.Where( { $PSItem.Code -like $code })
 	If ($SelectedSite) {
