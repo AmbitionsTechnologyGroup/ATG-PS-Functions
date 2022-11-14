@@ -274,7 +274,7 @@ Function Install-WinGet {
 			$DownloadFilePath = $DownloadFileInfo[-1]
 			Add-AppxPackage -Path $DownloadFilePath -ForceApplicationShutdown -InstallAllResources -Verbose
 			& $($Env:LOCALAPPDATA + "\Microsoft\WindowsApps\winget.exe") source reset winget
-			& $($Env:LOCALAPPDATA + "\Microsoft\WindowsApps\winget.exe") source add --name winget --arg https://winget.azureedge.net/cache --type Microsoft.PreIndexed.Package
+			#& $($Env:LOCALAPPDATA + "\Microsoft\WindowsApps\winget.exe") source add --name winget --arg https://winget.azureedge.net/cache --type Microsoft.PreIndexed.Package
 			Remove-Item -Path $DownloadFilePath -Force -ErrorAction SilentlyContinue
 		}
 	
@@ -316,7 +316,7 @@ Function Install-WinGet {
 			#Microsoft.UI.Xaml
 			Find-PackageProvider -Name NuGet | Install-PackageProvider -Force
 			Register-PackageSource -Name nuget.org -Location https://www.nuget.org/api/v2 -ProviderName NuGet
-			Find-Package -Name 'Microsoft.UI.Xaml' -ProviderName Nuget | Install-Package -Force
+			Install-Package -Name 'Microsoft.UI.Xaml' -ProviderName Nuget -Force
 		}
 	
 		If ($(whoami) -eq "nt authority\system") {
