@@ -440,7 +440,10 @@ Function Get-FileDownload {
 		Write-Output 'Unable to set PowerShell to use TLS 1.2 and TLS 1.1 due to old .NET Framework installed. If you see underlying connection closed or trust errors, you may need to upgrade to .NET Framework 4.5+ and PowerShell v3+.'
 	}
 
-	Write-Host "Begining download to $FilePath"
+	#Delete destination file if found.
+	If (Test-Path -Path $FilePath -ErrorAction SilentlyContinue) {Remove-Item -Path $FilePath -Force}
+
+	Write-Host "Beginning download to $FilePath"
 	Try {
 		Invoke-WebRequest -Uri $URL -OutFile $FilePath
 		Return $FileName, $FilePath
