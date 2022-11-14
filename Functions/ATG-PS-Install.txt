@@ -271,14 +271,14 @@ Function Install-WinGet {
 
 Function Install-WinGetApps {
 	Install-WinGet
-	Winget install -e --id 7zip.7zip -h
-	Winget install -e --id Google.Chrome -h
-	Winget install -e --id Mozilla.FirefoxESR -h
-	Winget install -e --id Zoom.Zoom -h
-	Winget install -e --id Notepad++.Notepad++ -h
-	Winget install -e --id Adobe.AdobeAcrobatReaderDC -h
-	Winget install -e --id VideoLAN.VLC -h
-	Winget install -e --id Microsoft.PowerShell -h
+	Winget install -e --id 7zip.7zip -h --accept-package-agreements --accept-source-agreements
+	Winget install -e --id Google.Chrome -h --accept-package-agreements --accept-source-agreements
+	Winget install -e --id Mozilla.FirefoxESR -h --accept-package-agreements --accept-source-agreements
+	Winget install -e --id Zoom.Zoom -h --accept-package-agreements --accept-source-agreements
+	Winget install -e --id Notepad++.Notepad++ -h --accept-package-agreements --accept-source-agreements
+	Winget install -e --id Adobe.AdobeAcrobatReaderDC -h --accept-package-agreements --accept-source-agreements
+	Winget install -e --id VideoLAN.VLC -h --accept-package-agreements --accept-source-agreements
+	Winget install -e --id Microsoft.PowerShell -h --accept-package-agreements --accept-source-agreements
 }
 
 Function Install-WinRepairToolbox {
