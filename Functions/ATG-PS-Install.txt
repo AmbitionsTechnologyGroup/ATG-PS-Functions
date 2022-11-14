@@ -273,7 +273,7 @@ Function Install-WinGet {
 			$DownloadFileInfo = Get-FileDownload -URL $realDownloadUrl -SaveToFolder $($env:temp)
 			$DownloadFilePath = $DownloadFileInfo[-1]
 			Add-AppxPackage -Path $DownloadFilePath -ForceApplicationShutdown -InstallAllResources -Verbose
-			& $($Env:LOCALAPPDATA + "\Microsoft\WindowsApps\winget.exe") source reset winget
+			#& $($Env:LOCALAPPDATA + "\Microsoft\WindowsApps\winget.exe") source reset w
 			#& $($Env:LOCALAPPDATA + "\Microsoft\WindowsApps\winget.exe") source add --name winget --arg https://winget.azureedge.net/cache --type Microsoft.PreIndexed.Package
 			Remove-Item -Path $DownloadFilePath -Force -ErrorAction SilentlyContinue
 		}
