@@ -313,6 +313,10 @@ Function Install-WinGet {
 					Remove-Item -Path $LocalFilePath -Force -ErrorAction SilentlyContinue
 				}
 			}
+			#Microsoft.UI.Xaml
+			Find-PackageProvider -Name NuGet | Install-PackageProvider -Force
+			Register-PackageSource -Name nuget.org -Location https://www.nuget.org/api/v2 -ProviderName NuGet
+			Find-Package -Name 'Microsoft.UI.Xaml' -ProviderName Nuget | Install-Package -Force
 		}
 	
 		If ($(whoami) -eq "nt authority\system") {
@@ -335,7 +339,7 @@ Function Install-WinGet {
 				Write-Host "The installed version $WGVersion is up to date."
 			} Else {
 				Write-Host "The installed version $WGVersion is out of date."
-				If ($PSVersionTable.PSEdition -eq "Core") {Powershell.exe -NonInteractive -Command $GetWinGet} Else {$GetWinGet | IEX}
+				If ($PSVersionTable.PSEdition -eq "Core") {Powershell.exe -NonInteractive -Command '$GetWinGetDependancies;$GetWinGet'} Else {$GetWinGetDependancies | IEX ; $GetWinGet | IEX}
 				$WGVersion2 = winget -v
 				If ($WGVersion -notmatch $WGVersion2) {
 					Write-Host "Winget $WGVersion2 installed successfully"
