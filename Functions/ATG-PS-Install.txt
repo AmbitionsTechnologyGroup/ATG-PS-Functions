@@ -321,41 +321,41 @@ Function Install-WinGet {
 			Write-Error "Due to the AppX nature of Winget, you cannot install WinGet when running the command as a user that is not logged in"
 		} Else {
 	# Install WinGet
-			If (Get-Command winget -ErrorAction SilentlyContinue) {
-				Write-Host "WinGet is already installed."
-				$WGVersion = winget -v
-				
-				$url = 'https://github.com/microsoft/winget-cli/releases/latest'
-				$request = [System.Net.WebRequest]::Create($url)
-				$response = $request.GetResponse()
-				$realTagUrl = $response.ResponseUri.OriginalString
-				$WGLatestLink = $realTagUrl.split('/')[-1].Trim('v')
-				
-				If ($WGVersion -match $WGLatestLink) {
-					Write-Host "The installed version $WGVersion is up to date."
-				} Else {
-					Write-Host "The installed version $WGVersion is out of date."
-					If ($PSVersionTable.PSEdition -eq "Core") {Powershell.exe -NonInteractive -Command $GetWinGet} Else {$GetWinGet | IEX}
-					$WGVersion2 = winget -v
-					If ($WGVersion -notmatch $WGVersion2) {
-						Write-Host "Winget $WGVersion2 installed successfully"
-					} Else {
-						Write-Error "Winget did not install successfully"
-					}
-				}
+		If (Get-Command winget -ErrorAction SilentlyContinue) {
+			Write-Host "WinGet is already installed."
+			$WGVersion = winget -v
+			
+			$url = 'https://github.com/microsoft/winget-cli/releases/latest'
+			$request = [System.Net.WebRequest]::Create($url)
+			$response = $request.GetResponse()
+			$realTagUrl = $response.ResponseUri.OriginalString
+			$WGLatestLink = $realTagUrl.split('/')[-1].Trim('v')
+			
+			If ($WGVersion -match $WGLatestLink) {
+				Write-Host "The installed version $WGVersion is up to date."
 			} Else {
-				Write-Host "WinGet is not installed."
-				If ($PSVersionTable.PSEdition -eq "Core") {Powershell.exe -NonInteractive -Command $GetWinGetDependancies} Else {$GetWinGetDependancies | IEX}
+				Write-Host "The installed version $WGVersion is out of date."
 				If ($PSVersionTable.PSEdition -eq "Core") {Powershell.exe -NonInteractive -Command $GetWinGet} Else {$GetWinGet | IEX}
-				If (Get-Command winget -ErrorAction SilentlyContinue) {
-					$WGVersion = winget -v
-					Write-Host "Winget $WGVersion installed successfully"
+				$WGVersion2 = winget -v
+				If ($WGVersion -notmatch $WGVersion2) {
+					Write-Host "Winget $WGVersion2 installed successfully"
 				} Else {
 					Write-Error "Winget did not install successfully"
 				}
 			}
+		} Else {
+			Write-Host "WinGet is not installed."
+			If ($PSVersionTable.PSEdition -eq "Core") {Powershell.exe -NonInteractive -Command $GetWinGetDependancies} Else {$GetWinGetDependancies | IEX}
+			If ($PSVersionTable.PSEdition -eq "Core") {Powershell.exe -NonInteractive -Command $GetWinGet} Else {$GetWinGet | IEX}
+			If (Get-Command winget -ErrorAction SilentlyContinue) {
+				$WGVersion = winget -v
+				Write-Host "Winget $WGVersion installed successfully"
+			} Else {
+				Write-Error "Winget did not install successfully"
+			}
 		}
 	}
+}
 
 Function Install-WinGetApps {
 	Install-WinGet
