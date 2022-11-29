@@ -1,0 +1,62 @@
+#This is meant to be a logon script running as the user profile. This only installs NextivaOne for the user running it. It does not need admin.
+
+If (Get-Command -Name "winget" -CommandType Application -ErrorAction SilentlyContinue) {
+	If (Get-Command -Name "$($Env:LOCALAPPDATA)\Programs\NextivaONE\NextivaONE.exe" -CommandType Application -ErrorAction SilentlyContinue) {
+		winget upgrade Nextiva.NextivaOne --accept-package-agreements --accept-source-agreements
+	} Else {
+		winget install Nextiva.NextivaOne --accept-package-agreements --accept-source-agreements
+	}
+} Else {
+	Function Get-FileDownload {
+		param(
+			[Parameter(Mandatory = $True)]
+			[uri]$URL,
+			[Parameter(Mandatory = $True)]
+			[string]$SaveToFolder
+		)
+		[string]$FileName = $URL.Segments[-1]
+		If ($SaveToFolder -notmatch '\\$'){	$SaveToFolder += '\'}
+		New-Item -Path $SaveToFolder -ItemType Directory -Force | Out-Null
+		[string]$FilePath = $SaveToFolder + $FileName
+		
+		#Write-Host "Enabling SSL"
+		Try {
+			[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192
+		} Catch {
+			Write-Output 'Unable to set PowerShell to use TLS 1.2 and TLS 1.1 due to old .NET Framework installed. If you see underlying connection closed or trust errors, you may need to upgrade to .NET Framework 4.5+ and PowerShell v3+.'
+		}
+	
+		#Delete destination file if found.
+		If (Test-Path -Path $FilePath -ErrorAction SilentlyContinue) {Remove-Item -Path $FilePath -Force}
+	
+		Write-Host "Beginning download to $FilePath"
+		Try {
+			Invoke-WebRequest -Uri $URL -OutFile $FilePath
+			Return $FileName, $FilePath
+		} Catch {
+			(New-Object System.Net.WebClient).DownloadFile($URL, $FilePath)
+			Return $FileName, $FilePath
+		}
+	}
+
+	$url = 'https://github.com/microsoft/winget-cli/releases/latest'
+	$request = [System.Net.WebRequest]::Create($url)
+	$response = $request.GetResponse()
+	$realTagUrl = $response.ResponseUri.OriginalString
+	$version = $realTagUrl.split('/')[-1].Trim('v')
+	$fileName = "Microsoft.DesktopAppInstaller_8wekyb3d8bbwe.msixbundle"
+	$realDownloadUrl = $realTagUrl.Replace('tag', 'download') + '/' + $fileName
+	Write-Host "Installing the latest version of winget from:`n $realDownloadUrl"
+	$DownloadLocation = $($env:temp)
+	Write-Host "Downloading Desktop App Installer"
+	$DownloadFileInfo = Get-FileDownload -URL $realDownloadUrl -SaveToFolder $($env:temp)
+	$DownloadFilePath = $DownloadFileInfo[-1]
+	Add-AppxPackage -Path $DownloadFilePath -ForceApplicationShutdown -InstallAllResources -Verbose
+	Remove-Item -Path $DownloadFilePath -Force -ErrorAction SilentlyContinue
+
+	If (Get-Command -Name "$($Env:LOCALAPPDATA)\Programs\NextivaONE\NextivaONE.exe" -CommandType Application -ErrorAction SilentlyContinue) {
+		winget upgrade Nextiva.NextivaOne --accept-package-agreements --accept-source-agreements
+	} Else {
+		winget install Nextiva.NextivaOne --accept-package-agreements --accept-source-agreements
+	}
+}
