@@ -1,4 +1,5 @@
 Function Optimize-Powershell {
+	Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
 	$Commands = @()
 		$Commands = @'
 		Function Get-HorizontalLine {
@@ -151,7 +152,7 @@ Function Optimize-Powershell {
 	Write-Output "Not Windows 10"
 	}
 
-	If (-not (Test-Path $PROFILE -EA SilentlyContinue)) {
+	If (-Not (Test-Path $PROFILE -EA SilentlyContinue)) {
 		New-Item -Type File -Force $PROFILE
 	} Else {
 		Remove-Item -Path $PROFILE -Force -EA SilentlyContinue
