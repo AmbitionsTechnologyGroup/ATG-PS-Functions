@@ -97,7 +97,7 @@ Function Update-DellPackages {
 }
 
 Function Update-DellServer {
-	Write-Host "Please note, this is a draft. Report errors to Ryan."
+	Write-Host "Please note, this function needs to be periodically updated. See https://downloads.dell.com/omimswac/dsu/ for the latest DSU version."
 	Write-Warning "Update-Everything will have a visible impact to any logged in users,`nas it will update drivers and reboot the computer.`nYou have 10 seconds to press CTRL+C to cancel this function."
 	$delay = 10
 
@@ -109,9 +109,9 @@ Function Update-DellServer {
 	}
 	$delay = $null
 
-	$URL = "https://downloads.dell.com/omimswac/dsu/Systems-Management_Application_D0JW4_WN64_1.9.3.0_A00.EXE"
-	$File = "C:\Ambitions\Dell System Update 1.9.3.exe"
-	$Hash = '24D96FB01B7F9CAF1756446CF408F8B4790F97A8E7E57C26C2E42CD9453F5DB1'
+	$URL = "https://downloads.dell.com/omimswac/dsu/Systems-Management_Application_8D3X6_WN64_2.0.1.0_A00.EXE"
+	$File = "C:\Ambitions\Dell System Update 2.0.1.exe"
+	$Hash = 'EAB30FCCC9BC484F55C3DBB01C9405BAD2B28754F364B082B3B94C4F8DEF0E73'
 	Function Get-DSUInstall {
 		Write-Host "Dell System Update is not installed, attempting to install."
 		Write-Host "Download the installer to $File"
@@ -149,8 +149,8 @@ Function Update-DellServer {
 			Exit
 		} Else {
 			Write-Host "Checkin if DSU is installed"
-			If ((Get-WmiObject win32_product | Where-Object -Property Name -Like "*Dell EMC System Update*").Version -NotLike "1.9.2*") {
-				Write-Host "Dell System Update is either not installed or not version 1.9.2"
+			If ((Get-WmiObject win32_product | Where-Object -Property Name -Like "*Dell System Update*").Version -NotLike "2.0.1.0*") {
+				Write-Host "Dell System Update is either not installed or not version 2.0.1.0"
 				Get-DSUInstall
 				Test-DSUInstall
 				Install-DSU
@@ -159,7 +159,7 @@ Function Update-DellServer {
 			}
 
 			Write-Host "Installing Dell System Updates"
-			& "C:\Program Files\Dell\Dell EMC System Update\DSU.exe" /d /u /n
+			& "C:\Program Files\Dell\DELL System Update\DSU.exe" /d /u /n
 		}
 	}
 }
