@@ -1,3 +1,129 @@
+Function Export-UsersOneDrive {
+	param
+	(
+		[Parameter(Mandatory=$false)]
+		[string]$departinguser,
+
+		[Parameter(Mandatory=$false)]
+		[string]$destinationuser,
+		
+		[Parameter(Mandatory=$false)]
+		[string]$globaladmin
+	)
+	
+	Write-Host -ForegroundColor Yellow "Please note:`n- This process will require you to log in as the global admin in several windows.`n- This will take quite some time if there are extensive amounts of files.`n- This cannot copy files larger then 250mb."
+	If (-not $departinguser) {$departinguser = Read-Host "Enter departing user's email"}
+	If (-not $departinguser) {$destinationuser = Read-Host "Enter destination user's email"}
+	If (-not $departinguser) {$globaladmin = Read-Host "Enter the username of your Global Admin account"}
+	Connect-O365AzureAD -Quiet
+	 
+	$InitialDomain = Get-AzureADDomain | Where-Object {$_.IsInitial -eq $true}
+	  
+	$SharePointAdminURL = "https://$($InitialDomain.Name.Split(".")[0])-admin.sharepoint.com"
+	  
+	$departingUserUnderscore = $departinguser -replace "[^a-zA-Z]", "_"
+	$destinationUserUnderscore = $destinationuser -replace "[^a-zA-Z]", "_"
+	  
+	$departingOneDriveSite = "https://$($InitialDomain.Name.Split(".")[0])-my.sharepoint.com/personal/$departingUserUnderscore"
+	$destinationOneDriveSite = "https://$($InitialDomain.Name.Split(".")[0])-my.sharepoint.com/personal/$destinationUserUnderscore"
+	Write-Host "`nConnecting to SharePoint Online" -ForegroundColor Blue
+	Connect-O365SharePoint -Url $SharePointAdminURL -Quiet
+	  
+	Write-Host "`nAdding $globaladmin as site collection admin on both OneDrive site collections" -ForegroundColor Blue
+	# Set current admin as a Site Collection Admin on both OneDrive Site Collections
+	If ($(Get-SPODeletedSite -IncludeOnlyPersonalSite).Url -match $departingOneDriveSite) {
+		Write-Host "$departingOneDriveSite has be deleted. Temporarily undeleting it for recovery."
+		Restore-SPODeletedSite -Identity $departingOneDriveSite
+		$WasDeleted = $True
+	}
+	Set-SPOUser -Site $departingOneDriveSite -LoginName $globaladmin -IsSiteCollectionAdmin $true
+	Set-SPOUser -Site $destinationOneDriveSite -LoginName $globaladmin -IsSiteCollectionAdmin $true
+	  
+	Write-Host "`nConnecting to $departinguser's OneDrive via SharePoint Online PNP module" -ForegroundColor Blue
+	  
+	Connect-O365SharepointPNP -Url $departingOneDriveSite -Quiet
+	  
+	Write-Host "`nGetting display name of $departinguser" -ForegroundColor Blue
+	# Get name of departing user to create folder name.https://pbwslaw-admin.sharepoint.com/
+	$departingOwner = Get-PnPSiteCollectionAdmin | Where-Object {$_.loginname -match $departinguser}
+	  
+	# If there's an issue retrieving the departing user's display name, set this one.
+	If ($departingOwner -contains $null) {
+		$departingOwner = @{
+			Title = "Departing User"
+		}
+	}
+	  
+	# Define relative folder locations for OneDrive source and destination
+	$departingOneDrivePath = "/personal/$departingUserUnderscore/Documents"
+	$destinationOneDrivePath = "/personal/$destinationUserUnderscore/Documents/$($departingOwner.Title)'s Files"
+	$destinationOneDriveSiteRelativePath = "Documents/$($departingOwner.Title)'s Files"
+	  
+	Write-Host "`nGetting all items from $($departingOwner.Title)" -ForegroundColor Blue
+	# Get all items from source OneDrive
+	$items = Get-PnPListItem -List Documents -PageSize 1000
+	  
+	$largeItems = $items | Where-Object {[long]$_.fieldvalues.SMTotalFileStreamSize -ge 261095424 -and $_.FileSystemObjectType -contains "File"}
+	If ($largeItems) {
+		$largeexport = @()
+		foreach ($item in $largeitems) {
+			$largeexport += "$(Get-Date) - Size: $([math]::Round(($item.FieldValues.SMTotalFileStreamSize / 1MB),2)) MB Path: $($item.FieldValues.FileRef)"
+			Write-Host "File too large to copy: $($item.FieldValues.FileRef)" -ForegroundColor DarkYellow
+		}
+		$largeexport | Out-file C:\temp\largefiles.txt -Append
+		Write-Host "A list of files too large to be copied from $($departingOwner.Title) have been exported to C:\temp\LargeFiles.txt" -ForegroundColor Yellow
+	}
+	  
+	$rightSizeItems = $items | Where-Object {[long]$_.fieldvalues.SMTotalFileStreamSize -lt 261095424 -or $_.FileSystemObjectType -contains "Folder"}
+	  
+	Write-Host "`nConnecting to $destinationuser via SharePoint PNP PowerShell module" -ForegroundColor Blue
+	Connect-O365SharepointPNP -Url $destinationOneDriveSite -Quiet
+	  
+	Write-Host "`nFilter by folders" -ForegroundColor Blue
+	# Filter by Folders to create directory structure
+	$folders = $rightSizeItems | Where-Object {$_.FileSystemObjectType -contains "Folder"}
+	  
+	Write-Host "`nCreating Directory Structure" -ForegroundColor Blue
+	foreach ($folder in $folders) {
+		$path = ('{0}{1}' -f $destinationOneDriveSiteRelativePath, $folder.fieldvalues.FileRef).Replace($departingOneDrivePath, '')
+		Write-Host "Creating folder in $path" -ForegroundColor Green
+		$newfolder = Resolve-PnPFolder -SiteRelativePath $path
+	}
+	   
+	Write-Host "`nCopying Files" -ForegroundColor Blue
+	$files = $rightSizeItems | Where-Object {$_.FileSystemObjectType -contains "File"}
+	$fileerrors = ""
+	foreach ($file in $files) {
+		  
+		$destpath = ("$destinationOneDrivePath$($file.fieldvalues.FileDirRef)").Replace($departingOneDrivePath, "")
+		Write-Host "Copying $($file.fieldvalues.FileLeafRef) to $destpath" -ForegroundColor Green
+		$newfile = Copy-PnPFile -SourceUrl $file.fieldvalues.FileRef -TargetUrl $destpath -OverwriteIfAlreadyExists -Force -ErrorVariable errors -ErrorAction SilentlyContinue
+		$fileerrors += $errors
+	}
+	If ($fileerrors) {
+		Write-Host -ForegroundColor Red "Errors were detected. A log is being saved at $Env:SystemDrive\temp\fileerrors.txt"
+		New-Item -Path $Env:SystemDrive\temp -ItemType Directory -Force
+		$fileerrors | Out-File $Env:SystemDrive\temp\fileerrors.txt
+	}
+	  
+	# Remove Global Admin from Site Collection Admin role for both users
+	Write-Host "`nRemoving $globaladmin from OneDrive site collections" -ForegroundColor Blue
+	Set-SPOUser -Site $departingOneDriveSite -LoginName $globaladmin -IsSiteCollectionAdmin $false
+	If ($globaladmin -ne $destinationuser) {
+		Set-SPOUser -Site $destinationOneDriveSite -LoginName $globaladmin -IsSiteCollectionAdmin $false
+	}
+	
+	If ($WasDeleted) {
+		Write-Host "$departingOneDriveSite was previously deleted. Re-deleting it."
+		Remove-SPOSite -Identity $departingOneDriveSite -Confirm:$false
+	}
+	Write-Host "`nDisconnecting from all services" -ForegroundColor Blue
+	Disconnect-AzureAD
+	Disconnect-SPOService
+	Disconnect-PnPOnline -ErrorAction SilentlyContinue
+	Write-Host "`nComplete!" -ForegroundColor Green
+}
+
 Function Import-PPESenderLists {
 	Function Export-PPEListsViaAPI {
 		<#
