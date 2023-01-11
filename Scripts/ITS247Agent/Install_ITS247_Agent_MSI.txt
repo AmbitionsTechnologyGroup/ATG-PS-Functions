@@ -97,7 +97,21 @@ Function InstallAgent {
 		#Start-Process -wait -Verb RunAs -FilePath 'C:\Ambitions\ITS247Agent\DPMASetup.exe' -ArgumentList 'SaazMobile.ini'
 	}
 	Write-Host "`nRemember: If powershell seems frozen you might have clicked in the window. Try clicking in the window again and press the ESC key to unfreeze.`n"
-	Do {
+	
+	function Start-SleepPretty($seconds) {
+		$doneDT = (Get-Date).AddSeconds($seconds)
+		while($doneDT -gt (Get-Date)) {
+			$secondsLeft = $doneDT.Subtract((Get-Date)).TotalSeconds
+			$percent = ($seconds - $secondsLeft) / $seconds * 100
+			Write-Progress -Activity "Sleeping" -Status "Sleeping..." -SecondsRemaining $secondsLeft -PercentComplete $percent
+			[System.Threading.Thread]::Sleep(500)
+		}
+		Write-Progress -Activity "Sleeping" -Status "Sleeping..." -SecondsRemaining 0 -Completed
+	}
+	Write-Host "Waiting 1 hour for agent install to finish."
+	Start-SleepPretty 3600
+	
+	<#Do {
 		$IRStart = Get-Date
 		$IRStartHM = Get-Date -Format hh:mm
 		$Process = "irsetup"
@@ -116,7 +130,8 @@ Function InstallAgent {
 			}
 			Write-Host "$Process Stopped" ; $Status = 'Done'
 		}
-	} Until ($Status)
+	} Until ($Status)#>
+	Writ
 <#
 	$countdownTime = 30
 	$startTime = Get-Date
