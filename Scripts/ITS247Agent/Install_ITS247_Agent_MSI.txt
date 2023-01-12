@@ -90,8 +90,7 @@ Function InstallAgent {
 		Write-Host Installing the agent for $SelectedSite.Site silently. No errors will be shown.
 		Start-Process "msiexec.exe" -ArgumentList "/I $msiFilePath /q" -Wait -NoNewWindow
 		#Start-Process -wait -Verb RunAs -FilePath 'C:\Ambitions\ITS247Agent\DPMASetup.exe' -ArgumentList '/S SaazMobile.ini'
-	}
- Else {
+	} Else {
 		Write-Host Installing the agent for $SelectedSite.Site interactively
 		Start-Process "msiexec.exe" -ArgumentList "/I $msiFilePath" -Wait -NoNewWindow
 		#Start-Process -wait -Verb RunAs -FilePath 'C:\Ambitions\ITS247Agent\DPMASetup.exe' -ArgumentList 'SaazMobile.ini'
@@ -118,8 +117,7 @@ Function InstallAgent {
 		If (!(Get-Process $Process -ErrorAction SilentlyContinue)) {
 			Write-Host -NoNewLine "`rWaiting for $Process to Start"
 			Start-Sleep -Seconds 2
-		}
-		Else {
+		} Else {
 			Write-Host "`n"
 			Write-Host "$Process has Started"
 			$IRStart = Get-Date
@@ -166,8 +164,7 @@ Function AskSilent {
 		Write-Host 'Selection Confirmed: Silent installation'
 		$Silent = $True
 		InstallAgent
-	}
- Else {
+	} Else {
 		Write-Host 'Selection Confirmed: Interactive installation'
 		$Silent = $False
 		InstallAgent
@@ -201,8 +198,7 @@ Function Create-Menu {
 			Write-Host Selection Confirmed: $SelectedSite.Site
 			AskSilent
 			InstallAgent
-		}
-		Else {
+		} Else {
 			$selection = Read-Host "Invalid code. Please make a valid selection"
 		}
 	}
@@ -211,21 +207,19 @@ Function Create-Menu {
 
 # Check for preassigned site code, offer choices If not
 If (Get-Variable -Name SiteCode -ErrorAction SilentlyContinue) { $Code = $SiteCode ; $Silent = $True }
-If ($Code = "Generic") {Clear-Variable Code -ErrorAction SilentlyContinue}
+If ($Code -eq "Generic") {Clear-Variable Code -ErrorAction SilentlyContinue}
 If ($Code) {
 	$SelectedSite = $SiteConfigs.Where( { $PSItem.Code -like $code })
 	If ($SelectedSite) {
 		InstallAgent
-	}
- Else {
+	} Else {
 		Do {
 			Show-Menu -Title 'Site Selection'
 			$selection = Read-Host "Invalid code. Please make a valid selection"
 		}
 		Until ($selection -eq 'q')
 	}
-}
-Else {
+} Else {
 	$DetectedIP = (Invoke-WebRequest -uri "http://ip.ambitionsgroup.com/" -UseBasicParsing).Content
 	$searchterm = '*' + $DetectedIP + '*'
 	$DetectedSite = $SiteConfigs.Where( { $PSItem.ExtIPs -like $searchterm })
@@ -240,8 +234,7 @@ Else {
 			$SelectedSite = $DetectedSite
 			$Silent = $True
 			InstallAgent
-		}
-		Else {
+		} Else {
 			#Prompt for auto install
 			$message = "Based on your external IP address of $DetectedIP, you are at $DetectedTitle"
 			$question = 'Do you want to proceed installing the agent for this site?'
@@ -254,15 +247,13 @@ Else {
 				$SelectedSite = $DetectedSite
 				AskSilent
 				InstallAgent
-			}
-			Else {
+			} Else {
 				Write-Host Generating a site selection menu
 				Create-Menu
 			}
 			#Pause
 		}
-	}
- Else {
+	} Else {
 		Write-Host No site detected based on your external IP address
 		Create-Menu
 	}
