@@ -129,8 +129,7 @@ Function InstallAgent {
 			Write-Host "$Process Stopped" ; $Status = 'Done'
 		}
 	} Until ($Status)#>
-	Writ
-<#
+	<#
 	$countdownTime = 30
 	$startTime = Get-Date
 	$endTime = $startTime.AddMinutes($countdownTime)
