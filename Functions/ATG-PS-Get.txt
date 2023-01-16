@@ -395,7 +395,7 @@ Function Get-FileDownload {
 		Parses the file name from the URL so you don't have to manually specify the file name.
 	.PARAMETER URL
 		URL of the file to download, i.e. 'http://download.ambitionsgroup.com/Software/migwiz.zip'
-	.PARAMETER URL
+	.PARAMETER SaveToFolder
 		Folder of where to save the file, i.e. 'C:\Temp
 	.EXAMPLE
 		#The following downloads the variable "$Link" to "C:\Ambitions\"
