@@ -59,7 +59,7 @@ Function Import-PPESenderLists {
 
 		# This funciton will capture and prepare your credentials for the Proofpoint Essentials API.
 		function Snag-Creds {
-			$domain = $Global:params.Domain
+			#$domain = $Global:params.Domain
 			$Creds = Get-Credential -Message "Enter your Credentials for Proofpoint Essentials."
 
 
@@ -78,7 +78,7 @@ Function Import-PPESenderLists {
 			$targetDomain = $Pdomain
 			$targetCompanyUsers = "https://$targetStack.proofpointessentials.com/api/v1/orgs/$targetDomain/users"
 			$targetCompanyOrg = "https://$targetStack.proofpointessentials.com/api/v1/orgs/$targetDomain/"
-			$AllDomainCheck = '*@'
+			#$AllDomainCheck = '*@'
 
 
 			$UserResponse = Invoke-RestMethod -Headers $Global:params.Headers -Uri $targetCompanyUsers -Method Get
@@ -100,8 +100,8 @@ Function Import-PPESenderLists {
 				
 				foreach ($WL in $item.white_list_senders) {
 					$SafetyTest = $null
-					IF ($WL -eq $primary) {$SafetyTest = "match"}     
-					IF ($WL -match '\*\@' -and $SafetyTest -eq $null) {$SafetyTest = "domain"}
+					IF ($WL -eq $primary) {$SafetyTest = "match"}
+					IF ($WL -match '\*\@' -and $null -eq $SafetyTest) {$SafetyTest = "domain"}
 
 					switch ($SafetyTest) {
 						"match" {$UserSafeSender += @([pscustomobject]@{PrimaryEmail=$primary;Entry="$WL"});break}
@@ -114,7 +114,7 @@ Function Import-PPESenderLists {
 			
 					$SafetyTest = $null
 					IF ($BL -eq $primary) {$SafetyTest = "match"}     
-					IF ($BL -match '\*\@' -and $SafetyTest -eq $null) {$SafetyTest = "domain"}
+					IF ($BL -match '\*\@' -and $null -eq $SafetyTest) {$SafetyTest = "domain"}
 
 					switch ($SafetyTest) {
 						"match" {$UserBlockedSender += @([pscustomobject]@{PrimaryEmail=$primary;Entry="$BL"});break}
@@ -165,7 +165,7 @@ Function Import-PPESenderLists {
 		}
 
 		# This script will begin with a clean Powershell Window and walk through the credentials capture.
-		cls
+		Clear-Host
 		Write-Output "Enter your credentials for Proofpoint.`n"
 		Snag-Creds
 
@@ -320,7 +320,7 @@ Function Import-PPESenderLists {
 	ForEach ($Domain in $Global:DomainList){$Global:UserSafeSenderList = $Global:UserSafeSenderList | Where-Object {$_.Entry -notlike $('*@' + $Domain)}}
 
 
-	$Global:Users = ($Global:UserBlockedSenderList.PrimaryEmail + $Global:UserSafeSenderList.PrimaryEmail) | Sort -Unique
+	$Global:Users = ($Global:UserBlockedSenderList.PrimaryEmail + $Global:UserSafeSenderList.PrimaryEmail) | Sort-Object -Unique
 	$Global:AllUserMailboxes = Get-Mailbox
 	$Global:Users | ForEach-Object {
 		$Global:Email = $_
@@ -597,7 +597,7 @@ Function Import-WindowsInstallerDrivers {
 		$URLStrings = $URLStrings | Where-Object {$_ -ne $Null}
 
 		$URLStrings | ForEach-Object {
-			$OutFile = $($DriversDir + "\" + $(Split-Path $_.Replace('%20','') -Leaf))
+			#$OutFile = $($DriversDir + "\" + $(Split-Path $_.Replace('%20','') -Leaf))
 			$DownloadFileInfo = Get-FileDownload -URL $_ -SaveToFolder $DriversDir
 			$DownloadedFiles += $DownloadFileInfo[-1]
 			Clear-Variable OutFile -Force -ErrorAction SilentlyContinue
@@ -640,7 +640,7 @@ Function Import-WindowsInstallerDrivers {
 	If (-Not (Test-Path -Path $BootWimPath -ErrorAction SilentlyContinue)) {
 		Do {
 			Write-host "$BootWimPath is not valid. Please select a drive letter that has a Windows Installer on it"
-			Get-Volume | Where-Object -Property DriveType -eq Removable | Select DriveLetter,FileSystemLabel | Out-Host
+			Get-Volume | Where-Object -Property DriveType -eq Removable | Select-Object DriveLetter,FileSystemLabel | Out-Host
 			$USBDriveLetter = Read-Host "Drive Letter of Windows USB Installer:"
 			$BootWimPath = $($USBDriveLetter + ":\sources\boot.wim")
 		} Until (Test-Path -Path $BootWimPath -ErrorAction SilentlyContinue)
