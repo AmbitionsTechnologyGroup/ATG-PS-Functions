@@ -547,13 +547,17 @@ Function Import-WindowsInstallerDrivers {
 	(
 		[Parameter(Mandatory=$False)]
 		$WorkingDirectory = $($Env:SystemDrive) + "\WinInstaller",
-		
+
 		[Parameter(Mandatory=$True)]
 		[String]$USBDriveLetter
 	)
+
+	<#-----------------------------Folder Prep-----------------------------------#>
+
 	#$WorkingDirectory = $($Env:SystemDrive) + "\WinInstaller"
 	#[String]$USBDriveLetter = "P"
 	$DriversDir = $($WorkingDirectory + "\Drivers")
+	$UpdatesDir = $($WorkingDirectory + "\Updates")
 	$MountDir = $($WorkingDirectory + "\Mount")
 	$WIMBootDir = $($WorkingDirectory + "\WIM-Boot")
 	$WimInstallDir = $($WorkingDirectory + "\WIM-Install")
@@ -561,6 +565,7 @@ Function Import-WindowsInstallerDrivers {
 	$NeededFolders = @(
 		$WorkingDirectory
 		$DriversDir
+		$UpdatesDir
 		$MountDir
 		$WIMBootDir
 		$WimInstallDir
@@ -573,6 +578,7 @@ Function Import-WindowsInstallerDrivers {
 		}
 	}
 
+	<#-----------------------------Driver Downloads-----------------------------------#>
 	#Get Drivers
 	Write-Host "Downloading drivers from Intel"
 	$DownloadedFiles = @()
@@ -580,7 +586,7 @@ Function Import-WindowsInstallerDrivers {
 		"https://www.intel.com/content/www/us/en/download/19512/intel-rapid-storage-technology-driver-installation-software-with-intel-optane-memory-10th-and-11th-gen-platforms.html"
 		"https://www.intel.com/content/www/us/en/download/720755/intel-rapid-storage-technology-driver-installation-software-with-intel-optane-memory-11th-and-12th-gen-platforms.html"
 	)
-	
+
 	$URLs | ForEach-Object {
 		$SourcePage = (Invoke-WebRequest -Uri $_ -UseBasicParsing).Content -split '\n'
 		$PageLinkLines = ($SourcePage | Select-String -SimpleMatch ".zip"| Select-String -SimpleMatch "Licenses" -NotMatch).Line
@@ -592,9 +598,10 @@ Function Import-WindowsInstallerDrivers {
 
 		$URLStrings | ForEach-Object {
 			$OutFile = $($DriversDir + "\" + $(Split-Path $_.Replace('%20','') -Leaf))
-			$DownloadedFiles += $OutFile
-			Invoke-WebRequest -Uri $_ -UseBasicParsing -OutFile $OutFile
+			$DownloadFileInfo = Get-FileDownload -URL $_ -SaveToFolder $DriversDir
+			$DownloadedFiles += $DownloadFileInfo[-1]
 			Clear-Variable OutFile -Force -ErrorAction SilentlyContinue
+			Clear-Variable DownloadFileInfo -Force -ErrorAction SilentlyContinue
 		}
 		Clear-Variable URLStrings -Force -ErrorAction SilentlyContinue
 	}
@@ -607,22 +614,28 @@ Function Import-WindowsInstallerDrivers {
 	[uri]$DellUrls = "https://dl.dell.com/FOLDER08107340M/4/Intel-Rapid-Storage-Technology-Driver-and-Application_0F5G4_WIN64_19.2.0.1003_A01_03.EXE"
 
 	$DellUrls | ForEach-Object {
-		#Isolate file name from URL
-		[string]$File = $_.Segments[-1]
 		#Add a '\' to the end of the folder only if needed.
 		If ($DriversDir -notmatch '\\$'){	$DriversDir += '\'}
-		#Create full download path
-		[string]$FilePath = $DriversDir + $File
-		#Enabling SSL"
-		[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192
-		Write-Host "Downloading $_"
-		(New-Object System.Net.WebClient).DownloadFile($_, $FilePath)
-		$ExtractPath = $DriversDir + $([System.IO.Path]::GetFileNameWithoutExtension($FilePath))
+		$DownloadFileInfo = Get-FileDownload -URL $_ -SaveToFolder $DriversDir
+		$FilePath = $DownloadFileInfo[-1]
+		$ExtractPath = '"' + $DriversDir + $([System.IO.Path]::GetFileNameWithoutExtension($DownloadFileInfo[0])) + '"'
+		Write-Host "& $FilePath /s /e=$ExtractPath"
 		& $FilePath /s /e=$ExtractPath
-		Clear-Variable OutFile -Force -ErrorAction SilentlyContinue
+		Clear-Variable DownloadFileInfo -Force -ErrorAction SilentlyContinue
 	}
 
-	#Get USB drive WIM
+	<#-----------------------------Update Downloads-----------------------------------#>
+	Write-Host "Downloading updates from Windows"
+	$DownloadedFiles = @()
+	$UpdateURLs = @(
+		"https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2023/01/windows11.0-kb5022303-x64_87d49704f3f7312cddfe27e45ba493048fdd1517.msu"
+	)
+
+	$UpdateURLs | ForEach-Object {
+		Get-FileDownload -URL $_ -SaveToFolder $UpdatesDir
+	}
+
+	#Get USB drive BOOT WIM
 	$Global:BootWimPath = $($USBDriveLetter + ":\sources\boot.wim")
 	If (-Not (Test-Path -Path $BootWimPath -ErrorAction SilentlyContinue)) {
 		Do {
@@ -633,12 +646,14 @@ Function Import-WindowsInstallerDrivers {
 		} Until (Test-Path -Path $BootWimPath -ErrorAction SilentlyContinue)
 	}
 
+	
 	#Move Boot File from USB to local Computer
 	Write-Host "Copying Boot.wim to local computer for processing"
 	$WIMBootWorkingFile = $WIMBootDir + "\boot.wim"
 	Write-Host "Copy-Item -Path $BootWimPath -Destination $WIMBootWorkingFile -Force"
 	Copy-Item -Path $BootWimPath -Destination $WIMBootWorkingFile -Force
-	
+
+<#-----------------------------Process drivers for boot.wim (windows installer)-----------------------------------#>
 	$Index = (Get-WindowsImage -ImagePath $WIMBootWorkingFile)
 	$Index | ForEach-Object {
 		Write-Host "Mounting Boot Image Index $($_.ImageIndex) - $($_.ImageName)"
@@ -653,7 +668,9 @@ Function Import-WindowsInstallerDrivers {
 	Write-Host "Copy-Item -Path $WIMBootWorkingFile -Destination $BootWimPath -Force"
 	Copy-Item -Path $WIMBootWorkingFile -Destination $BootWimPath -Force
 
-	#Move File from USB to local Computer
+
+<#-----------------------------Process drivers and updates for install.wim (windows image)-----------------------------------#>
+	#Move Install.wim File from USB to local Computer
 	$Global:InstallEsdPath = $($USBDriveLetter + ":\sources\install.esd")
 	$Global:InstallWimPath = $($USBDriveLetter + ":\sources\install.wim")
 	Write-Host "Copying install.(esd/wim) to local computer for processing"
@@ -686,6 +703,8 @@ Function Import-WindowsInstallerDrivers {
 		Mount-WindowsImage -Path $MountDir -ImagePath $WIMInstallWorkingFile -Index $($_.ImageIndex)
 		Write-Host "Adding Drivers"
 		Add-WindowsDriver -Path $MountDir -Driver $DriversDir -Recurse -ForceUnsigned -Verbose
+		Write-Host "Adding Updates"
+		Add-WindowsPackage -Path $MountDir -PackagePath $UpdatesDir -Verbose
 		Write-Host "Dismounting Install Image Index $($_.ImageIndex) - $($_.ImageName)"
 		Dismount-WindowsImage -Path $MountDir -Save
 		Start-Sleep 1
