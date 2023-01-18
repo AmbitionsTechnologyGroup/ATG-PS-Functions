@@ -17,7 +17,7 @@ Function Update-DellPackages {
 
 	Write-Host "Dell Updates"
 		$Manufact = (Get-CimInstance -Class Win32_ComputerSystem).Manufacturer
-		If ( $Manufact -like "*Dell*") {
+		If ( $Manufact -match "Dell" -or $Manufact -match "Alienware") {
 			#Install and update Chocolatey if Needed
 			If (Get-Command choco -errorAction SilentlyContinue) {
 				choco upgrade chocolatey -y
@@ -41,6 +41,7 @@ Function Update-DellPackages {
 				Get-ProvisionedAppPackage -Online -ErrorAction SilentlyContinue | Where-Object {$_.DisplayName -like "*Dell*Update*"} | Remove-ProvisionedAppPackage -Online
 				Get-AppxPackage "*Dell*Update*" -ErrorAction SilentlyContinue | Remove-AppxPackage
 				Get-Package "Dell*Windows 10" -ErrorAction SilentlyContinue | Uninstall-Package -AllVersions -Force
+				Uninstall-Application -AppToUninstall "Alienware Update for Windows Universal" -ErrorAction SilentlyContinue
 				If (Get-AppxPackage *Dell*Update*){
 					$apps = Get-ChildItem -Path HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall,HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall | Get-ItemProperty | Where-Object {$_.DisplayName -like "Dell*Update*" } | Select-Object -Property DisplayName, UninstallString
 					ForEach ($ver in $apps) {
