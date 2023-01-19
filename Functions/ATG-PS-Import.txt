@@ -573,8 +573,10 @@ Function Import-WindowsInstallerDrivers {
 
 	If (Test-Path -Path $WorkingDirectory) {
 		Write-Host "Cleaning up previous working directory if needed."
-		Dismount-WindowsImage -Path $MountDir -Discard -Verbose -ErrorAction SilentlyContinue
-		Remove-PathForcefully -Path $WorkingDirectory
+		If (Test-Path -Path $MountDir\* -ErrorAction SilentlyContinue) {
+			Dismount-WindowsImage -Path $MountDir -Discard -Verbose -ErrorAction SilentlyContinue
+		}
+		Remove-PathForcefully -Path $WorkingDirectory -ErrorAction SilentlyContinue
 	}
 
 	Write-Host "Creating needed folders"
@@ -666,8 +668,8 @@ Function Import-WindowsInstallerDrivers {
 		Mount-WindowsImage -Path $MountDir -ImagePath $WIMBootWorkingFile -Index $($_.ImageIndex)
 		Write-Host "Adding Drivers"
 		Add-WindowsDriver -Path $MountDir -Driver $DriversDir -Recurse -ForceUnsigned -Verbose
-		Write-Host "Adding Updates"
-		Add-WindowsPackage -Path $MountDir -PackagePath $UpdatesDir -Verbose
+		#Write-Host "Adding Updates"
+		#Add-WindowsPackage -Path $MountDir -PackagePath $UpdatesDir -Verbose
 		Write-Host "Dismounting Boot Image Index $($_.ImageIndex) - $($_.ImageName)"
 		Dismount-WindowsImage -Path $MountDir -Save
 		Start-Sleep 1
