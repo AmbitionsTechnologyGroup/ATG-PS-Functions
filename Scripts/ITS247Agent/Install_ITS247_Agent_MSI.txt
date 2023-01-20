@@ -107,28 +107,28 @@ Function InstallAgent {
 		}
 		Write-Progress -Activity "Sleeping" -Status "Sleeping..." -SecondsRemaining 0 -Completed
 	}
-	Write-Host "Waiting 1 hour for agent install to finish."
-	Start-SleepPretty 3600
+	#Write-Host "Waiting 1 hour for agent install to finish."
+	#Start-SleepPretty 3600
 	
-	<#Do {
-		$IRStart = Get-Date
-		$IRStartHM = Get-Date -Format hh:mm
-		$Process = "irsetup"
-		If (!(Get-Process $Process -ErrorAction SilentlyContinue)) {
-			Write-Host -NoNewLine "`rWaiting for $Process to Start"
+	Do {
+		$LogPath = "${env:ProgramFiles(x86)}\ITSPlatform\log\platform-installation-manager.log"
+		[int]$WaitMinutes = 10
+		If (!(Get-Item -Path $LogPath -ErrorAction SilentlyContinue)) {
+			Write-Host -NoNewLine "`rWaiting for Installation log to be created."
 			Start-Sleep -Seconds 2
 		} Else {
+			$IRStart = (Get-Item -Path $LogPath).CreationTime
+			$IRStartHM = $IRStart.ToString("hh:mm tt")
 			Write-Host "`n"
-			Write-Host "$Process has Started"
-			$IRStart = Get-Date
-			While (Get-Process $Process -ErrorAction SilentlyContinue) {
+			Write-Host -Foregroundcolor yellow "$IRStartHM - File has been created at $LogPath"
+			While (($(Get-Date) - $(Get-Item -Path $LogPath).LastWriteTime).TotalMinutes -le $WaitMinutes) {
 				[int32]$IRWait = (New-TimeSpan -Start $IRStart -End $(Get-Date)).TotalMinutes
-				Write-Host -NoNewLine "`rWaiting for $Process to stop since $IRStartHM, it's been $IRWait minutes"
+				Write-Host -NoNewLine "`rWaiting for Installation Log to be untouched for at least $WaitMinutes minutes (It's been untouched for $([int]$(($(Get-Date) - $(Get-Item -Path $LogPath).LastWriteTime).TotalMinutes)) minutes)"
 				Start-Sleep -Seconds 2
 			}
-			Write-Host "$Process Stopped" ; $Status = 'Done'
+			Write-Host -Foregroundcolor yellow "`nThe install log hasn't been touched for $WaitMinutes minutes.`n$(Get-Date -Format "hh:mm tt") - Considering install complete." ; $Status = 'Done'
 		}
-	} Until ($Status)#>
+} Until ($Status)
 	<#
 	$countdownTime = 30
 	$startTime = Get-Date
