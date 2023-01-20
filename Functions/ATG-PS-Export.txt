@@ -15,6 +15,24 @@ Function Export-LDAPSCertificate {
 	}
 }
 
+Function Export-365AllDistributionGroups {
+	param
+	(
+		[Parameter(Mandatory=$True)]
+		[string]$SaveToFolder
+	)
+
+	If (-not $(Get-ConnectionInformation)) {Connect-O365Exchange;$DisconnectWhenDoneALL = $True}
+	$AllDistributionGroups = Get-DistributionGroup
+	$AllDistributionGroups.DisplayName | ForEach-Object {
+		Write-Host $_
+		Export-365DistributionGroup -DistributionGroup $_ -SavePath $(Join-Path -Path $SaveToFolder -ChildPath $($_ + ".csv"))
+	}
+	If ($DisconnectWhenDoneALL -eq $True) {
+		Write-Host "Disconnecting from Exchange Online"
+		Disconnect-O365Exchange
+	}
+}
 Function Export-365DistributionGroup {
 	param
 	(
@@ -39,8 +57,8 @@ Function Export-365DistributionGroup {
 	Function Get-DistributionGroups {
 		$DistributionGroups = Get-DistributionGroup
 		If ($DistributionGroup) {
-			If ($DistributionGroups.Name -contains $DistributionGroup) {
-				$Global:SelectedDG = $DistributionGroup
+			If ($DistributionGroups.DisplayName -Match $DistributionGroup) {
+				$Global:SelectedDG = Get-DistributionGroup $DistributionGroup
 				Write-Host "You've selected $SelectedDG"
 			} Else {
 				Write-Host -ForegroundColor Yellow "$DistributionGroup is not a valid group."
@@ -117,16 +135,17 @@ Function Export-365DistributionGroup {
 	}
 	
 	################################
-	Connect-O365Exchange
+	If (-not $(Get-ConnectionInformation)) {Connect-O365Exchange;$DisconnectWhenDone = $True}
 	Get-DistributionGroups
 	Export-DistributionGroupMembers
 	Clear-Variable SelectedDG -Force -ErrorAction SilentlyContinue
 	Clear-Variable DGMembers -Force -ErrorAction SilentlyContinue
 	Clear-Variable DistributionGroup -Force -ErrorAction SilentlyContinue
 	Clear-Variable DistributionGroups -Force -ErrorAction SilentlyContinue
-	Write-Host "Disconnecting from Exchange Online"
-	Disconnect-O365Exchange
-
+	If ($DisconnectWhenDone -eq $True) {
+		Write-Host "Disconnecting from Exchange Online"
+		Disconnect-O365Exchange
+	}
 }
 
 Function Export-UsersOneDrive {
