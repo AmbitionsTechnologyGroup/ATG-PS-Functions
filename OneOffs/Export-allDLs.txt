@@ -1,0 +1,128 @@
+Function Export-365DistributionGroup {
+	param
+	(
+		[Parameter(Mandatory=$false)]
+		[string]$DistributionGroup,
+		[Parameter(Mandatory=$false)]
+		[string]$SavePath,
+		[Parameter(Mandatory=$false)]
+		[Switch]$ExportAllDistributionGroups
+	)
+
+	Function Save-File([string] $initialDirectory ) {
+
+		[System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms") | Out-Null
+
+		$OpenFileDialog = New-Object System.Windows.Forms.SaveFileDialog
+		$OpenFileDialog.initialDirectory = $initialDirectory
+		$OpenFileDialog.filter = "All files (*.csv)| *.csv"
+		$OpenFileDialog.ShowDialog() |  Out-Null
+
+		return $OpenFileDialog.filename
+	}
+
+	Function Get-DistributionGroups {
+		$DistributionGroups = Get-DistributionGroup
+		If ($DistributionGroup) {
+			If ($DistributionGroups.Name -contains $DistributionGroup) {
+				$Global:SelectedDG = $DistributionGroup
+				Write-Host "You've selected $SelectedDG"
+			} Else {
+				Write-Host -ForegroundColor Yellow "$DistributionGroup is not a valid group."
+			}
+		}
+
+		If (-not $SelectedDG) {
+			$DistributionGroups | Select-Object @{N='Index'; E={$DistributionGroups.IndexOf($_)}}, DisplayName, PrimarySmtpAddress | Out-Host -Paging -ErrorAction SilentlyContinue
+			$selection = Read-Host "Please enter the number of the Distribution Group you wish to select."
+			$Global:SelectedDG = $DistributionGroups[$selection]
+			Write-Host "You've selected $SelectedDG"
+		}
+
+	}
+
+	Function Export-DistributionGroupMembers {
+		$DGMembers = $SelectedDG | ForEach-Object {Get-DistributionGroupMember -Identity $_.Identity | Select-Object Name, PrimarySmtpAddress }
+		Write-Host "$SelectedDG`nGetting members of list."
+		function Show-Menu {
+			param (
+				[string]$Title = "$($DGMembers.count) members found in $SelectedDG"
+			)
+			Clear-Host
+			Write-Host "================ $Title ================"
+			Write-Host "What would you like to do with the list?"
+			Write-Host
+			Write-Host "1: View list of members."
+			Write-Host "2: Copy list of members."
+			Write-Host "3: Save list of members."
+			Write-Host "Q: Press 'Q' to quit"
+		}
+
+		If (-not $SavePath) {
+			do {
+				Show-Menu
+				$selection = Read-Host "Please make a selection"
+				switch ($selection) {
+					'1' {
+
+						'================ You chose option #1: View List ================'
+						Write-Host $SelectedDG
+						$DGMembers | Format-Table | Out-Host | More
+						Write-Host
+						Pause
+					} '2' {
+
+						'================ You chose option #2: Copy list ================'
+						$DGMembers | ConvertTo-Csv -Delimiter "`t" -NoTypeInformation | Set-Clipboard
+						Write-Host "Results have been copied to the clipboard. You may paste in another program."
+						Write-Host
+						Pause
+					} '3' {
+
+						'================ You chose option #3: Save list ================'
+
+						$SavePath = Save-File $env:USERPROFILE
+						"sep=;" | Out-File -FilePath $SavePath -Force
+						$DGMembers | ConvertTo-Csv -Delimiter ";" -NoTypeInformation | Out-File -FilePath $SavePath -Append -Force
+						Write-Host "The file has been saved to $SavePath"
+						Write-Host
+						Pause
+					} 'q' {
+						#exit
+					}
+				}
+				#pause
+			} until ($selection -eq 'q')
+		} Else {
+			"sep=;" | Out-File -FilePath $SavePath -Force
+			$DGMembers | ConvertTo-Csv -Delimiter ";" -NoTypeInformation | Out-File -FilePath $SavePath -Append -Force
+			Write-Host "The file has been saved to $SavePath"
+			Write-Host
+		}
+	}
+
+	################################
+	If (-not $(Get-ConnectionInformation)) {Connect-O365Exchange;$DisconnectWhenDone = $True}
+
+	If (-Not $ExportAllDistributionGroups) {
+		Get-DistributionGroups
+		Export-DistributionGroupMembers
+		Clear-Variable SelectedDG -Force -ErrorAction SilentlyContinue
+		Clear-Variable DGMembers -Force -ErrorAction SilentlyContinue
+		Clear-Variable DistributionGroup -Force -ErrorAction SilentlyContinue
+		Clear-Variable DistributionGroups -Force -ErrorAction SilentlyContinue
+	} Else {
+		$AllDistributionGroups = Get-DistributionGroup
+		$AllDistributionGroups | ForEach-Object {
+			Export-365DistributionGroup -DistributionGroup $_.Name -SavePath $(Join-Path -Path $SavePath -ChildPath $($_.Name + ".csv"))
+			Clear-Variable SelectedDG -Force -ErrorAction SilentlyContinue
+			Clear-Variable DGMembers -Force -ErrorAction SilentlyContinue
+			Clear-Variable DistributionGroup -Force -ErrorAction SilentlyContinue
+			Clear-Variable DistributionGroups -Force -ErrorAction SilentlyContinue
+		}
+	}
+	If ($DisconnectWhenDone -eq $True) {
+		Write-Host "Disconnecting from Exchange Online"
+		Disconnect-O365Exchange
+	}
+}
