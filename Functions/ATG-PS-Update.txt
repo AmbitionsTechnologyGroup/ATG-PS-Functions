@@ -39,7 +39,7 @@ Function Update-DellPackages {
 			Write-Host "Checking if 'Dell Command Update' is current."
 				#Remove any Windows 10 "Apps"
 				Get-ProvisionedAppPackage -Online -ErrorAction SilentlyContinue | Where-Object {$_.DisplayName -like "*Dell*Update*"} | Remove-ProvisionedAppPackage -Online
-				Get-AppxPackage "*Dell*Update*" -ErrorAction SilentlyContinue | Remove-AppxPackage
+				Uninstall-Application -AppToUninstall "Dell Update"
 				Get-Package "Dell*Windows 10" -ErrorAction SilentlyContinue | Uninstall-Package -AllVersions -Force
 				Uninstall-Application -AppToUninstall "Alienware Update for Windows Universal" -ErrorAction SilentlyContinue
 				If (Get-AppxPackage *Dell*Update*){
