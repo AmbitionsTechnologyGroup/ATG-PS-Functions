@@ -240,6 +240,154 @@ Function Connect-O365Sharepoint {
 # New-SPOSite -Url https://pbwslaw.sharepoint.com/sites/ArchivedOneDrives -Owner "admin@pbwslaw.onmicrosoft.com" -Title "Archived User OneDrives" -StorageQuota 1048576 -Template "BDR#0"
 }
 
+Function Connect-O365Sharepoint {
+	param
+	(
+		[Parameter(Mandatory=$false)]
+		[string]$url
+	)
+		If (-not (Get-Command Connect-SPOService -ErrorAction SilentlyContinue)) {
+			Write-Host "Installing the SharePoint Online Management Shell module"
+			Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+			Install-Module -Name Microsoft.Online.SharePoint.PowerShell -AllowClobber -Force
+			$ModVer = (Get-Command Connect-SPOService).Version
+			If ($ModVer) {
+				Write-Host "Exchange Online Management module version $ModVer has been installed."
+			} Else {
+				Write-Host "Exchange Online Management module failed to install."
+				Break
+			}
+		} Else {
+			$Readhost = 'N'
+			$Readhost = Read-Host "Do you want to check for module updates? This should be done periodically. `n(y/N)"
+			Switch ($ReadHost)
+			{
+				Y {
+					$ModVer = (Get-Command Connect-SPOService).Version
+					$AvailableModVer = (Find-Module Microsoft.Online.SharePoint.PowerShell -Repository PSGallery).Version
+					If ($ModVer -ne $AvailableModVer) {
+						Write-host "Microsoft.Online.SharePoint.PowerShell has an update from $ModVer to $AvailableModVer.`nInstalling the update."
+						Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+						Install-Module -Name Microsoft.Online.SharePoint.PowerShell -AllowClobber -Force
+					} Else {
+						Write-host "Microsoft.Online.SharePoint.PowerShell is already up to date at version $AvailableModVer."
+					}
+				}
+				N { Write-Host "Skipping update check." }
+				Default { Write-Host "Skipping update check." }
+			}
+		}
+
+	If (-not $url) {
+		Write-Host -ForegroundColor Yellow '`nA Sharepoint URL is needed. To obtain the URL, login to https://admin.microsoft.com/Adminportal/Home#/alladmincenters as a global admin for the client. Then right-click on "SharePoint" and select "Copy URL".'
+		$url = Read-Host "SharePoint Url"
+	}
+
+	If ($PSVersionTable.PSEdition -like "Desktop") {
+		Connect-SPOService -Url $url
+
+	} Else {
+		Write-Host -ForegroundColor Green -BackgroundColor DarkRed "Warning! You are using a CORE edition of Powershell. You will need to authenticate via a browser window."
+		Connect-SPOService -Url $url
+	}
+
+	Write-Host -ForegroundColor White -BackgroundColor DarkRed @"
+		Be sure to disconnect the remote PowerShell session when you're finished.
+		If you close the Windows PowerShell window without disconnecting the session,
+		you could use up all the remote PowerShell sessions available to you,
+		and you'll need to wait for the sessions to expire.
+		To disconnect the remote PowerShell session, run the following command.
+		Disconnect-SPOService
+"@
+
+<#
+	.SYNOPSIS
+		Initiates an Office 365 SharePoint Online connection that is compatible with MFA.
+	.LINK
+		https://learn.microsoft.com/en-us/powershell/sharepoint/sharepoint-online/connect-sharepoint-online
+	.EXAMPLE
+		Connect-O365Sharepoint -url https://client-admin.sharepoint.com
+#>
+# New-SPOSite -Url https://pbwslaw.sharepoint.com/sites/ArchivedOneDrives -Owner "admin@pbwslaw.onmicrosoft.com" -Title "Archived User OneDrives" -StorageQuota 1048576 -Template "BDR#0"
+}
+
+Function Connect-O365SharepointPNP {
+	param
+	(
+		[Parameter(Mandatory=$false)]
+		[string]$url,
+
+		[Parameter(Mandatory=$False)]
+		[switch]$Quiet
+	)
+	If (-not (Get-Command Connect-PnPOnline -ErrorAction SilentlyContinue)) {
+		Write-Host "Installing the SharePoint Online Management Shell module"
+		Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+		Install-Module -Name PnP.PowerShell -AllowClobber -Force
+		$ModVer = (Get-Command Connect-PnPOnline).Version
+		If ($ModVer) {
+			Write-Host "Exchange Online Management module version $ModVer has been installed."
+		} Else {
+			Write-Host "Exchange Online Management module failed to install."
+		Break
+		}
+	} Else {
+		If (-not $Quiet) {
+			$Readhost = 'N'
+			$Readhost = Read-Host "Do you want to check for module updates? This should be done periodically. n(y/N)"
+		} Else {$Readhost = 'Y'}
+		Switch ($ReadHost)
+		{
+			Y {
+				$ModVer = (Get-Command Connect-PnPOnline).Version
+				$AvailableModVer = (Find-Module PnP.PowerShell -Repository PSGallery).Version
+				If ($ModVer -ne $AvailableModVer) {
+					Write-host "PnP.PowerShell has an update from $ModVer to $AvailableModVer.nInstalling the update."
+					Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+					Install-Module -Name PnP.PowerShell -AllowClobber -Force
+				} Else {
+					Write-host "PnP.PowerShell is already up to date at version $AvailableModVer."
+				}
+			}
+			N { Write-Host "Skipping update check." }
+			Default { Write-Host "Skipping update check." }
+		}
+	}
+
+	If (-not $url) {
+		Write-Host -ForegroundColor Yellow 'nA Sharepoint Site URL is needed.'
+		$url = Read-Host "SharePoint Url"
+	}
+
+	If ($PSVersionTable.PSEdition -like "Desktop") {
+		Connect-PnPOnline -Url $url -Interactive
+	} Else {
+		Write-Host -ForegroundColor Green -BackgroundColor DarkRed "Warning! You are using a CORE edition of Powershell. You will need to authenticate via a browser window."
+		Connect-PnPOnline -Url $url -Interactive
+	}
+
+	If (-not $Quiet) {
+		Write-Host -ForegroundColor White -BackgroundColor DarkRed @"
+		Be sure to disconnect the remote PowerShell session when you're finished.
+		If you close the Windows PowerShell window without disconnecting the session,
+		you could use up all the remote PowerShell sessions available to you,
+		and you'll need to wait for the sessions to expire.
+		To disconnect the remote PowerShell session, run the following command.
+		DisConnect-PnPOnline
+"@
+	}
+
+	<#
+		.SYNOPSIS
+		Initiates an Office 365 SharePoint Online connection that is compatible with MFA.
+		.LINK
+		https://learn.microsoft.com/en-us/powershell/sharepoint/sharepoint-online/connect-sharepoint-online
+		.EXAMPLE
+		Connect-O365SharepointPnP -url https://client-admin.sharepoint.com
+	#>
+	# New-SPOSite -Url https://pbwslaw.sharepoint.com/sites/ArchivedOneDrives -Owner "admin@pbwslaw.onmicrosoft.com" -Title "Archived User OneDrives" -StorageQuota 1048576 -Template "BDR#0"
+}
+
 Function Connect-Wifi {
 	param
 		(
