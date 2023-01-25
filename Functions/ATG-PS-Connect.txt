@@ -106,67 +106,76 @@ Function Connect-NetExtender {
 }
 
 Function Connect-O365Exchange {
-		If (-not (Get-Command Connect-ExchangeOnline -ErrorAction SilentlyContinue)) {
-			Write-Host "Installing the Exchange Online Management module"
-			Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-			Install-Module -Name ExchangeOnlineManagement -AllowClobber -Force
-			$ModVer = (Get-Command Connect-ExchangeOnline).Version
-			If ($ModVer) {
-				Write-Host "Exchange Online Management module version $ModVer has been installed."
-			} Else {
-				Write-Host "Exchange Online Management module failed to install."
-				Break
-			}
+	param
+	(
+		[Parameter(Mandatory = $False)]
+		[switch]$Quiet
+	)
+	If (-not (Get-Command Connect-ExchangeOnline -ErrorAction SilentlyContinue)) {
+		Write-Host "Installing the Exchange Online Management module"
+		Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+		Install-Module -Name ExchangeOnlineManagement -AllowClobber -Force
+		$ModVer = (Get-Command Connect-ExchangeOnline).Version
+		If ($ModVer) {
+			Write-Host "Exchange Online Management module version $ModVer has been installed."
 		} Else {
-			$Readhost = 'N'
-			$Readhost = Read-Host "Do you want to check for module updates? This should be done periodically. `n(y/N)"
-			Switch ($ReadHost)
-			{
-				Y {
-					$ModVer = (Get-Command Connect-ExchangeOnline).Version
-					$AvailableModVer = (Find-Module ExchangeOnlineManagement -Repository PSGallery).Version
-					If ($ModVer -ne $AvailableModVer) {
-						Write-host "ExchangeOnlineManagement has an update from $ModVer to $AvailableModVer.`nInstalling the update."
-						Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-						Install-Module -Name ExchangeOnlineManagement -AllowClobber -Force
-					} Else {
-						Write-host "ExchangeOnlineManagement is already up to date at version $AvailableModVer."
-					}
-				}
-				N { Write-Host "Skipping update check." }
-				Default { Write-Host "Skipping update check." }
-			}
+			Write-Host "Exchange Online Management module failed to install."
+			Break
 		}
-
+	} Else {
+		If (-not $Quiet) {
+			$Readhost = 'N'
+			$Readhost = Read-Host "Do you want to check for module updates? This should be done periodically. n(y/N)"
+		} Else { $Readhost = 'Y' }
+		Switch ($ReadHost) {
+			Y {
+				$ModVer = (Get-Command Connect-ExchangeOnline).Version
+				$AvailableModVer = (Find-Module ExchangeOnlineManagement -Repository PSGallery).Version
+				If ($ModVer -ne $AvailableModVer) {
+					Write-host "ExchangeOnlineManagement has an update from $ModVer to $AvailableModVer.nInstalling the update."
+					Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+					Install-Module -Name ExchangeOnlineManagement -AllowClobber -Force
+				} Else {
+					Write-host "ExchangeOnlineManagement is already up to date at version $AvailableModVer."
+				}
+			}
+			N { Write-Host "Skipping update check." }
+			Default { Write-Host "Skipping update check." }
+		}
+	}
+	
 	If ($PSVersionTable.PSEdition -like "Desktop") {
 		Connect-ExchangeOnline -ShowBanner:$false
-
-	} Else {
+	
+	}
+ Else {
 		Write-Host -ForegroundColor Green -BackgroundColor DarkRed "Warning! You are using a CORE edition of Powershell. You will need to authenticate via a browser window."
 		Connect-ExchangeOnline -ShowBanner:$false -Device
 	}
-
-	Write-Host -ForegroundColor White -BackgroundColor DarkRed @"
-		Be sure to disconnect the remote PowerShell session when you're finished.
-		If you close the Windows PowerShell window without disconnecting the session,
-		you could use up all the remote PowerShell sessions available to you,
-		and you'll need to wait for the sessions to expire.
-		To disconnect the remote PowerShell session, run the following command.
-
-		Disconnect-O365Exchange
+	
+	If (-not $Quiet) {
+		Write-Host -ForegroundColor White -BackgroundColor DarkRed @"
+	Be sure to disconnect the remote PowerShell session when you're finished.
+	If you close the Windows PowerShell window without disconnecting the session,
+	you could use up all the remote PowerShell sessions available to you,
+	and you'll need to wait for the sessions to expire.
+	To disconnect the remote PowerShell session, run the following command.
+	
+	Disconnect-O365Exchange
 "@
-
-<#
+	}
+	
+	<#
 	.SYNOPSIS
-		Initiates an Office 365 Exchange connection that is compatible with MFA.
-
+	Initiates an Office 365 Exchange connection that is compatible with MFA.
+	
 	.LINK
-		https://docs.microsoft.com/en-us/powershell/exchange/connect-to-exchange-online-powershell?view=exchange-ps
-
+	https://docs.microsoft.com/en-us/powershell/exchange/connect-to-exchange-online-powershell?view=exchange-ps
+	
 	.EXAMPLE
-		Connect-O365Exchange
-		Yup, that's it!
-#>
+	Connect-O365Exchange
+	Yup, that's it!
+	#>
 }
 
 Function Connect-O365Sharepoint {
