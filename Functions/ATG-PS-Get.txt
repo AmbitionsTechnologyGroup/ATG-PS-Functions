@@ -520,6 +520,54 @@ Function Get-InternetHealth {
 	$SpeedtestHealth
 }
 
+Function Get-InstalledApplication {
+	param(
+
+	  [Parameter(Mandatory=$False, ValueFromPipeline=$True,
+	  ValueFromPipelineByPropertyName=$True, HelpMessage='Enter the name of the application to check.')]
+	  [Alias('Application')]
+	  [string] $Name
+	)
+
+	If ( $PSBoundParameters['Verbose'] -or $VerbosePreference -eq 'Continue' ) {
+		Write-Verbose '[Scanning All App sources]'
+		Write-Verbose '--[Scanning Wmi Repository]'
+	}
+	$Global:WmiApps = (Get-WmiObject -Class Win32_Product).Name | Select-Object -Unique | Sort-Object
+	If ( $PSBoundParameters['Verbose'] -or $VerbosePreference -eq 'Continue' ) {
+		Write-Verbose '--[Scanning Native Powershell Repository]'
+	}
+	$Global:PowershellApps = (Get-Package -Provider Programs -IncludeWindowsInstaller).Name | Select-Object -Unique | Sort-Object
+	If ( $PSBoundParameters['Verbose'] -or $VerbosePreference -eq 'Continue' ) {
+		Write-Verbose '--[Scanning MSIExec UninstallString Repository]'
+	}
+	$Global:uninstallX86RegPath="HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall" | Select-Object -Unique | Sort-Object
+	$Global:uninstallX64RegPath="HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall" | Select-Object -Unique | Sort-Object
+	$Global:MsiApps = (Get-ChildItem $uninstallX86RegPath | ForEach-Object { Get-ItemProperty $_.PSPath }).DisplayName
+	$MsiApps += (Get-ChildItem $uninstallX64RegPath | ForEach-Object { Get-ItemProperty $_.PSPath }).DisplayName
+	$Global:AllApps = $WmiApps + $PowershellApps + $MsiApps | Select-Object -Unique | Sort-Object
+	$Global:Uninstalled = $False
+
+	If ($Name) {
+		If ($AllApps -match $Name) {
+			If ( $PSBoundParameters['Verbose'] -or $VerbosePreference -eq 'Continue' ) {
+				Write-Verbose "$($AllApps -match $Name) is installed."
+			}
+			Return $True
+		} Else {
+			If ( $PSBoundParameters['Verbose'] -or $VerbosePreference -eq 'Continue' ) {
+				Write-Verbose "$Name is NOT installed."
+			}
+			Return $False
+		}
+	} Else {
+		If ( $PSBoundParameters['Verbose'] -or $VerbosePreference -eq 'Continue' ) {
+				Write-Verbose "Installed Applications:`n`n"
+			}
+		Return $AllApps
+	}
+}
+
 Function Get-IPConfig {
 	<#
 	.DESCRIPTION
