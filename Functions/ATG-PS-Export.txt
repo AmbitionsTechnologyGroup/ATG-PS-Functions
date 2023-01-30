@@ -220,7 +220,8 @@ Function Export-UsersOneDrive {
 			$largeexport += "$(Get-Date) - Size: $([math]::Round(($item.FieldValues.SMTotalFileStreamSize / 1MB),2)) MB Path: $($item.FieldValues.FileRef)"
 			Write-Host "File too large to copy: $($item.FieldValues.FileRef)" -ForegroundColor DarkYellow
 		}
-		$largeexport | Out-file C:\temp\largefiles.txt -Append
+		New-Item -Path $Env:SystemDrive\temp -ItemType Directory -Force
+		$largeexport | Out-file $Env:SystemDrive\temp\largefiles.txt -Append
 		Write-Host "A list of files too large to be copied from $($departingOwner.Title) have been exported to C:\temp\LargeFiles.txt" -ForegroundColor Yellow
 	}
 	  
