@@ -151,13 +151,13 @@ Function Export-365DistributionGroup {
 Function Export-UsersOneDrive {
 	param
 	(
-		[Parameter(Mandatory=$false)]
+		[Parameter(Mandatory=$True)]
 		[string]$departinguser,
 
-		[Parameter(Mandatory=$false)]
+		[Parameter(Mandatory=$True)]
 		[string]$destinationuser,
 		
-		[Parameter(Mandatory=$false)]
+		[Parameter(Mandatory=$True)]
 		[string]$globaladmin
 	)
 	
