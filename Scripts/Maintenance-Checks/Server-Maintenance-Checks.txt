@@ -419,7 +419,7 @@ Get-FWCheck
 	#Check if ATG tools exists
 	Write-Host
 	Write-Host "Portable Apps check:"
-	if (Test-Path C:\Ambitions\Windows_Repair_Toolbox) {
+	If (Test-Path C:\Ambitions\Windows_Repair_Toolbox) {
 		Write-Host -ForegroundColor Green ATG Portable Apps tools are installed
 	} Else {
 		Write-Host -ForegroundColor Red ATG Portable Apps tools are NOT installed
@@ -429,10 +429,9 @@ Get-FWCheck
 	#Changelog check
 	Write-Host
 	Write-Host "Change Log file check:"
-	if (Test-Path C:\ambitions\*_$env:computername"_ChangeLog.txt") {
+	If (Test-Path $Env:SystemDrive"\Ambitions\"$env:computername"_ChangeLog.txt") {
 		Write-Host -ForegroundColor Green $env:computername"_ChangeLog.txt does exist"
-	}
- else {
+	} Else {
 		Write-Host -ForegroundColor Red $env:computername"_ChangeLog.txt" does NOT exist
 	}
 	#End of Changelog check
