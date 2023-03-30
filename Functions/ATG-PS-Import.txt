@@ -636,12 +636,15 @@ Function Import-WindowsInstallerDrivers {
 	Write-Host "Downloading updates from Windows"
 	$DownloadedFiles = @()
 	$UpdateURLs = @(
-		"https://catalog.s.download.windowsupdate.com/d/msdownload/update/software/secu/2023/01/windows11.0-kb5022303-x64_87d49704f3f7312cddfe27e45ba493048fdd1517.msu"
+		"https://catalog.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/d73b698e-6d66-4f6d-942e-6a980db92d07/public/windows11.0-kb5023778-x64_204c2f5ab1eb71d80eb470b5af079dd8e56c20e7.msu"
 	)
 
 	$UpdateURLs | ForEach-Object {
 		Get-FileDownload -URL $_ -SaveToFolder $UpdatesDir
 	}
+
+	Write-Host -NoNewLine "Automatic downloads complete. Please add any manual drivers to $WorkingDirectory `nPress any key to continue...";
+	$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
 
 	#Get USB drive BOOT WIM
 	$Global:BootWimPath = $($USBDriveLetter + ":\sources\boot.wim")
