@@ -594,32 +594,51 @@ Function Import-WindowsInstallerDrivers {
 		"https://www.intel.com/content/www/us/en/download/19512/intel-rapid-storage-technology-driver-installation-software-with-intel-optane-memory-10th-and-11th-gen-platforms.html"
 		"https://www.intel.com/content/www/us/en/download/720755/intel-rapid-storage-technology-driver-installation-software-with-intel-optane-memory-11th-and-12th-gen-platforms.html"
 	)
-
-	$URLs | ForEach-Object {
-		$SourcePage = (Invoke-WebRequest -Uri $_ -UseBasicParsing).Content -split '\n'
-		$PageLinkLines = ($SourcePage | Select-String -SimpleMatch ".zip"| Select-String -SimpleMatch "Licenses" -NotMatch).Line
+	
+	If (-not (Test-Path "${env:ProgramFiles}\7-Zip\7z.exe" -ErrorAction SilentlyContinue)) {
+		Install-Choco
+		Choco install 7zip -y
+	}
+	
+	ForEach ($URL in $URLs) {
+		Write-Host $URL
+		$SourcePage = (Invoke-WebRequest -Uri $URL -UseBasicParsing).Content -split '\n'
+		$PageLinkLines = ($SourcePage | Select-String -SimpleMatch ".exe"| Select-String -SimpleMatch "Licenses" -NotMatch).Line
 		New-Variable -Name URLStrings -Value @() -Force
 		$PageLinkLines | ForEach-Object {
 			$URLStrings += ((Select-String '(http[s]?)(:\/\/)([^\s,]+)(?=")' -Input $($_.Replace(' ','%20'))).Matches.Value)
 		}
 		$URLStrings = $URLStrings | Where-Object {$_ -ne $Null}
 
-		$URLStrings | ForEach-Object {
-			#$OutFile = $($DriversDir + "\" + $(Split-Path $_.Replace('%20','') -Leaf))
-			$DownloadFileInfo = Get-FileDownload -URL $_ -SaveToFolder $DriversDir
+		$URLStrings = $URLStrings | Where-Object {$_ -notmatch "html"}
+		$URLStrings = $URLStrings | Sort-Object | Get-Unique
+		ForEach ($URLString in $URLStrings){
+			#$OutFile = $($DriversDir + "\" + $(Split-Path $URLString.Replace('%20','') -Leaf))
+			$GUIFolder = $($DriversDir + "\Intel_" + (New-Guid).Guid)
+			$DownloadFileInfo = Get-FileDownload -URL $URLString -SaveToFolder $GUIFolder
+			$DownloadFileInfo
 			$DownloadedFiles += $DownloadFileInfo[-1]
+			#Extract .exe using 7zip
+			& "${env:ProgramFiles}\7-Zip\7z.exe" x $DownloadFileInfo[-1] "-o$($GUIFolder)" -r -y
+			Sleep 50
+			#Extract content located in .text file, after renaming it to include not just an extension.
+			Rename-Item -LiteralPath $((Get-ChildItem -Path $GUIFolder -Filter *.text).FullName) -NewName Content.text
+			& "${env:ProgramFiles}\7-Zip\7z.exe" x "-o$GUIFolder" $((Get-ChildItem -Path $GUIFolder -Filter *.text).FullName) -y
 			Clear-Variable OutFile -Force -ErrorAction SilentlyContinue
 			Clear-Variable DownloadFileInfo -Force -ErrorAction SilentlyContinue
 		}
 		Clear-Variable URLStrings -Force -ErrorAction SilentlyContinue
 	}
 
-	$DownloadedFiles | ForEach-Object {
-		Expand-Archive -Path $_ -DestinationPath $DriversDir -Force
-	}
+									
+															 
+  
 
 	Write-Host "Downloading drivers from Dell"
-	[uri]$DellUrls = "https://dl.dell.com/FOLDER08107340M/4/Intel-Rapid-Storage-Technology-Driver-and-Application_0F5G4_WIN64_19.2.0.1003_A01_03.EXE"
+	$DellUrls = @(
+	"https://dl.dell.com/FOLDER08107340M/4/Intel-Rapid-Storage-Technology-Driver-and-Application_0F5G4_WIN64_19.2.0.1003_A01_03.EXE"
+	"https://dl.dell.com/FOLDER09445327M/3/Intel-Rapid-Storage-Technology-Driver-and-Application_88DXV_WIN64_18.7.6.1010_A05.EXE"
+	)
 
 	$DellUrls | ForEach-Object {
 		#Add a '\' to the end of the folder only if needed.
@@ -698,7 +717,7 @@ Function Import-WindowsInstallerDrivers {
 		$ConverToEsd = $True
 		Write-Host "Copy-Item -Path $InstallEsdPath -Destination $EsdInstallWorkingFile -Force"
 		Copy-Item -Path $InstallEsdPath -Destination $EsdInstallWorkingFile -Force
-		$Image = (Get-WindowsImage -ImagePath $EsdInstallWorkingFile | Where-Object -Property ImageName -notmatch " N" | Where-Object -Property ImageName -notmatch "Education" | Where-Object -Property ImageName -notmatch "Single Language")
+		$Image = (Get-WindowsImage -ImagePath $EsdInstallWorkingFile | Where-Object -Property ImageName -notmatch " N" | Where-Object -Property ImageName -notmatch "Education" | Where-Object -Property ImageName -notmatch "Single Language")[-1]
 		Write-Host "Converting ESD file to WIM file"
 		$Image | ForEach-Object {
 			Write-Host "Exporting Image $($_.ImageIndex) of $($Image.count)Dism"
