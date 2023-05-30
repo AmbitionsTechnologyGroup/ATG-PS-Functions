@@ -23,6 +23,10 @@ Function Update-DellPackages {
 				choco upgrade chocolatey -y
 			} Else { Install-Choco }
 
+						Stop-Process -Name DellCommandUpdate -Force -ErrorAction SilentlyContinue
+			$DCUx86 = Join-Path -Path ${env:ProgramFiles(x86)} -ChildPath "Dell\CommandUpdate\dcu-cli.exe"
+			$DCUx64 = Join-Path -Path $Env:ProgramFiles -ChildPath "Dell\CommandUpdate\dcu-cli.exe"
+
 			Function Install-DCU {
 				#Starts the IPMI Service if needed
 				$IPMIService = (Get-Service -Name IPMIDRV -ErrorAction SilentlyContinue).Status
@@ -36,55 +40,54 @@ Function Update-DellPackages {
 				}
 			}
 
-			Write-Host "Checking if 'Dell Command Update' is current."
-				#Remove any Windows 10 "Apps"
-				Get-ProvisionedAppPackage -Online -ErrorAction SilentlyContinue | Where-Object {$_.DisplayName -like "*Dell*Update*"} | Remove-ProvisionedAppPackage -Online
-				Uninstall-Application -AppToUninstall "Dell Update"
-				Get-Package "Dell*Windows 10" -ErrorAction SilentlyContinue | Uninstall-Package -AllVersions -Force
-				Uninstall-Application -AppToUninstall "Alienware Update for Windows Universal" -ErrorAction SilentlyContinue
-				If (Get-AppxPackage *Dell*Update*){
-					$apps = Get-ChildItem -Path HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall,HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall | Get-ItemProperty | Where-Object {$_.DisplayName -like "Dell*Update*" } | Select-Object -Property DisplayName, UninstallString
-					ForEach ($ver in $apps) {
-						If ($ver.UninstallString) {
-							$uninst = $ver.UninstallString
-							Write-Host Uninstalling: $ver.DisplayName
-							Start-Process cmd -ArgumentList "/c $uninst /quiet /norestart" -NoNewWindow -Wait -PassThru
+			If ((!(Test-Path $DCUx86)) -and (!(Test-Path $DCUx64))) {
+					Write-Host "Checking if 'Dell Command Update' is current."
+					#Remove any Windows 10 "Apps"
+					Get-ProvisionedAppPackage -Online -ErrorAction SilentlyContinue | Where-Object {$_.DisplayName -like "*Dell*Update*"} | Remove-ProvisionedAppPackage -Online
+					Uninstall-Application -AppToUninstall "Dell Update"
+					Get-Package "Dell*Windows 10" -ErrorAction SilentlyContinue | Uninstall-Package -AllVersions -Force
+					Uninstall-Application -AppToUninstall "Alienware Update for Windows Universal" -ErrorAction SilentlyContinue
+					If (Get-AppxPackage *Dell*Update*){
+						$apps = Get-ChildItem -Path HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall,HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall | Get-ItemProperty | Where-Object {$_.DisplayName -like "Dell*Update*" } | Select-Object -Property DisplayName, UninstallString
+						ForEach ($ver in $apps) {
+							If ($ver.UninstallString) {
+								$uninst = $ver.UninstallString
+								Write-Host Uninstalling: $ver.DisplayName
+								Start-Process cmd -ArgumentList "/c $uninst /quiet /norestart" -NoNewWindow -Wait -PassThru
+							}
 						}
 					}
+
+					#Compare version numbers of any remaining installed version.
+					$DCUInstalledVersion = (Get-Package -Provider Programs -IncludeWindowsInstaller -Name "Dell Command | Update" -ErrorAction SilentlyContinue).Version
+					If (Get-Command winget -ErrorAction SilentlyContinue) {
+						$DCUAvailableVersion = $(winget show --id Dell.CommandUpdate --accept-source-agreements | Select-String -SimpleMatch "Version:").Line.Replace("Version: ","")
+					} Else {
+						$DCUAvailableVersion = choco list dellcommandupdate #Gets all results
+						$DCUAvailableVersion = ($DCUAvailableVersion | Select-String -Pattern "DellCommandUpdate " -SimpleMatch).Line #Isolates the desired result
+						$DCUAvailableVersion = $DCUAvailableVersion.split(" ",[System.StringSplitOptions]::RemoveEmptyEntries)[1] #Isolates the version number
+					}
+
+				If (-not $DCUInstalledVersion) {
+					Write-Host "'Dell Command Update' is not installed, installing now."
+					Install-DCU
+
+				}  ElseIf ($DCUAvailableVersion -notmatch $DCUInstalledVersion) {
+					Write-Host "'Dell Command Update' is not current. Updating from version $DCUInstalledVersion to $DCUAvailableVersion."
+
+					#Remove any programs listed through "Add and remove programs"
+					$DCUInstalled = Get-WmiObject -Class Win32_Product | Where-Object {$_.Name -like "*Dell*Update*"}
+					If ($DCUInstalled) {
+						$DCUInstalled.Uninstall()
+					}
+					Install-DCU
+
+				} ElseIf ($DCUInstalledVersion -eq $DCUAvailableVersion) {
+					Write-Host -ForegroundColor Green "'Dell Command Update' is current."
 				}
-
-				#Compare version numbers of any remaining installed version.
-				$DCUInstalledVersion = (Get-Package -Provider Programs -IncludeWindowsInstaller -Name "Dell Command | Update" -ErrorAction SilentlyContinue).Version
-				If (Get-Command winget -ErrorAction SilentlyContinue) {
-					$DCUAvailableVersion = $(winget show --id Dell.CommandUpdate --accept-source-agreements | Select-String -SimpleMatch "Version:").Line.Replace("Version: ","")
-				} Else {
-					$DCUAvailableVersion = choco list dellcommandupdate #Gets all results
-					$DCUAvailableVersion = ($DCUAvailableVersion | Select-String -Pattern "DellCommandUpdate " -SimpleMatch).Line #Isolates the desired result
-					$DCUAvailableVersion = $DCUAvailableVersion.split(" ",[System.StringSplitOptions]::RemoveEmptyEntries)[1] #Isolates the version number
-				}
-
-			If (-not $DCUInstalledVersion) {
-				Write-Host "'Dell Command Update' is not installed, installing now."
-				Install-DCU
-
-			}  ElseIf ($DCUAvailableVersion -notmatch $DCUInstalledVersion) {
-				Write-Host "'Dell Command Update' is not current. Updating from version $DCUInstalledVersion to $DCUAvailableVersion."
-
-				#Remove any programs listed through "Add and remove programs"
-				$DCUInstalled = Get-WmiObject -Class Win32_Product | Where-Object {$_.Name -like "*Dell*Update*"}
-				If ($DCUInstalled) {
-					$DCUInstalled.Uninstall()
-				}
-				Install-DCU
-
-			} ElseIf ($DCUInstalledVersion -eq $DCUAvailableVersion) {
-				Write-Host -ForegroundColor Green "'Dell Command Update' is current."
 			}
 
 			#Configure and run Dell Command Update
-			Stop-Process -Name DellCommandUpdate -Force -ErrorAction SilentlyContinue
-			$DCUx86 = Join-Path -Path ${env:ProgramFiles(x86)} -ChildPath "Dell\CommandUpdate\dcu-cli.exe"
-			$DCUx64 = Join-Path -Path $Env:ProgramFiles -ChildPath "Dell\CommandUpdate\dcu-cli.exe"
 			If (Test-Path $DCUx86) {
 				& $DCUx86 /configure -autoSuspendBitLocker=enable
 				& $DCUx86 /applyUpdates -reboot=disable
