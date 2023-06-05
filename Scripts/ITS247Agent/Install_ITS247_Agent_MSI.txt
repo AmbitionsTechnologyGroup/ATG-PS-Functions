@@ -81,7 +81,32 @@ Function InstallAgent {
 	$null = (New-Item -ItemType Directory -Force -Path 'C:\Ambitions\ITS247Agent')
 	If (Test-Path 'C:\Ambitions\ITS247Agent\SaazMobile.ini') { Remove-Item 'C:\Ambitions\ITS247Agent\SaazMobile.ini' }
 	If (Test-Path 'C:\Ambitions\ITS247Agent\DPMASetup.exe') { Remove-Item 'C:\Ambitions\ITS247Agent\DPMASetup.exe' }
-	(New-Object System.Net.WebClient).DownloadFile($msiURL, $msiFilePath)
+	
+	$pass="helpme"|ConvertTo-SecureString -AsPlainText -Force
+	$Cred = New-Object System.Management.Automation.PsCredential('helpme@helpme',$pass)
+	New-PSDrive -name ATGData -Root \\helpme\ATGData -Credential $cred -PSProvider filesystem
+	$ITSInstallerPath = 'ATGData:\atg_CLIENT_DPMA_ITSPlatform.msi'
+	Write-Host "Testing Local Install Availability"
+	If (Test-Path -Path $ITSInstallerPath -ErrorAction SilentlyContinue) {
+		Write-Host "Local Install is available. Is it recent?"
+		$ITSInstaller = Get-Item $ITSInstallerPath
+		$lastWrite = $ITSInstaller.LastWriteTime
+		$timespan = new-timespan -days 30
+		If (((Get-Date) - $lastWrite) -gt $timespan) {
+			#Older, download latest
+			Write-Host "Local install is stale. Downloading the latest and updating."
+			(New-Object System.Net.WebClient).DownloadFile($msiURL, $msiFilePath)
+			Start-Sleep 5
+			Copy-Item -Path $msiFilePath -Destination $ITSInstaller.FullName -Force
+		} Else {
+			Write-Host "Local install is recent. Copying it to $msiFilePath."
+			Copy-Item -Path $ITSInstaller.FullName -Destination $msiFilePath -Force
+		}
+	} Else {
+		Write-Host "Local Install is not available, obtaining from the internet."
+		(New-Object System.Net.WebClient).DownloadFile($msiURL, $msiFilePath)
+	}
+	
 	Get-ChildItem 'C:\Ambitions\ITS247Agent' | Unblock-File
 	Write-Host Disabling Windows Defender Real Time Scanning
 	Set-MpPreference -DisableRealtimeMonitoring $True
