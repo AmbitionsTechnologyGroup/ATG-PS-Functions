@@ -85,14 +85,18 @@ Function Debug-ServerRebootScript {
 			Write-Host -ForegroundColor Red "Scheduled Program arguments looks incorrect."
 			Write-Host -ForegroundColor Yellow "$($Task.Actions.Arguments)"
 			Write-Host -ForegroundColor Red "It should be `'-ExecutionPolicy Bypass -NoProfile -File `"C:\Ambitions\scripts\ServerReboots.ps1`"`'"
-	}
+		}
 	} Else {
 		Write-Warning "Scheduled task does not exist!"
 	}
 	Pause
-	If (Get-Command "Get-VM" -ErrorAction SilentlyContinue) {
+	$VMAutoStart = Get-VM -ErrorAction SilentlyContinue | Select-Object VMname, AutomaticStartAction, AutomaticStartDelay
+	If ($VMAutoStart) {
 		Write-Host "Checking virtual machine auto start settings. Make sure everything in use is set to Start."
-		Get-VM | Select-Object VMname,AutomaticStartAction,AutomaticStartDelay;Pause
+		$VMAutoStart
+	}
+	If ($VMAutoStart) {
+		Pause
 	}
 	Write-Host "Checking Server List"
 	$ServerList = Get-Content -Path C:\Ambitions\Scripts\Server_Reboots.csv -ErrorAction SilentlyContinue | ConvertFrom-Csv
