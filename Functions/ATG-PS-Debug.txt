@@ -92,8 +92,7 @@ Function Debug-ServerRebootScript {
 	Pause
 	If (Get-Command "Get-VM" -ErrorAction SilentlyContinue) {
 		Write-Host "Checking virtual machine auto start settings. Make sure everything in use is set to Start."
-		Get-VM | Select-Object VMname,AutomaticStartAction,AutomaticStartDelay
-		Pause
+		Get-VM | Select-Object VMname,AutomaticStartAction,AutomaticStartDelay;Pause
 	}
 	Write-Host "Checking Server List"
 	$ServerList = Get-Content -Path C:\Ambitions\Scripts\Server_Reboots.csv -ErrorAction SilentlyContinue | ConvertFrom-Csv
