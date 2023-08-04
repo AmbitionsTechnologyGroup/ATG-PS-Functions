@@ -24,6 +24,8 @@
 
 	#Function to send messages to Teams. Set $date, $server, and $message variables
 	function Send-To-Teams{
+		#Enables latest version of TLS
+		[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192
 		$date = Get-Date -Format g
 		$uri = "$([System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String("aHR0cHM6Ly9hbWJpdGlvbnNncm91cC53ZWJob29rLm9mZmljZS5jb20vd2ViaG9va2IyLzg5N2QyYjRjLTUwYzYtNDljYi1hNjk0LTUwZTNjNzI2NWJkY0BjZjRiZGQwNi1iMDNkLTRiYWYtODU2NS0xMjY1NDY5YTg3NGYvSW5jb21pbmdXZWJob29rLzg0Nzg4YjBlOTI2ZDRjYWM4YTlkMDM0ZDFjM2YzZTFkLzA0ZDMzMjQ3LWVlNzItNDFhZi1hNWFlLTFjNDI4MTI2MjQ0MQ==")))"
 
@@ -311,10 +313,11 @@
 					Invoke-Command -ComputerName $vmhost -Credential $cred -ScriptBlock {
 						#Function to send messages to Teams. Set $date, $server, and $message variables
 						function Send-To-Teams{
-							$server = $env:computername
+							#Enables latest version of TLS
+							[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192
 							$date = Get-Date -Format g
-							$uri = "https://ambitionsgroup.webhook.office.com/webhookb2/897d2b4c-50c6-49cb-a694-50e3c7265bdc@cf4bdd06-b03d-4baf-8565-1265469a874f/IncomingWebhook/84788b0e926d4cac8a9d034d1c3f3e1d/04d33247-ee72-41af-a5ae-1c4281262441"
-							
+							$uri = "$([System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String("aHR0cHM6Ly9hbWJpdGlvbnNncm91cC53ZWJob29rLm9mZmljZS5jb20vd2ViaG9va2IyLzg5N2QyYjRjLTUwYzYtNDljYi1hNjk0LTUwZTNjNzI2NWJkY0BjZjRiZGQwNi1iMDNkLTRiYWYtODU2NS0xMjY1NDY5YTg3NGYvSW5jb21pbmdXZWJob29rLzg0Nzg4YjBlOTI2ZDRjYWM4YTlkMDM0ZDFjM2YzZTFkLzA0ZDMzMjQ3LWVlNzItNDFhZi1hNWFlLTFjNDI4MTI2MjQ0MQ==")))"
+					
 							$body = ConvertTo-Json -Depth 4 @{
 								themeColor = $color
 								title = $title
