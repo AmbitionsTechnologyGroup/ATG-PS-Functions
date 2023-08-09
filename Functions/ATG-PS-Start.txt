@@ -4,6 +4,62 @@ Function Start-PPKGLog ([String] $LogLabel) {
 		Start-Transcript -path $LogPath -Force -Append
 }
 
+Function Start-PSWinGet {
+<#
+	.SYNOPSIS
+		Allows Winget to be run as system or on servers.
+	.LINK
+		https://github.com/microsoft/winget-cli
+	.PARAMETER Command
+		Useful for deployments. If you have a prebuilt Install-WinGetPackage, Uninstall-WinGetPackage, or Update-WinGetPackage command, you can pass it along in RMM.
+	.EXAMPLE
+		Start-PSWinGet will install any prerequisites and launch Powershell Core with multithreading, then give a list of useful commands.
+	.EXAMPLE
+		Start-PSWinget -Command 'Uninstall-WinGetPackage "Notepad++"' will install prerequisites, launch Powershell Core, then uninstall Notepad++.
+#>
+	param
+	(
+		[Parameter(Mandatory = $false)]
+		[String] $Command
+	)
+	
+	#Baseline install and run
+	$ScriptBlock = '
+		If (-Not (Get-Command "Get-WinGetPackage" -ErrorAction SilentlyContinue)) {
+				Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+				Install-Module -Name Microsoft.WinGet.Client -AllowClobber -Force -AllowPrerelease
+			}
+		'
+	If ($Command) {	$ScriptBlock = $ScriptBlock + $Command }
+	
+	#Running as Powershell 5, need to switch to core
+	If ($PSEdition -eq "Desktop") {
+		If (-Not (Get-Command "pwsh.exe" -ErrorAction SilentlyContinue)) { Update-pwsh }
+
+			
+		If ($PSSCriptRoot) { #If running as a script, exit after done.
+			pwsh.exe -MTA -NoProfileLoadTime -Command $ScriptBlock
+		} Else { #If not running as a script, let tech continue in powershell core. Look for the -NoExit
+			
+			#Give a human some friendly prompts if they haven't given an already composed command.
+			If (-not $Command) {
+				$CoreWarning = '"You are now running powershell core.`nPS Winget Commands available:"'
+				$ScriptBlock = $ScriptBlock + "Write-Warning 'You are now running powershell core. | PS Winget Commands available:';(Get-Command '*-wingetpackage').Name"
+			}
+			pwsh.exe -MTA -NoExit -NoProfileLoadTime -Command $ScriptBlock
+		}
+		
+	} Else { #Already running as pwsh Core
+		Invoke-Expression $ScriptBlock
+		
+		#Give a human some friendly prompts if they haven't given an already composed command.
+		If (-not $PSSCriptRoot) {
+			Write-Host "PS Winget Commands available:"
+			(Get-Command "*-wingetpackage").Name
+		}
+	}
+}
+
 Function Start-ServerMaintenance {
 	If ($PSVersionTable.PSEdition -eq "Desktop") {
 		If (-Not (Get-Command "pwsh" -ErrorAction SilentlyContinue)) { Update-PWSH }
