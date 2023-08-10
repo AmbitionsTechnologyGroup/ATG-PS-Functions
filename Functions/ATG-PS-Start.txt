@@ -38,7 +38,7 @@ Function Start-PSWinGet {
 
 			
 		If ($PSSCriptRoot) { #If running as a script, exit after done.
-			pwsh.exe -MTA -NoProfileLoadTime -Command $ScriptBlock
+			pwsh.exe -MTA -Command $ScriptBlock
 		} Else { #If not running as a script, let tech continue in powershell core. Look for the -NoExit
 			
 			#Give a human some friendly prompts if they haven't given an already composed command.
@@ -46,7 +46,7 @@ Function Start-PSWinGet {
 				$CoreWarning = '"You are now running powershell core.`nPS Winget Commands available:"'
 				$ScriptBlock = $ScriptBlock + "Write-Warning 'You are now running powershell core. | PS Winget Commands available:';(Get-Command '*-wingetpackage').Name"
 			}
-			pwsh.exe -MTA -NoExit -NoProfileLoadTime -Command $ScriptBlock
+			pwsh.exe -MTA -NoExit -Command $ScriptBlock
 		}
 		
 	} Else { #Already running as pwsh Core
