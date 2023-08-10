@@ -714,6 +714,10 @@ Function Get-NetExtenderStatus {
 #>
 }
 
+Function Get-PSWinGetUpdatablePackages {
+	Start-PSWinGet -Command 'Get-WinGetPackage | Where {$_.IsUpdateAvailable -eq $True}'
+}
+
 Function Get-SharedMailboxRestoreRequest {
 	Get-MailboxRestoreRequest | Get-MailboxRestoreRequestStatistics -IncludeReport | FT TargetAlias, Status, StatusDetail, PercentComplete, DataConsistencyScore -AutoSize
 	<#

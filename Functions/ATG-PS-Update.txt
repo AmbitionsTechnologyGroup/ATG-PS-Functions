@@ -200,6 +200,7 @@ Function Update-Everything {
 	Update-Edge
 	Update-NiniteApps
 	Update-PWSH
+	Update-PSWinGetPackages
 	Restart-Computer -Force
 }
 
@@ -458,6 +459,10 @@ Function Update-PWSH {
 		If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
 		Choco upgrade pwsh -y
 	}
+}
+
+Function Update-PSWinGetPackages {
+	Start-PSWinGet -Command 'Get-WinGetPackage | Where {$_.IsUpdateAvailable -eq $True} | Update-WinGetPackage -Mode Silent -Verbose'
 }
 
 Function Update-Windows {
