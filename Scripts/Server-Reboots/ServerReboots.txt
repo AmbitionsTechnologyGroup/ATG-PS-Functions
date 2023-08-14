@@ -2,6 +2,8 @@
 	Automated server reboot script
 	Ambitions Technology Group - (505)234-7777
 	RCS
+	14AUG2023
+	Added catch to disable scheduled reboots at SMBH as per ticket #5051
 	22JUL2022
 	Commented out Datto update, they self update now.
 	13MAY2020
@@ -21,6 +23,12 @@
 	[switch]$ServicesCheck,
 	[switch]$ForceReboots
 	)
+
+	If ($($env:userdomain) -match "SMBH") {
+		$Task = Get-ScheduledTask -TaskName "ATG*Scheduled*Server*Reboot*"
+		$Task | Disable-ScheduledTask
+		Exit
+	}
 
 	#Function to send messages to Teams. Set $date, $server, and $message variables
 	function Send-To-Teams{
