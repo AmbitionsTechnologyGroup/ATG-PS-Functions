@@ -136,7 +136,7 @@ Function Get-ATGPS {
 	}
  Else {
 		$progressPreference = 'silentlyContinue'
-		iwr tinyurl.com/get-atgps -UseBasicParsing | iex
+		iex(iwr ps.acgs.io -UseBasicParsing)
 		# List imported functions from ATGPS
 		Write-Host ====================================================
 		Write-Host "The below functions are now loaded and ready to use:"

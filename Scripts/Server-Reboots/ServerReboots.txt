@@ -209,7 +209,7 @@
 					$color = 'd8d800'
 					$message = "Updating the firmware of the server"
 					Send-To-Teams
-					iwr tinyurl.com/get-atgps -UseBasicParsing | iex
+					iex(iwr ps.acgs.io -UseBasicParsing)
 					Update-DellServer
 					#Log the reboot
 					$date = Get-Date -Format g
@@ -226,7 +226,7 @@
 						$color = 'd8d800'
 						$message = "$server will have it's firmware updated"
 						Send-To-Teams
-						Invoke-Command -ComputerName $server -Credential $cred -Command "iwr tinyurl.com/get-atgps -UseBasicParsing | iex ; Update-DellServer"
+						Invoke-Command -ComputerName $server -Credential $cred -Command "iex(iwr ps.acgs.io -UseBasicParsing) ; Update-DellServer"
 					#Log the reboot
 					Invoke-Command -ComputerName $server -Credential $cred -ScriptBlock {
 						#Log the major system Change

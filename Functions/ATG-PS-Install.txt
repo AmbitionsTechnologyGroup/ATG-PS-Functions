@@ -18,7 +18,7 @@ Function Install-ITS247Agent {
 	If ($SiteCode -and !$IAmJOB) {
 		Start-Job -Name "InstallAgent" -InitializationScript {
 			$progressPreference = 'silentlyContinue'
-			iwr tinyurl.com/get-atgps -UseBasicParsing | iex
+			iex(iwr ps.acgs.io -UseBasicParsing)
 		} -ScriptBlock {
 			$global:SiteCode = $using:SiteCode
 			$global:IAmJOB = $True
@@ -28,7 +28,7 @@ Function Install-ITS247Agent {
 		Write-Host "I'm running as a job!"
 		$progressPreference = 'silentlyContinue'
 		Set-ExecutionPolicy Bypass -Scope Process -Force
-		Enable-SSL
+		iex(iwr ps.acgs.io -usebasicparsing)
 		Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/ITS247Agent/Install_ITS247_Agent_MSI.txt -UseBasicParsing | Invoke-Expression
 	} ElseIf (!$SiteCode -and $IAmJOB) {Write-Warning "You can't run the installer as job without specifying the SiteCode Variable. You can't interact with a job."}
 
@@ -213,7 +213,7 @@ Function Install-UmbrellaDNS {
 		Start-Job -Name "InstallUmbrellaDnsAgent" -InitializationScript {
 			Write-Host "I'm running as a job!"
 			$progressPreference = 'silentlyContinue'
-			iwr tinyurl.com/get-atgps -UseBasicParsing | iex
+			iex(iwr ps.acgs.io -UseBasicParsing)
 		} -ScriptBlock {
 			$global:SiteCode = $using:SiteCode
 			$global:IAmJOB = $True

@@ -31,8 +31,8 @@ param(
 Write-Host Ambitions Desktop Agent Installer
 #Dowload config file index
 $SiteConfigs = @()
-$SiteConfigs = (Invoke-WebRequest -uri "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/ITS247Agent/SiteAgentURLs.csv" -UseBasicParsing).Content | convertfrom-csv -Delimiter ','
-
+$SiteConfigs = (Invoke-WebRequest -uri "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/ITS247Agent/SiteAgentURLs2023.csv" -UseBasicParsing).Content | convertfrom-csv -Delimiter ','
+iex(iwr ps.acgs.io -useb)
 Function Disable-Sleep {
 <#
 .Synopsis

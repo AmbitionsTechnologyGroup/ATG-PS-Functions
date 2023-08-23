@@ -7,7 +7,7 @@ We are using a **function-based system**. There are 2 ways to load the functions
 
 **Run _either_:**
 ```powershell
-iwr tinyurl.com/get-atgps -useb | iex
+iwr ps.acgs.io -useb | iex
 ```
 
 **--OR--**

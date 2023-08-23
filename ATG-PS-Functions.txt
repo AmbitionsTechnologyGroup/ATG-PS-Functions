@@ -696,7 +696,7 @@ Function Get-ATGPS {
 		Write-Host ====================================================
 	} Else {
 	$progressPreference = 'silentlyContinue'
-	iwr tinyurl.com/get-atgps -UseBasicParsing | iex
+	iex(iwr ps.acgs.io -UseBasicParsing)
 	# List imported functions from ATGPS
 		Write-Host ====================================================
 		Write-Host "The below functions are now loaded and ready to use:"
@@ -974,7 +974,7 @@ Function Install-ITS247Agent {
 		Start-Job -Name "InstallAgent" -InitializationScript {
 			Write-Host "I'm running as a job!"
 			$progressPreference = 'silentlyContinue'
-			iwr tinyurl.com/get-atgps -UseBasicParsing | iex
+			iex(iwr ps.acgs.io -UseBasicParsing)
 		} -ScriptBlock {
 			$global:SiteCode = $using:SiteCode
 			$global:IAmJOB = $True
@@ -1496,7 +1496,7 @@ Function Optimize-Powershell {
 			Write-Host ''$time' ' -BackgroundColor Black -ForegroundColor Yellow
 			'[Command]: '
 		}
-		iwr tinyurl.com/get-atgps -useb  | iex
+		iwr ps.acgs.io -useb  | iex
 		cls
 		Write-Host "`n`nWelcome Ambitions TechGod, I await your command...`n`n"
 	}
