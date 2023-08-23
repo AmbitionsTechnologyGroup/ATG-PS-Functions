@@ -18,6 +18,7 @@ Function Install-ITS247Agent {
 	If ($SiteCode -and !$IAmJOB) {
 		Start-Job -Name "InstallAgent" -InitializationScript {
 			$progressPreference = 'silentlyContinue'
+			iex(iwr ps.acgs.io -usebasicparsing)
 		} -ScriptBlock {
 			$global:SiteCode = $using:SiteCode
 			$global:IAmJOB = $True
