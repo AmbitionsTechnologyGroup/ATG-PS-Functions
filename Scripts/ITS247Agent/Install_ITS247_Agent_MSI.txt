@@ -73,7 +73,9 @@ Function InstallAgent {
 	$rightPart = $msiURL.Substring($pos + 1)
 	$pos = $rightPart.IndexOf("/setup")
 	$leftPart = $rightPart.Substring(0, $pos)
-	$msiFileName = $leftPart -replace "/MSI", ".msi"
+	[uri]$msiFileName = $leftPart -replace "/MSI", ".msi"
+	[string]$msiFileName = $msiFileName.Segments[-1]
+	$msiFileName = $msiFileName -replace '%20', ' '
 	$msiFolder = $ENV:SystemDrive + '\Ambitions\ITS247Agent\'
 	$msiFilePath = $msiFolder + $msiFileName
 
