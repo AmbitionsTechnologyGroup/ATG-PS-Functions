@@ -86,6 +86,9 @@ Function InstallAgent {
 	
 	$pass="helpme"|ConvertTo-SecureString -AsPlainText -Force
 	$Cred = New-Object System.Management.Automation.PsCredential('helpme@helpme',$pass)
+	#These next 2 lines prevent an issue connecting: New-PSDrive : You can't access this shared folder because your organization's security policies block unauthenticated guest access. These policies help protect your PC from unsafe or malicious devices on the network
+	If((Test-Path -LiteralPath "HKLM:\SOFTWARE\Policies\Microsoft\Windows\LanmanWorkstation") -ne $true) { New-Item "HKLM:\SOFTWARE\Policies\Microsoft\Windows\LanmanWorkstation" -force -ea SilentlyContinue }
+	New-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\LanmanWorkstation' -Name 'AllowInsecureGuestAuth' -Value 1 -PropertyType DWord -Force -ea SilentlyContinue
 	New-PSDrive -name ATGData -Root \\helpme\ATGData -Credential $cred -PSProvider filesystem
 	$ITSInstallerPath = 'ATGData:\atg_CLIENT_DPMA_ITSPlatform.msi'
 	Write-Host "Testing Local Install Availability"
@@ -115,13 +118,12 @@ Function InstallAgent {
 	Disable-Sleep
 	If ($Silent) {
 		Write-Host Installing the agent for $SelectedSite.Site silently. No errors will be shown.
-		Start-Process "msiexec.exe" -ArgumentList "/I $msiFilePath /q" -Wait -NoNewWindow
-		#Start-Process -wait -Verb RunAs -FilePath 'C:\Ambitions\ITS247Agent\DPMASetup.exe' -ArgumentList '/S SaazMobile.ini'
+		[string]$arguments = '/i "' + $msiFilePath + '" /q'
 	} Else {
 		Write-Host Installing the agent for $SelectedSite.Site interactively
-		Start-Process "msiexec.exe" -ArgumentList "/I $msiFilePath" -Wait -NoNewWindow
-		#Start-Process -wait -Verb RunAs -FilePath 'C:\Ambitions\ITS247Agent\DPMASetup.exe' -ArgumentList 'SaazMobile.ini'
+		[string]$arguments = '/i "' + $msiFilePath + '"'
 	}
+	Start-Process "msiexec.exe" -ArgumentList $arguments -Wait -NoNewWindow
 	Write-Host "`nRemember: If powershell seems frozen you might have clicked in the window. Try clicking in the window again and press the ESC key to unfreeze.`n"
 	
 	function Start-SleepPretty($seconds) {
