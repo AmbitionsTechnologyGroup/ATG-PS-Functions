@@ -459,6 +459,39 @@ Function Update-PWSH {
 		If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
 		Choco upgrade pwsh -y
 	}
+	# Update the system PATH env to correct previous install logic.
+	$folderToSearch = "C:\Program Files\PowerShell\"
+
+	# Find the folder containing pwsh.exe
+	$pwshFolder = Get-ChildItem -Path $folderToSearch -Recurse -Filter "pwsh.exe" | Select-Object -ExpandProperty Directory -First 1
+
+	# If the folder was found
+	if ($pwshFolder) {
+		# Get the current PATH
+		$path = [Environment]::GetEnvironmentVariable("Path", "Machine")
+
+		# Split the PATH into an array of folders
+		$pathFolders = $path -split ";"
+
+		# Find the index of the folder in the PATH that contains the string "C:\Program Files\Powershell\"
+		$indexToUpdate = $pathFolders.IndexOf(($pathFolders | Where-Object { $_ -like "$folderToSearch*" }))
+
+		# If the folder was found in the PATH
+		if ($indexToUpdate -ge 0) {
+			# Update the folder path in the PATH
+			$pathFolders[$indexToUpdate] = $pwshFolder.FullName
+		} else {
+			# If the folder was not found in the PATH, add it
+			$pathFolders += $pwshFolder.FullName
+		}
+
+		# Join the folders back into a string and update the PATH
+		[Environment]::SetEnvironmentVariable("Path", ($pathFolders -join ";"), "Machine")
+	} else {
+		Write-Host "pwsh.exe not found in $folderToSearch"
+	}
+	$env:Path = [System.Environment]::GetEnvironmentVariable("Path","Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path","User")
+
 }
 
 Function Update-PSWinGetPackages {
