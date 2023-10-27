@@ -316,7 +316,7 @@ Function Install-WinGet {
 			}
 			#Microsoft.UI.Xaml
 			Find-PackageProvider -Name NuGet | Install-PackageProvider -Force
-			Register-PackageSource -Name nuget.org -Location https://www.nuget.org/api/v2 -ProviderName NuGet
+			Register-PackageSource -Name nuget.org -Location https://api.nuget.org/v3 -ProviderName NuGet
 			Install-Package -Name 'Microsoft.UI.Xaml' -ProviderName Nuget -Force
 		}
 	
