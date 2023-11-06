@@ -249,29 +249,40 @@ Function Update-NiniteApps {
 Function Update-NTPDateTime {
 	<#
 	.SYNOPSIS
-		Immediately updates the clock based on the time received from an Network Time Provider. 'pool.ntp.org' is used by default.
+		Immediately updates the clock based on the time received from a Network Time Provider. 'north-america.pool.ntp.org' is used by default.
 	#>
 	param
 	(
 		[Parameter(Mandatory=$False)]
-		[string]$sNTPServer = 'pool.ntp.org'
+		[string]$sNTPServer = 'north-america.pool.ntp.org'
 	)
 	
+	# Displays the current system date and time
 	Write-Host "Current system date/time is:"
 	$(Get-Date).DateTime
+	
+	# Pre-emptively writes the output label for the new time, so it won't interupt the calculations.
 	Write-Host -NoNewLine "`nSystem date/time has been set to: "
+	
+	# Creates a DateTime object representing the start of the epoch
 	$StartOfEpoch=New-Object DateTime(1900,1,1,0,0,0,[DateTimeKind]::Utc)   
+	# Creates a byte array of length 48 and initializes all elements to 0
 	[Byte[]]$NtpData = ,0 * 48
-	$NtpData[0] = 0x1B    # NTP Request header in first byte
+	# Sets the first byte of the byte array to 0x1B, which is the NTP request header
+	$NtpData[0] = 0x1B
+	# Creates a new socket object for sending and receiving data over the network
 	$Socket = New-Object Net.Sockets.Socket([Net.Sockets.AddressFamily]::InterNetwork, [Net.Sockets.SocketType]::Dgram, [Net.Sockets.ProtocolType]::Udp)
+	# Connects the socket to the specified NTP server and port number
 	$Socket.Connect($sNTPServer,123)
 	 
+	# Sends an NTP request to the server and receives an NTP response
 	$t1 = Get-Date    # Start of transaction... the clock is ticking...
 	[Void]$Socket.Send($NtpData)
 	[Void]$Socket.Receive($NtpData)  
 	$t4 = Get-Date    # End of transaction time
 	$Socket.Close()
- 
+	
+	# Calculates the offset between the local system time and the NTP server time
 	$IntPart = [BitConverter]::ToUInt32($NtpData[43..40],0)   # t3
 	$FracPart = [BitConverter]::ToUInt32($NtpData[47..44],0)
 	$t3ms = $IntPart * 1000 + ($FracPart * 1000 / 0x100000000)
@@ -284,11 +295,12 @@ Function Update-NTPDateTime {
 	$t4ms = ([TimeZoneInfo]::ConvertTimeToUtc($t4) - $StartOfEpoch).TotalMilliseconds
   
 	$Offset = (($t2ms - $t1ms) + ($t3ms-$t4ms))/2
-	 
-	[String]$NTPDateTime = $StartOfEpoch.AddMilliseconds($t4ms + $Offset).ToLocalTime() 
 	
+	# Sets the local system time to the NTP server time
+	[String]$NTPDateTime = $StartOfEpoch.AddMilliseconds($t4ms + $Offset).ToLocalTime() 
 	Set-Date $NTPDateTime
 	
+	# Checks if the offset is greater than 10 seconds and prints a message accordingly
 	If ([Math]::Abs($Offset) -gt 10000) {
 	Write-Host "There was an offset of $($Offset / 1000) seconds."
 	} Else {
