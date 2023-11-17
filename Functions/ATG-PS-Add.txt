@@ -1,6 +1,4 @@
 Function Add-ChromeShortcut{
-	#Requires -RunAsAdministrator
-
 	param
 	(
 		[Parameter(Mandatory=$true)]
