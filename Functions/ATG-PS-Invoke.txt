@@ -769,6 +769,7 @@ Write-Host;Write-Host -NoNewLine "Preparing for connection to nddc.ambitionsgrou
 		$Credential = New-Object System.Management.Automation.PSCredential ('dh_wu6qvp', $Password)
 
 	Write-Host "Establishing the SFTP connection"
+		Get-SSHTrustedHost -HostName "ftp.nddc.ambitionsgroup.com" | Remove-SSHTrustedHost #Clears previously stored keys. They change over time with Dreamhost.
 		$ThisSession = New-SFTPSession -KeyFile $SshKeyPath -ComputerName $SftpIp -Credential $Credential -AcceptKey
 
 	Write-Host "Uploading the file to the SFTP path"
