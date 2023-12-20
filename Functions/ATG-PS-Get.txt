@@ -149,8 +149,7 @@ Function Get-ATGPS {
 }
 
 Function Get-BitLockerKey {
-	param
-	(
+	param(
 		[Parameter(Mandatory = $false)]
 		[string]$Computer
 	)
@@ -166,13 +165,15 @@ Function Get-BitLockerKey {
 			Write-Host "Error..."
 		}
 		#Check if the computer object has had a BitLocker Recovery Password
-		$Bitlocker_Object = Get-ADObject -Filter { objectclass -eq 'msFVE-RecoveryInformation' } -SearchBase $Computer_Object.DistinguishedName -Properties 'msFVE-RecoveryPassword' | Select-Object -Last 1
+		$Bitlocker_Object = Get-ADObject -Filter { objectclass -eq 'msFVE-RecoveryInformation' } -SearchBase $Computer_Object.DistinguishedName -Properties 'Name','msFVE-RecoveryPassword' | Sort-Object -Property Name | Select-Object -Last 1
 		If ($Bitlocker_Object.'msFVE-RecoveryPassword') {
+			$BitLocker_ID = $BitLocker_Object.'Name'
 			$BitLocker_Key = $BitLocker_Object.'msFVE-RecoveryPassword'
 
 			#$strToReport = $_.name,$BitLocker_Key
 			$strToReport = [PSCustomObject]@{
 				Computer     = $_.name
+				BitLockerID = $BitLocker_ID
 				BitLockerKey = $BitLocker_Key
 			}
 			$AllComputers += $strToReport
@@ -181,12 +182,12 @@ Function Get-BitLockerKey {
 
 			#Save to Report
 			#$strToReport | Out-File C:\temp\Report.txt -append
-		}
-		Else {
+		} Else {
 			$BitLocker_Key = "None"
 			#$strToReport = $_.name,$BitLocker_Key
 			$strToReport = [PSCustomObject]@{
 				Computer     = $_.name
+				BitLockerID = "None"
 				BitLockerKey = $BitLocker_Key
 			}
 			$AllComputers += $strToReport
@@ -196,23 +197,20 @@ Function Get-BitLockerKey {
 	If ($Computer) {
 		If ($AllComputers.Computer -NotContains $Computer) {
 			Write-Host "The computer specified was not found."
-		}
-		Else {
+		} Else {
 			$ComputerInfo = new-object psobject
 			$ComputerInfo = $AllComputers | Where-Object -Property Computer -eq -Value $Computer
 			$ComputerInfo | Format-List
 			If ($ComputerInfo.BitlockerKey -eq "None") {
-				Write-Host "There is no bitlocker key for this compuer."
-			}
-			Else {
+				Write-Host "There is no bitlocker key for this computer."
+			} Else {
 
 				Write-Host "The bitlocker key has been copied to the clipboard.`n"
 				$ComputerInfo.BitlockerKey | Clip
 			}
 		}
-	}
- Else {
-		$AllComputers
+	} Else {
+		$AllComputers | Sort-Object -Property "Computer"
 	}
 
 	<#
