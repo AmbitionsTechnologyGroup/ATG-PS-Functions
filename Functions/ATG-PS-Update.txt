@@ -4,6 +4,50 @@ Function Update-DattoAgent {
 	Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Datto-Agent-Update/DattoAgentUpdate.txt -usebasicparsing | Invoke-Expression
 }
 
+Function Update-DnsServerRootHints{
+	<#
+	.SYNOPSIS
+		Downloads the latest root hints from Public Information Regarding Internet Domain Name Registration Services and sets them. Only works on Windows DNS servers. Useful for resolving the error "DNS: Root hint server X.X.X.X must respond to NS queries for the root zone."
+	.LINK
+		https://www.internic.net/domain/named.root
+	.EXAMPLE
+		Update-DnsServerRootHints
+	#>
+	If (Get-Service -DisplayName "DNS Server" -ErrorAction SilentlyContinue) {
+		$url = "https://www.internic.net/domain/named.root"
+		$hashtable = @{}
+
+		# Download the contents of the URL
+		$content = Invoke-WebRequest -Uri $url
+
+		# Split the content into lines
+		$lines = $content.Content.Split("`r`n") | Where-Object {$_ -notmatch ";|NS|AAAA"}  # Use `"`r`n" for Windows-style newlines
+
+		# Process each line, ignoring lines starting with ;
+		foreach ($line in $lines) {
+			if (!($line -like ";*")) {
+				$values = $line.Split(" ")
+				$hashtable[$values[0]] = $values[-1]  # Store only the last string
+			}
+		}
+		#$hashtable = $($hashtable.GetEnumerator() | Sort Name | Select Name,Value | Format-Table)
+		Write-Host "Currently set DNS Root Hints:";$(Get-DNSServerRootHint)
+		# Display the hashtable (optional)
+		Write-Host "Latest root hints from www.internic.net :";$($hashtable.GetEnumerator() | Sort Name | Select Name,Value | Format-Table)
+
+		# Remove the old entries and add the updated entries. Does not check if old is still up to date.
+		Write-Host "Replacing current set with updates"
+		foreach ($entry in $($hashtable.GetEnumerator()| Sort Name)) {
+			Remove-DnsServerRootHint -Force -NameServer ($entry.Name).ToLower() -ErrorAction SilentlyContinue
+			Add-DnsServerRootHint -NameServer $entry.Name -IPAddress $entry.Value -Verbose
+		}
+		Write-Host "DNS Root Hints are now set to:";$(Get-DNSServerRootHint)
+		
+	} Else {
+		Write-Warning "You can only run this command on a DNS server."
+	}
+}
+
 Function Update-DellPackages {
 	<#
 	.SYNOPSIS
