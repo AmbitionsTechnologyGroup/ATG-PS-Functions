@@ -519,7 +519,7 @@ Function Update-PWSH {
 	$folderToSearch = "C:\Program Files\PowerShell\"
 
 	# Find the folder containing pwsh.exe
-	$pwshFolder = Get-ChildItem -Path $folderToSearch -Recurse -Filter "pwsh.exe" | Select-Object -ExpandProperty Directory -First 1
+	$pwshFolder = If (Test-Path $folderToSearch -ErrorAction SilentlyContinue) {Get-ChildItem -Path $folderToSearch -Recurse -Filter "pwsh.exe" | Select-Object -ExpandProperty Directory -First 1}
 
 	# If the folder was found
 	if ($pwshFolder) {
