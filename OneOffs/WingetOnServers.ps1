@@ -83,9 +83,10 @@ $ResolveWingetPath = Resolve-Path "C:\Program Files\WindowsApps\Microsoft.Deskto
     }
 $WinGetExe = (Get-ChildItem $ResolveWingetPath[-1] | Where-Object -Property Name -Match winget.exe).FullName
 
+#Pin Webroot
+& $(Get-ChildItem "C:\Program Files\WindowsApps\Microsoft.DesktopAppInstaller_*_x64__8wekyb3d8bbwe" -Recurse | Where-Object -Property Name -Match winget.exe).FullName pin add Webroot.SecureAnywhere --accept-source-agreements
 
 #List Updates
-
 & $(Get-ChildItem "C:\Program Files\WindowsApps\Microsoft.DesktopAppInstaller_*_x64__8wekyb3d8bbwe" -Recurse | Where-Object -Property Name -Match winget.exe).FullName upgrade --accept-source-agreements --source winget
 
 #Install Updates
