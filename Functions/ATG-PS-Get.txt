@@ -397,7 +397,7 @@ Function Get-FileDownload {
 		Folder of where to save the file, i.e. 'C:\Temp
 	.EXAMPLE
 		#The following downloads the variable "$Link" to "C:\Ambitions\"
-		
+
 		Get-FileDownload -URL $Link -SaveToFolder 'C:\Ambitions\'
 
 	.EXAMPLE
@@ -411,22 +411,31 @@ Function Get-FileDownload {
 	param(
 		[Parameter(Mandatory = $True)]
 		[uri]$URL,
-		[Parameter(Mandatory = $True)]
-		[string]$SaveToFolder
+		[Parameter(Mandatory = $False)]
+		[string]$SaveToFolder,
+		[Parameter(Mandatory = $False)]
+		[string]$FileName
 	)
-	
+
 	#Isolate file name from URL
-	[string]$FileName = $URL.Segments[-1]
-	
+	If (-not $FileName) {
+		[string]$FileName = $URL.Segments[-1]
+	}
+
+	#Set's SaveToFolder to current directory if one wasn't supplied.
+	If (-not $SaveToFolder) {
+		$SaveToFolder = (Get-Location).Path
+	}
+
 	#Add a '\' to the end of the folder only if needed.
 	If ($SaveToFolder -notmatch '\\$'){	$SaveToFolder += '\'}
-
+	
 	#Create the destination folder if it doesn't exist.
 	New-Item -Path $SaveToFolder -ItemType Directory -Force | Out-Null
 
 	#Create full download path
 	[string]$FilePath = $SaveToFolder + $FileName
-	
+
 	#Write-Host "Enabling SSL"
 	Try {
 		# Set TLS 1.2 (3072), then TLS 1.1 (768), then TLS 1.0 (192)
@@ -443,11 +452,15 @@ Function Get-FileDownload {
 
 	Write-Host "Beginning download to $FilePath"
 	Try {
-		Invoke-WebRequest -Uri $URL -OutFile $FilePath
-		Return $FileName, $FilePath
+		Invoke-RestMethod -Uri $URL -OutFile $FilePath
 	} Catch {
-		(New-Object System.Net.WebClient).DownloadFile($URL, $FilePath)
-		Return $FileName, $FilePath
+		Try {
+			Invoke-WebRequest -Uri $URL -OutFile $FilePath -UseBasicParsing
+			Return $FileName, $FilePath
+		} Catch {
+			(New-Object System.Net.WebClient).DownloadFile($URL, $FilePath)
+			Return $FileName, $FilePath
+		}
 	}
 }
 
