@@ -453,6 +453,7 @@ Function Get-FileDownload {
 	Write-Host "Beginning download to $FilePath"
 	Try {
 		Invoke-RestMethod -Uri $URL -OutFile $FilePath
+		Return $FileName, $FilePath
 	} Catch {
 		Try {
 			Invoke-WebRequest -Uri $URL -OutFile $FilePath -UseBasicParsing
