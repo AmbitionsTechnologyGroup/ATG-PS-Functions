@@ -134,6 +134,8 @@ Function Connect-O365Exchange {
 				If ($ModVer -ne $AvailableModVer) {
 					Write-host "ExchangeOnlineManagement has an update from $ModVer to $AvailableModVer.nInstalling the update."
 					Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+					Remove-Module ExchangeOnlineManagement -Force
+					Uninstall-Module -Name ExchangeOnlineManagement -AllVersions -Force
 					Install-Module -Name ExchangeOnlineManagement -AllowClobber -Force
 				} Else {
 					Write-host "ExchangeOnlineManagement is already up to date at version $AvailableModVer."

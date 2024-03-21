@@ -46,10 +46,12 @@ If (!(Test-Path $RootCertPath -ea SilentlyContinue)) {
 }
 
 Write-Host "Checking Umbrella DNS client."
-$IsInstalled = Get-Service -Name Umbrella_RC -ErrorAction SilentlyContinue
-If ($IsInstalled) {
-	Write-Host -ForegroundColor Green "Umbrella DNS client is already installed. Exiting."
+$OldIsInstalled = Get-Service -Name Umbrella_RC -ErrorAction SilentlyContinue
+$NewIsInstalled = Get-Service -Name csc_umbrellaagent -ErrorAction SilentlyContinue
+If ($NewIsInstalled) {
+	Write-Host -ForegroundColor Green "Cisco Secure Client Umbrella DNS agent is already installed. Exiting."
 } Else {
+	If ($OldIsInstalled) {Write-Host "The old Umbrella Client has been detected. Updating to the new Cisco Secure Client Umbrella DNS agent"}
 	Write-Host "Installing Umbrella DNS client."
 	$PreDNS = (Get-NetIPConfiguration | Where {$_.Netprofile.Ipv4Connectivity -Like "*Internet*"}).DnsServer.ServerAddresses
 	#Write-Host "DNS Servers: $PreDNS"
