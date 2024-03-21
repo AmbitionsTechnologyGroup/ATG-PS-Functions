@@ -347,12 +347,13 @@ Function Install-UmbrellaDNS {
 
 				#Cleanup
 				Set-Location ..
-				Remove-PathForcefully -Path $msiFolder
+				Remove-Item -Path $msiFolder -Recurse -Force -ErrorAction SilentlyContinue
 
 			#nslookup -q=txt debug.opendns.com
-			Start-Sleep -Seconds 30
+			#Start-Sleep -Seconds 30
 			#$PostDNS = (Get-NetIPConfiguration | Where {$_.Netprofile.Ipv4Connectivity -Like "*Internet*"}).DnsServer.ServerAddresses
 			#Write-Host "DNS Servers: $PostDNS"
+			Get-Service -Name csc_umbrellaagent
 			
 			BREAK
 		} #End of InstallAgent
