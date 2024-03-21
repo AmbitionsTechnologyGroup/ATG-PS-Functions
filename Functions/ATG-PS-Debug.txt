@@ -16,8 +16,12 @@ Function Debug-UmbrellaDNS {
 		$UDexe = $X64exe
 	} ElseIf (Test-Path $X86exe -ea SilentlyContinue) {
 		$UDexe = $X86exe
+	} ElseIf (Get-Service csc_umbrellaagent) {
+		$CSCAgent = (Get-Service csc_umbrellaagent)
+		Write-Warning "The new $($CSCAgent.DisplayName) is installed and it is $($CSCAgent.Status).`nThis troubleshooting command does not apply."
+		Break
 	} Else {
-		Write-Host "Umbrella Diagnostics do not appear to be installed."
+		Write-Warning "Umbrella Diagnostics do not appear to be installed."
 		Break
 	}
 	Write-Host "Here is the help file for UmbrellaDiagnostic.exe:"
@@ -150,6 +154,9 @@ Function Debug-UmbrellaProxiedDnsServer {
 		}
 		Write-Host "------------------------------------------------------------------`nExcluded IP / DNS values:"
 		Get-ChildItem -Path $OpenDnsPath -Filter "*list.txt" | Get-Content
+	} ElseIf (Get-Service csc_umbrellaagent) {
+		$CSCAgent = (Get-Service csc_umbrellaagent)
+		Write-Host "The new $($CSCAgent.DisplayName) is installed and it is $($CSCAgent.Status).`nThis troubleshooting command does not apply."
 	} Else {
 		Write-Host -ForegroundColor Red "Umbrella DNS client is NOT installed."
 	}

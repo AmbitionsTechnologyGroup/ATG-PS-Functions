@@ -273,6 +273,17 @@ Function Install-UmbrellaDNS {
 				$Code = $DetectedSite.Code
 			}
 		}
+		If (!$Code) {
+			$Hostname = (Get-ComputerInfo -Property CsName).CsName
+			$prefix = $hostname.Split('-')[0]
+			If ($prefix){
+				$DetectedSite = $SiteConfigs | Where-Object {$_ -match $prefix}
+			}
+			If ($DetectedSite) {
+				Write-Host "$($DetectedSite.Site) has been detected."
+				$Code = $DetectedSite.Code
+			}
+		}
 		Write-Host "Installing Umbrella DNS client."
 		$PreDNS = (Get-NetIPConfiguration | Where {$_.Netprofile.Ipv4Connectivity -Like "*Internet*"}).DnsServer.ServerAddresses
 		#Write-Host "DNS Servers: $PreDNS"
