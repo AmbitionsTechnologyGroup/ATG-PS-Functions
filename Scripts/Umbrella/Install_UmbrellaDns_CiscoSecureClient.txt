@@ -11,7 +11,7 @@
 	https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/blob/49d3876af3f2548ca106fb731cb0bf4def21a007/Scripts/Umbrella/UDNS-Client-Mapping.csv
 #>
 
-	#Requires -RunAsAdministrator
+	###Require -RunAsAdministrator
 [cmdletbinding()]
 param(
 	[string]$Code #Shortcode of the site you want to install, list available at https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/blob/master/Scripts/ITS247Agent/SiteAgentURLs.csv
@@ -55,7 +55,7 @@ If ($NewIsInstalled) {
 	Write-Host "Installing Umbrella DNS client."
 	$PreDNS = (Get-NetIPConfiguration | Where {$_.Netprofile.Ipv4Connectivity -Like "*Internet*"}).DnsServer.ServerAddresses
 	#Write-Host "DNS Servers: $PreDNS"
-	nslookup -q=txt debug.opendns.com
+	#nslookup -q=txt debug.opendns.com
 	Start-Sleep -Seconds 10
 	#Dowload config file index
 	$SiteConfigs = @()
@@ -122,13 +122,13 @@ If ($NewIsInstalled) {
 			$orderedData | ConvertTo-Json | Out-File -FilePath "$env:ProgramData\Cisco\Cisco Secure Client\Umbrella\OrgInfo.json"
 
 			Write-Host "Restarting Services"
-			Get-Service "*Umbrella*" | Restart-Service
+			Restart-Service -Name csc_umbrellaagent -ErrorAction SilentlyContinue
 
 			#Cleanup
 			Set-Location ..
 			Remove-PathForcefully -Path $msiFolder
 
-		nslookup -q=txt debug.opendns.com
+		#nslookup -q=txt debug.opendns.com
 		Start-Sleep -Seconds 30
 		#$PostDNS = (Get-NetIPConfiguration | Where {$_.Netprofile.Ipv4Connectivity -Like "*Internet*"}).DnsServer.ServerAddresses
 		#Write-Host "DNS Servers: $PostDNS"
