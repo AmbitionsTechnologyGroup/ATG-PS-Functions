@@ -301,7 +301,7 @@ Function Install-UmbrellaDNS {
 
 			#Write-Host Disabling Windows Defender Real Time Scanning
 			#Set-MpPreference -DisableRealtimeMonitoring $True -ErrorAction SilentlyContinue
-			Write-Host "Installing the agent for $SelectedSite.Site"
+			Write-Host "Installing the agent for $($SelectedSite.Site)"
 			Set-Location -Path $msiFolder
 			Write-Host "Installing Cisco Secure Client CORE"
 			$CoreMsi = $(Get-ChildItem -Path $msiFolder -Filter "*core*").FullName
