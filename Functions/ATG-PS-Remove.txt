@@ -43,7 +43,7 @@ Function Remove-PathForcefully {
 		)
 
 
-		$SubPath = (Resolve-Path $SubPath -ErrorAction Stop).Path
+		$SubPath = (Resolve-Path $SubPath -ErrorAction SilentlyContinue).Path
 		try {
 			Remove-Item $SubPath -Force -Recurse -ErrorAction Stop
 			Write-Host -ForegroundColor Green -BackgroundColor Black "Deletion of $SubPath succeeded."

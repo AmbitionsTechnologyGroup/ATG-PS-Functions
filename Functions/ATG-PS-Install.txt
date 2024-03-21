@@ -264,7 +264,15 @@ Function Install-UmbrellaDNS {
 	If ($NewIsInstalled) {
 		Write-Host -ForegroundColor Green "Cisco Secure Client Umbrella DNS agent is already installed. Exiting."
 	} Else {
-		If ($OldIsInstalled) {Write-Host "The old Umbrella Client has been detected. Updating to the new Cisco Secure Client Umbrella DNS agent"}
+		If ($OldIsInstalled) {
+			Write-Host "The old Umbrella Client has been detected. Updating to the new Cisco Secure Client Umbrella DNS agent"
+			$OldOrgData = (Get-Content -Path $Env:ProgramData\OpenDNS\ERC\OrgInfo.json | ConvertFrom-Json).organizationId
+			$DetectedSite = $SiteConfigs | Where-Object {$_.Command -match $OldOrgData}
+			If ($DetectedSite) {
+				Write-Host "$($DetectedSite.Site) has been detected."
+				$Code = $DetectedSite.Code
+			}
+		}
 		Write-Host "Installing Umbrella DNS client."
 		$PreDNS = (Get-NetIPConfiguration | Where {$_.Netprofile.Ipv4Connectivity -Like "*Internet*"}).DnsServer.ServerAddresses
 		#Write-Host "DNS Servers: $PreDNS"
