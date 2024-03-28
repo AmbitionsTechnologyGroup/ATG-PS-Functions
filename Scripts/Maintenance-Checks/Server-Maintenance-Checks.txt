@@ -5,6 +5,26 @@
 $progressPreference = 'silentlyContinue'
 
 #Random Functions
+#Function Get-DWALatestVersion {
+	# Define the URL of the website
+	$url = "https://continuity.datto.com/help/Content/kb/siris-alto-nas/KB370000003534.htm"
+
+	# Use Invoke-WebRequest to fetch the content of the website
+	$response = Invoke-WebRequest -Uri $url -UseBasicParsing
+
+	# Use a regular expression to find the version number in the content
+	# This pattern looks for numbers separated by dots, which is a common version number format
+	$versionPattern = "\b\d+\.\d+\.\d+\.\d+\b"
+	$matches = [regex]::Matches($response.Content, $versionPattern)
+
+	# Check if any matches were found
+	if ($matches.Count -gt 0) {
+		# Assume the first match is the latest version number
+		$latestVersion = $matches[0].Value
+		#Write-Host "The latest version number is: $latestVersion"
+	} else {
+		Write-Host "No version number found on the website."
+	}
 Function DattoBDRCheck {
 	#Determine if Shadowsnap agent is installed
 	$OnlineDattoAgent = iwr https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Datto-Agent-Update/OnlineDattoAgent.json | ConvertFrom-Json
@@ -22,7 +42,26 @@ Function DattoBDRCheck {
 		$FileVer = "C:\Program Files\Datto\Datto Windows Agent\DattoBackupAgent.exe"
 		#Designate name of agent
 		$agent = "Datto Windows Agent"
-		$OnlineDattoVersion = $OnlineDattoAgent.DattoWindowsAgent.Version
+		#Get Latest Datto Version
+			$url = "https://continuity.datto.com/help/Content/kb/siris-alto-nas/KB370000003534.htm"
+		
+			# Use Invoke-WebRequest to fetch the content of the website
+			$response = Invoke-WebRequest -Uri $url -UseBasicParsing
+		
+			# Use a regular expression to find the version number in the content
+			# This pattern looks for numbers separated by dots, which is a common version number format
+			$versionPattern = "\b\d+\.\d+\.\d+\.\d+\b"
+			$matches = [regex]::Matches($response.Content, $versionPattern)
+		
+			# Check if any matches were found
+			if ($matches.Count -gt 0) {
+				# Assume the first match is the latest version number
+				$OnlineDattoVersion = $matches[0].Value
+				#Write-Host "The latest version number is: $latestVersion"
+			} else {
+				Write-Host "No version number found on the website."
+			}
+		#$OnlineDattoVersion = $OnlineDattoAgent.DattoWindowsAgent.Version
 		$InstalledVer = (Get-Item $FileVer).VersionInfo.ProductVersion
 	}
 	#If neither agent is installed
