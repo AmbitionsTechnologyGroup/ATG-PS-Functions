@@ -736,7 +736,7 @@ Write-Host;Write-Host -NoNewLine "Preparing for connection to nddc.ambitionsgrou
 		Write-Host @greenCheck;Write-Host " SSH already enabled"
 	} Else {
 		Write-Host "Enabling SSH"
-		Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.208 -Force -ErrorAction SilentlyContinue
+		Install-PackageProvider -Name NuGet -MinimumVersion 3.0.0.1 -Force -ErrorAction SilentlyContinue
 		Install-Module -Name Posh-SSH -AllowClobber -Confirm:$False -Force
 	}
 

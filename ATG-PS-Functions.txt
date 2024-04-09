@@ -2153,7 +2153,7 @@ Function Update-PowershellModules {
 	[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 	$Providers = (Get-PackageProvider).Name
 	If ($Providers -NotContains "Nuget") {
-		Install-PackageProvider -Name NuGet -Force -ErrorAction SilentlyContinue
+		Install-PackageProvider -Name NuGet -MinimumVersion 3.0.0.1 -Force -ErrorAction SilentlyContinue
 	}
 	$Modules = Get-Module
 	$ModulesToInstall = "PSReadline","PowerShellGet"
