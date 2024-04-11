@@ -79,6 +79,13 @@ $unzipMethod = 'builtin'
 # Ensure we can run everything
 Set-ExecutionPolicy Bypass -Scope Process -Force;
 
+#Install Nuget if needed
+	[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
+	$Providers = (Get-PackageProvider).Name
+	If ($Providers -NotContains "Nuget") {
+		Install-PackageProvider -Name NuGet -MinimumVersion 3.0.0.1 -Force -ErrorAction SilentlyContinue
+	}
+
 # If the repository requires authentication, create the Credential object
 if ((-not [string]::IsNullOrEmpty($repoUsername)) -and (-not [string]::IsNullOrEmpty($repoPassword))) {
 $securePassword = ConvertTo-SecureString $repoPassword -AsPlainText -Force
