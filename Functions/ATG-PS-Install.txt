@@ -548,7 +548,17 @@ Function Install-WinGet {
 			If ($Providers -NotContains "Nuget") {
 				Install-PackageProvider -Name NuGet -MinimumVersion 3.0.0.1 -Force -ErrorAction SilentlyContinue
 			}
-			Register-PackageSource -Name nuget.org -Location https://api.nuget.org/v3 -ProviderName NuGet
+						# Check if running in the desktop version of PowerShell
+			if ($PSVersionTable.PSEdition -eq "Desktop" -and (Get-Command -Name "Register-PackageSource" -ErrorAction SilentlyContinue)) {
+				Register-PackageSource -Name nuget.org -Location https://www.nuget.org/api/v2 -ProviderName NuGet -Trusted -Force
+				Write-Host "Registered nuget.org package source for desktop PowerShell."
+			} elseif ($PSVersionTable.PSEdition -eq "Core" -and (Get-Command -Name "Register-PackageSource" -ErrorAction SilentlyContinue)) {
+				Register-PackageSource -Name nuget.org -Location https://api.nuget.org/v3/index.json -ProviderName NuGet -Trusted -Force
+				Write-Host "Registered nuget.org package source for PowerShell Core."
+			} else {
+				Write-Host "Register-PackageSource cmdlet not found. Ensure you are running this script in a compatible PowerShell environment."
+			}
+
 			Install-Package -Name 'Microsoft.UI.Xaml' -ProviderName Nuget -Force
 		}
 	
