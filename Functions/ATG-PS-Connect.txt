@@ -132,10 +132,15 @@ Function Connect-O365Exchange {
 				$ModVer = (Get-Command Connect-ExchangeOnline).Version
 				$AvailableModVer = (Find-Module ExchangeOnlineManagement -Repository PSGallery).Version
 				If ($ModVer -ne $AvailableModVer) {
-					Write-host "ExchangeOnlineManagement has an update from $ModVer to $AvailableModVer.nInstalling the update."
+					Write-host "ExchangeOnlineManagement has an update from $ModVer to $AvailableModVer.`nInstalling the update."
 					Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-					Remove-Module ExchangeOnlineManagement -Force
-					Uninstall-Module -Name ExchangeOnlineManagement -AllVersions -Force
+					Remove-Module -Name ExchangeOnlineManagement -Force -ErrorAction SilentlyContinue
+					Uninstall-Module -Name ExchangeOnlineManagement -AllVersions -Force -ErrorAction SilentlyContinue
+					If (Get-Module -Name ExchangeOnlineManagement -ListAvailable) {
+						$ModPath = (Get-Module -Name ExchangeOnlineManagement -ListAvailable).ModuleBase
+						$ArgumentList = '/C "taskkill /IM powershell.exe /F & rd /s /q "' + $ModPath + '" & start powershell -NoExit -ExecutionPolicy Bypass -Command "irm ps.acgs.io|iex ; Connect-O365Exchange"'
+						Start-Process "cmd.exe" -ArgumentList $ArgumentList
+					}
 					Install-Module -Name ExchangeOnlineManagement -AllowClobber -Force
 				} Else {
 					Write-host "ExchangeOnlineManagement is already up to date at version $AvailableModVer."
