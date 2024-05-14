@@ -146,7 +146,7 @@ Function Update-DellPackages {
 
 Function Update-DellServer {
 	Write-Host "Please note, this function needs to be periodically updated. See https://downloads.dell.com/omimswac/dsu/ for the latest DSU version."
-	Write-Warning "Update-Everything will have a visible impact to any logged in users,`nas it will update drivers and reboot the computer.`nYou have 10 seconds to press CTRL+C to cancel this function."
+	Write-Warning "Update-Everything will have a visible impact to any logged in users,`nas it will update drivers and potentially interrupt network connectivity.`nYou have 10 seconds to press CTRL+C to cancel this function."
 	$delay = 10
 
 	while ($delay -ge 0)
