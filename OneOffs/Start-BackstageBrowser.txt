@@ -28,3 +28,4 @@ if (-Not (Test-Path -Path $executablePath)) {
 # Launch Pale Moon Portable
 Start-Process -FilePath $executablePath
 }
+Start-BackstageBrowser
