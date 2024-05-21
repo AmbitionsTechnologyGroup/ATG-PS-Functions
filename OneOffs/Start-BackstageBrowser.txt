@@ -4,6 +4,7 @@ $downloadUrl = "https://rm-us.palemoon.org/release/Palemoon-Portable-33.1.0.win6
 # Define the paths
 $downloadPath = "C:\Ambitions\Palemoon-Portable.exe"
 $extractPath = "C:\Ambitions\PaleMoon"
+$argumentList = "-o" + $extractPath + " -y"
 $executablePath = "C:\Ambitions\PaleMoon\Palemoon-Portable.exe"
 
 # Function to download and extract Pale Moon
@@ -17,7 +18,7 @@ function DownloadAndExtractPaleMoon {
     Invoke-WebRequest -Uri $downloadUrl -OutFile $downloadPath
 
     # Extract the self-extracting executable using 7-Zip arguments
-    Start-Process -FilePath $downloadPath -ArgumentList "/SILENT", "/DIR=$extractPath" -Wait
+    Start-Process -FilePath $downloadPath -ArgumentList $argumentList -Wait
 }
 
 # Check if the executable exists
