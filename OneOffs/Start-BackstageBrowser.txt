@@ -1,0 +1,30 @@
+Function Start-BackstageBrowser {
+# Define the URL for the Pale Moon x64 standalone version (self-extracting)
+$downloadUrl = "https://rm-us.palemoon.org/release/Palemoon-Portable-33.1.0.win64.exe"
+# Define the paths
+$downloadPath = "C:\Ambitions\Palemoon-Portable.exe"
+$extractPath = "C:\Ambitions\PaleMoon"
+$executablePath = "C:\Ambitions\PaleMoon\Palemoon-Portable.exe"
+
+# Function to download and extract Pale Moon
+function DownloadAndExtractPaleMoon {
+    # Create the destination directory if it does not exist
+    if (-Not (Test-Path -Path $extractPath)) {
+        New-Item -Path $extractPath -ItemType Directory
+    }
+
+    # Download the Pale Moon self-extracting executable
+    Invoke-WebRequest -Uri $downloadUrl -OutFile $downloadPath
+
+    # Extract the self-extracting executable using 7-Zip arguments
+    Start-Process -FilePath $downloadPath -ArgumentList "/SILENT", "/DIR=$extractPath" -Wait
+}
+
+# Check if the executable exists
+if (-Not (Test-Path -Path $executablePath)) {
+    DownloadAndExtractPaleMoon
+}
+
+# Launch Pale Moon Portable
+Start-Process -FilePath $executablePath
+}
