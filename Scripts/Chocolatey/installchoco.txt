@@ -83,7 +83,7 @@ Set-ExecutionPolicy Bypass -Scope Process -Force;
 	[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 	$Providers = (Get-PackageProvider).Name
 	If ($Providers -NotContains "Nuget") {
-		Install-PackageProvider -Name NuGet -MinimumVersion 3.0.0.1 -Force -ErrorAction SilentlyContinue
+		Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.208 -Force -ErrorAction SilentlyContinue
 	}
 
 # If the repository requires authentication, create the Credential object
