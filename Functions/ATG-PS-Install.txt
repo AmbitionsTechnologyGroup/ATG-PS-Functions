@@ -546,7 +546,7 @@ Function Install-WinGet {
 			#Microsoft.UI.Xaml
 			$Providers = (Get-PackageProvider).Name
 			If ($Providers -NotContains "Nuget") {
-				Install-PackageProvider -Name NuGet -MinimumVersion 3.0.0.1 -Force -ErrorAction SilentlyContinue
+				Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.208 -Force -ErrorAction SilentlyContinue
 			}
 						# Check if running in the desktop version of PowerShell
 			if ($PSVersionTable.PSEdition -eq "Desktop" -and (Get-Command -Name "Register-PackageSource" -ErrorAction SilentlyContinue)) {
