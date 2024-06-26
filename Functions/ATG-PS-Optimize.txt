@@ -55,7 +55,7 @@ Function Optimize-Powershell {
 
 			If (!(Get-Module -Name PSReadline -ListAvailable)) {
 				If ($Providers -NotContains "Nuget") {
-					Install-PackageProvider -Name NuGet -MinimumVersion 3.0.0.1 -Force -ErrorAction SilentlyContinue
+					Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.208 -Force -ErrorAction SilentlyContinue
 				}
 				Install-Module PSReadline -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
 			}
