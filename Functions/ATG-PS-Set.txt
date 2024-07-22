@@ -12,6 +12,30 @@ Function Set-AutoLogon ([String] $SiteCode) {
 	Write-Host "End of Set autologon"
 }
 
+function Set-ComputerLanguage {
+	param (
+		[string]$Language = "en-US"
+	)
+
+	# Check if the OS language is not set to the specified language
+	$osLanguage = Get-SystemPreferredUILanguage
+	if ($osLanguage -ne $Language) {
+		Write-Host "OS language is currently set to $osLanguage. Changing to $Language..."
+		Install-Language -Language $Language -CopyToSettings
+		Set-SystemPreferredUILanguage -Language $Language
+	}
+
+	# Check if the keyboard layout is not set to the specified language
+	$keyboardLayout = Get-WinUserLanguageList | Where-Object { $_.LanguageTag -ne $Language }
+	if ($keyboardLayout) {
+		Write-Host "Keyboard layout is currently set to $($keyboardLayout.LanguageTag). Changing to $Language..."
+		Set-WinUserLanguageList -LanguageList $Language -Force
+	}
+
+	# Inform the user that changes have been made
+	Write-Host "Language and keyboard layout have been updated to $Language. A reboot is required to take effect."
+}
+
 Function Set-DailyReboot {
 <#
 	.SYNOPSIS
