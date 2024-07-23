@@ -16,13 +16,14 @@ function Set-ComputerLanguage {
 	param (
 		[string]$Language = "en-US"
 	)
-
+	$LanguageUpdated = $False
 	# Check if the OS language is not set to the specified language
 	$osLanguage = Get-SystemPreferredUILanguage
 	if ($osLanguage -ne $Language) {
 		Write-Host "OS language is currently set to $osLanguage. Changing to $Language..."
 		Install-Language -Language $Language -CopyToSettings
 		Set-SystemPreferredUILanguage -Language $Language
+		$LanguageUpdated = $True
 	}
 
 	# Check if the keyboard layout is not set to the specified language
@@ -30,10 +31,16 @@ function Set-ComputerLanguage {
 	if ($keyboardLayout) {
 		Write-Host "Keyboard layout is currently set to $($keyboardLayout.LanguageTag). Changing to $Language..."
 		Set-WinUserLanguageList -LanguageList $Language -Force
+		$LanguageUpdated = $True
 	}
 
-	# Inform the user that changes have been made
-	Write-Host "Language and keyboard layout have been updated to $Language. A reboot is required to take effect."
+	If ($LanguageUpdated) {
+		# Inform the user that changes have been made
+		Write-Host "Language and keyboard layout have been updated to $Language. A reboot is required to take effect."
+	} Else {
+		# Inform the user that changes have been made
+		Write-Host "Language and keyboard layout are already set to $Language. No further action is required."
+	}
 }
 
 Function Set-DailyReboot {
