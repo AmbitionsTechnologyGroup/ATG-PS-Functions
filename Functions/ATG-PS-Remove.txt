@@ -43,8 +43,6 @@ Function Remove-ADStaleComputers {
 	}
 }
 
-Remove-ADStaleComputers
-
 Function Remove-ITS247InstallFolder {
 	Write-Host "Cleaning up install folder"
 	Remove-PathForcefully -Path 'C:\Ambitions\ITS247Agent'
