@@ -1,3 +1,50 @@
+Function Remove-ADStaleComputers {
+	# Ask for the number of days without contact to disable a computer
+	$disableDays = Read-Host -Prompt "Enter the number of days without contact to disable a computer (default: 180)"
+	if (-not $disableDays) { $disableDays = 180 }
+
+	# Ask for the number of days without contact to delete a computer
+	$deleteDays = Read-Host -Prompt "Enter the number of days without contact to delete a computer (default: 365)"
+	if (-not $deleteDays) { $deleteDays = 365 }
+
+	# Get the cutoff dates for disabling and deleting computers
+	$disableDate = (Get-Date).AddDays(-$disableDays)
+	$deleteDate = (Get-Date).AddDays(-$deleteDays)
+
+	# Get the list of computers that haven't been contacted since the cutoff dates
+	$computersToDisable = Get-ADComputer -Filter { LastLogonTimeStamp -lt $disableDate -and Enabled -eq $true } -Properties LastLogonTimeStamp
+	$computersToDelete = Get-ADComputer -Filter { LastLogonTimeStamp -lt $deleteDate -and Enabled -eq $false } -Properties LastLogonTimeStamp
+
+	# Display the list of computers that will be disabled
+	Write-Host "The following computers will be disabled:"
+	$computersToDisable | Select-Object Name, @{Name="LastLogonTimeStamp";Expression={[datetime]::FromFileTime($_.LastLogonTimeStamp).ToString("yyyy-MM-dd HH:mm:ss")}} | Format-Table
+
+	# Display the list of computers that will be deleted
+	Write-Host "The following computers will be deleted:"
+	$computersToDelete | Select-Object Name, @{Name="LastLogonTimeStamp";Expression={[datetime]::FromFileTime($_.LastLogonTimeStamp).ToString("yyyy-MM-dd HH:mm:ss")}} | Format-Table
+
+	# Ask for confirmation before proceeding
+	$confirm = Read-Host -Prompt "Do you want to proceed with disabling and deleting these computers? (y/n)"
+	if ($confirm.ToLower() -ne 'y') {
+		Write-Host "Operation cancelled."
+		return
+	}
+
+	# Disable the computers
+	foreach ($computer in $computersToDisable) {
+		Disable-ADAccount -Identity $computer.SamAccountName
+		Write-Host "Disabled computer: $($computer.Name)"
+	}
+
+	# Delete the computers from Active Directory
+	foreach ($computer in $computersToDelete) {
+		Remove-ADObject -Identity $computer.DistinguishedName -Recursive -Confirm:$false
+		Write-Host "Deleted computer from Active Directory: $($computer.Name)"
+	}
+}
+
+Remove-ADStaleComputers
+
 Function Remove-ITS247InstallFolder {
 	Write-Host "Cleaning up install folder"
 	Remove-PathForcefully -Path 'C:\Ambitions\ITS247Agent'
