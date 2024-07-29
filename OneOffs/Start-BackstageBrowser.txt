@@ -1,6 +1,6 @@
 Function Start-BackstageBrowser {
 # Define the URL for the Pale Moon x64 standalone version (self-extracting)
-$downloadUrl = "https://www.palemoon.org/download.php?mirror=us&bits=64&type=portable"
+$downloadUrl = "https://rm-us.palemoon.org/release/Palemoon-Portable-33.2.1.win64.exe"
 # Define the paths
 $downloadPath = "C:\Ambitions\Palemoon-Portable.exe"
 $extractPath = "C:\Ambitions\PaleMoon"
