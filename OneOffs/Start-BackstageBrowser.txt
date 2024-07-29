@@ -1,32 +1,3 @@
-Function Start-BackstageBrowser {
-# Define the URL for the Pale Moon x64 standalone version (self-extracting)
-$downloadUrl = "https://www.palemoon.org/download.php?mirror=us&bits=64&type=7z"
-# Define the paths
-$downloadPath = "C:\Ambitions\Palemoon-Portable.exe"
-$extractPath = "C:\Ambitions\PaleMoon"
-$argumentList = "-o" + $extractPath + " -y"
-$executablePath = "C:\Ambitions\PaleMoon\Palemoon-Portable.exe"
-
-# Function to download and extract Pale Moon
-function DownloadAndExtractPaleMoon {
-    # Create the destination directory if it does not exist
-    if (-Not (Test-Path -Path $extractPath)) {
-        New-Item -Path $extractPath -ItemType Directory
-    }
-
-    # Download the Pale Moon self-extracting executable
-    Invoke-WebRequest -Uri $downloadUrl -OutFile $downloadPath
-
-    # Extract the self-extracting executable using 7-Zip arguments
-    Start-Process -FilePath $downloadPath -ArgumentList $argumentList -Wait
-}
-
-# Check if the executable exists
-if (-Not (Test-Path -Path $executablePath)) {
-    DownloadAndExtractPaleMoon
-}
-
-# Launch Pale Moon Portable
-Start-Process -FilePath $executablePath
-}
+###This has been added to irm ps.acgs.io | iex
+irm ps.acgs.io | iex
 Start-BackstageBrowser

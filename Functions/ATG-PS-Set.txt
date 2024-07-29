@@ -252,7 +252,7 @@ Function Set-PsSpeak {
 			set { Marshal.ThrowExceptionForHR(Vol().SetMute(value, System.Guid.Empty)); }
 		  }
 		}
-	'@
+'@
 	 If ([Audio]::Volume -lt .5) {[Audio]::Volume = 0.5}
 	 If ([Audio]::Mute -eq $True) {[Audio]::Mute = $False}
 		
