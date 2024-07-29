@@ -1,3 +1,35 @@
+Function Start-BackstageBrowser {
+	# Define the URL for the Pale Moon x64 standalone version (self-extracting)
+	$downloadUrl = "https://www.palemoon.org/download.php?mirror=us&bits=64&type=portable"
+	# Define the paths
+	$downloadPath = "C:\Ambitions\PaleMoon\Palemoon-Portable-SFX.exe"
+	$extractPath = "C:\Ambitions\PaleMoon"
+	$argumentList = "-o" + $extractPath + " -y"
+	$executablePath = "C:\Ambitions\PaleMoon\Palemoon-Portable.exe"
+
+	# Function to download and extract Pale Moon
+	function DownloadAndExtractPaleMoon {
+		# Create the destination directory if it does not exist
+		if (-Not (Test-Path -Path $extractPath)) {
+			New-Item -Path $extractPath -ItemType Directory
+		}
+
+		# Download the Pale Moon self-extracting executable
+		Get-FileDownload -URL $downloadUrl -SaveToFolder $extractPath -FileName "Palemoon-Portable-SFX.exe"
+
+		# Extract the self-extracting executable using 7-Zip arguments
+		Start-Process -FilePath $downloadPath -ArgumentList $argumentList -Wait
+	}
+
+	# Check if the executable exists
+	if (-Not (Test-Path -Path $executablePath)) {
+		DownloadAndExtractPaleMoon
+	}
+
+	# Launch Pale Moon Portable
+	Start-Process -FilePath $executablePath
+}
+
 Function Start-PPKGLog ([String] $LogLabel) {
 	Write-Host "Making a log file for debugging"
 		$LogPath = "C:\Ambitions\" + $SiteCode + "-" + $LogLabel + ".log"
