@@ -54,6 +54,44 @@ Function Enable-O365AuditLog {
 		Write-Output 'Unable to set PowerShell to use TLS 1.2 and TLS 1.1 due to old .NET Framework installed. If you see underlying connection closed or trust errors, you may need to upgrade to .NET Framework 4.5+ and PowerShell v3+.'
 		}
 	}
+
+	Function Enable-WakeOnLAN {
+		If (-not (Get-Module -Name DellBIOSProvider -ErrorAction SilentlyContinue) ) {
+			Try {
+			Install-Module DellBIOSProvider -Force -ErrorAction Stop
+			Import-Module DellBIOSProvider -Force -ErrorAction Stop
+			} Catch {
+				Write-Output "WakeOnLAN is not able to be set via powershell on this computer."
+			}
+		}
+		# Get the current Wake on LAN setting
+		$wolSetting = Get-Item -Path DellSmbios:\PowerManagement\WakeOnLan -ErrorAction SilentlyContinue
+		If ($wolSetting) {
+			if ($wolSetting.CurrentValue -eq "Disabled") {
+				Write-Output "Wake on LAN is currently disabled. Enabling it now..."
+				
+				# Enable Wake on LAN
+				Try {
+					Set-Item -Path DellSmbios:\PowerManagement\WakeOnLan -Value LanWlan -ErrorAction Stop
+				} Catch {
+					Set-Item -Path DellSmbios:\PowerManagement\WakeOnLan -Value LanOnly -ErrorAction Stop
+				}
+				# Confirm the change
+				$wolSetting = Get-Item -Path DellSmbios:\PowerManagement\WakeOnLan -ErrorAction SilentlyContinue
+				$wolSetting
+				if ($wolSetting.CurrentValue -Match "Lan") {
+					Write-Output "Wake on LAN has been successfully enabled."
+				} else {
+					Write-Output "Failed to enable Wake on LAN."
+				}
+			} else {
+				Write-Output "Wake on LAN is already enabled."
+			}
+		} Else {
+			Write-Output "WakeOnLAN is not able to be set via powershell on this computer."
+		}
+	}
+	
 	
 	# SIG # Begin signature block
 	# MIIF0AYJKoZIhvcNAQcCoIIFwTCCBb0CAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
