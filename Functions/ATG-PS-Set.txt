@@ -208,7 +208,7 @@ Function Set-PsSpeak {
 			$SpeechSynthesizer.Volume = $Volume
 		}
 		if (-not ([System.Management.Automation.PSTypeName]'Audio').Type) {
-#			Add-Type -TypeDefinition @'
+			Add-Type -TypeDefinition @'
 			using System.Runtime.InteropServices;
 			[Guid("5CDF2C82-841E-4546-9722-0CF74078229A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 			interface IAudioEndpointVolume {
@@ -251,7 +251,7 @@ Function Set-PsSpeak {
 					set { Marshal.ThrowExceptionForHR(Vol().SetMute(value, System.Guid.Empty)); }
 				}
 			}
-#'@
+'@
 		}
 	 If ([Audio]::Volume -lt .5) {[Audio]::Volume = 0.5}
 	 If ([Audio]::Mute -eq $True) {[Audio]::Mute = $False}
