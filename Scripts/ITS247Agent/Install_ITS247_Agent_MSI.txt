@@ -116,7 +116,7 @@ Function InstallAgent {
 	}
 	
 	Do {
-		$LogPath = "${env:ProgramFiles(x86)}\ITSPlatform\log\platform-installation-manager.log"
+		$LogPath = "${env:ProgramFiles(x86)}\ITSPlatformSetupLogs\ITSPlatform-install-success.log"
 		[int]$WaitMinutes = 10
 		If (!(Get-Item -Path $LogPath -ErrorAction SilentlyContinue)) {
 			Write-Host -NoNewLine "`rWaiting for installation log to be created."
@@ -134,7 +134,7 @@ Function InstallAgent {
 			Write-Host -Foregroundcolor yellow "`nThe install log hasn't been touched for $WaitMinutes minutes.`n$(Get-Date -Format "hh:mm tt") - Considering install complete." ; $Status = 'Done'
 		}
 } Until ($Status)
-	1..3 | ForEach-Object { [console]::Beep(1200, 505); Start-Sleep .505 }; [console]::Beep(1800, 1500)
+	Set-PSSpeak -Text ".. Installation of continuum agent on pc $(hostname) is complete.)" -Gender Female
 	Disable-Sleep
 	Exit
 } #End of InstallAgent
