@@ -126,6 +126,68 @@ Function Remove-PathForcefully {
 	#>
 }
 
+Function Remove-StaleObjects {
+	param(
+		[parameter(Mandatory=$true)]
+		[string] $targetDirectory,
+		[parameter(Mandatory=$true)]
+		[Int] $DaysOld
+	)
+	# PowerShell script to delete files or folders older than 30 days in a specific directory
+	#$targetDirectory = "C:\Program Files (x86)\ITSPlatform\agentcore\download"
+	#$DaysOld = 30
+	$thresholdDate = (Get-Date).AddDays(-$DaysOld)
+	
+	If (! $(Test-Path $targetDirectory -ErrorAction SilentlyContinue)) {
+		Write-Warning "$targetDirectory does not exist."
+		Break
+	}
+	# Recursively get all files and folders in the target directory
+	$itemsToDelete = Get-ChildItem -Path $targetDirectory -Recurse | Where-Object {
+		$_.LastAccessTime -lt $thresholdDate
+	}
+	#$itemsToDelete.FullName
+	#$itemsToDelete.Count
+	foreach ($item in $itemsToDelete) {
+		if ($item.PSIsContainer) {
+			# If it's a folder, remove it recursively
+			Remove-Item -Path $item.FullName -Recurse -Force -ErrorAction SilentlyContinue
+			Write-Host $VerbosePreference
+			If ( $PSBoundParameters['Verbose'] -or $VerbosePreference -eq 'Continue' ){Write-Verbose "Deleted folder: $($item.FullName)"}
+		} else {
+			# If it's a file, remove it
+			Remove-Item -Path $item.FullName -Force -ErrorAction SilentlyContinue
+			If ( $PSBoundParameters['Verbose'] -or $VerbosePreference -eq 'Continue' ){Write-Verbose "Deleted file: $($item.FullName)"}
+		}
+	}
+
+	# Get all empty folders recursively
+	$emptyFolders = Get-ChildItem -Path $targetDirectory -Recurse | Where-Object {
+		$_.PSIsContainer -and @(Get-ChildItem -Path $_.FullName -Force).Count -eq 0
+	}
+
+	foreach ($folder in $emptyFolders) {
+		Remove-Item -Path $folder.FullName -Force -ErrorAction SilentlyContinue
+		If ( $PSBoundParameters['Verbose'] -or $VerbosePreference -eq 'Continue' ){Write-Host "Deleted empty folder: $($folder.FullName)"}
+	}
+	$itemsUnableToDelete = Get-ChildItem -Path $targetDirectory -Recurse | Where-Object {
+		$_.LastWriteTime -lt $thresholdDate
+	}
+
+
+	
+	$SuccessfulDelete = $(($itemsToDelete).Count - ($itemsUnableToDelete).Count)
+	If ($SuccessfulDelete) {
+	Write-Host "Removed $($SuccessfulDelete.Count) objects."
+	Write-Host "Cleanup of the directory $targetDirectory complete!"
+	} Else {
+		Write-Host "No objects older then $DaysOld days were deleted from $targetDirectory."
+	}
+	If ($itemsUnableToDelete) {
+		Write-Warning "$($($itemsUnableToDelete).count) objects were found but were not able to be deleted"
+	}
+}
+
 # SIG # Begin signature block
 # MIIF0AYJKoZIhvcNAQcCoIIFwTCCBb0CAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
