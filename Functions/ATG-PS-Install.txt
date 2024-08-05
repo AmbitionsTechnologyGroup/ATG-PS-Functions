@@ -44,6 +44,7 @@ Function Install-NetExtender {
 	} Else {
 		Write-Host "Downloading & Installing NetExtender"
 		If (Get-Command winget -ErrorAction SilentlyContinue) {
+			winget source update
 			winget install --id SonicWALL.NetExtender -e -h --accept-package-agreements --accept-source-agreements
 		} Else {
 			If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
@@ -606,6 +607,7 @@ Function Install-WinGet {
 
 Function Install-WinGetApps {
 	If (-not (Get-Command -Name "winget" -ErrorAction SilentlyContinue)) {Install-Winget}
+	winget source update
 	Winget install -e --id 7zip.7zip -h --accept-package-agreements --accept-source-agreements
 	Winget install -e --id Google.Chrome -h --accept-package-agreements --accept-source-agreements
 	Winget install -e --id Mozilla.FirefoxESR -h --accept-package-agreements --accept-source-agreements

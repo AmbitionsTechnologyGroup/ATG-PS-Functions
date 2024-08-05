@@ -78,6 +78,7 @@ Function Update-DellPackages {
 				#Install the latest
 				Stop-Process -Name DellCommandUpdate -Force -ErrorAction SilentlyContinue
 				If (Get-Command winget -ErrorAction SilentlyContinue) {
+					winget source update
 					winget install --id Dell.CommandUpdate -e -h --accept-package-agreements --accept-source-agreements
 				} Else {
 					Choco upgrade dellcommandupdate -y --force -i --ignorechecksums
@@ -235,6 +236,7 @@ Function Update-Everything {
 	}
 	$delay = $null
 	If (Get-Command winget -ErrorAction SilentlyContinue) {
+		winget source update
 		winget upgrade --all -h
 	} Else {
 		If (Get-Command choco -ErrorAction SilentlyContinue) {choco upgrade all -y}
@@ -510,6 +512,7 @@ Function Update-PowershellModules {
 Function Update-PWSH {
 	Write-Host "Updating PWSH"
 	If (Get-Command winget -ErrorAction SilentlyContinue) {
+		winget source update
 		winget install --id Microsoft.PowerShell -e -h --accept-package-agreements --accept-source-agreements
 	} Else {
 		If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
