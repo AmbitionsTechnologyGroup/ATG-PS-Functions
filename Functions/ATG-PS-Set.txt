@@ -34,6 +34,13 @@ function Set-ComputerLanguage {
 		$LanguageUpdated = $True
 	}
 
+	$CultureLanguage = (Get-Culture).Name
+	if ($CultureLanguage -ne $Language) {
+		Write-Host "OS Culture is currently set to $CultureLanguage. Changing to $Language..."
+		Set-Culture -CultureInfo $Language
+		$LanguageUpdated = $True
+	}
+
 	If ($LanguageUpdated) {
 		# Inform the user that changes have been made
 		Write-Host "Language and keyboard layout have been updated to $Language. A reboot is required to take effect."
