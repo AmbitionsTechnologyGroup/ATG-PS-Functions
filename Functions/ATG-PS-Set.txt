@@ -41,8 +41,39 @@ function Set-ComputerLanguage {
 		$LanguageUpdated = $True
 	}
 
+	if ((Get-WinSystemLocale).Name -ne $Language){
+		Set-WinSystemLocale -SystemLocale $Language
+		$LanguageUpdated = $True
+	}
+
+	function Get-GeoIdLanguageMapping {
+		$cultures = [System.Globalization.CultureInfo]::GetCultures([System.Globalization.CultureTypes]::AllCultures)
+		$geoIdLanguageMapping = @()
+
+		foreach ($culture in $cultures) {
+			try {
+				$region = [System.Globalization.RegionInfo]$culture.Name
+				$geoIdLanguageMapping += [PSCustomObject]@{
+					GeoId        = $region.GeoId
+					LanguageCode = $culture.Name
+					DisplayName  = $region.DisplayName
+				}
+			} catch {
+				# Ignore cultures that do not have a corresponding RegionInfo
+			}
+		}
+
+		return $geoIdLanguageMapping | Sort-Object GeoId | Select-Object GeoId, LanguageCode, DisplayName
+	}
+	$NewLanguageGeoId = (Get-GeoIdLanguageMapping | ?{$_.LanguageCode -eq $Language}).GeoId
+	If (-not ((Get-WinHomeLocation).GeoId -match $NewLanguageGeoId)) {
+		Set-WinHomeLocation -GeoId $NewLanguageGeoId
+		$LanguageUpdated = $True
+	}
+
 	If ($LanguageUpdated) {
 		# Inform the user that changes have been made
+		Set-WinUILanguageOverride -Language $Language
 		Write-Host "Language and keyboard layout have been updated to $Language. A reboot is required to take effect."
 	} Else {
 		# Inform the user that changes have been made
