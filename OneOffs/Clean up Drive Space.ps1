@@ -1,4 +1,5 @@
 $ErrorActionPreference = "silentlycontinue"
+#[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192 ; irm 'https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/OneOffs/Clean%20up%20Drive%20Space.ps1' | iex
 #Clean up Drive Space
 #Enable SSL/TLS
 Try {
@@ -40,11 +41,11 @@ Function Invoke-WindowsCleanMgr {
 	$Locations = @($VolCaches.PSChildName)
 	foreach ($VC in $VolCaches) {New-ItemProperty -Path "$($VC.PSPath)" -Name $StateFlags -Value 1 -Type DWORD -Force | Out-Null}
 	ForEach ($Location in $Locations) {Set-ItemProperty -Path $($Base + $Location) -Name $SageSet -Type DWORD -Value 2 -ea SilentlyContinue | Out-Null}
-	$Args = "/sagerun:$([string]([int]$SageSet.Substring($SageSet.Length - 4)))"
+	$Argss = "/sagerun:$([string]([int]$SageSet.Substring($SageSet.Length - 4)))"
 	#Write-Host "Running Windows CleanMgr /verylowdisk"
 	#Start-Process -Wait "$env:SystemRoot\System32\cleanmgr.exe" -ArgumentList "/verylowdisk /d c" -WindowStyle Hidden
 	Write-Host "Running Windows CleanMgr /everything"
-	Start-Process -Wait "$env:SystemRoot\System32\cleanmgr.exe" -ArgumentList $Args -WindowStyle Hidden
+	Start-Process -Wait "$env:SystemRoot\System32\cleanmgr.exe" -ArgumentList $Argss -WindowStyle Hidden
 	Write-Host "Done Windows CleanMgr"
 }
 
@@ -296,7 +297,7 @@ $PathsToDelete | %{
 	If (@(Get-Item $_)){
 		ForEach ($SubItem in $_) {
 			Get-Item $_ | ForEach-Object {
-				$_.FullName
+				#$_.FullName
 				Remove-PathForcefully -Path $($_.FullName)
 			}
 		}
@@ -305,18 +306,19 @@ $PathsToDelete | %{
 
 $CommandsToRun = @(
 	Start-ScheduledTask -TaskPath "\Microsoft\Windows\Servicing" -TaskName "StartComponentCleanup" ## Run the StartComponentCleanup task
-	Get-Item "$Env:windir\Microsoft.NET\Framework\*\ngen.exe" | % { & $($_.FullName) update} ## Reclaim space from .NET Native Images
-	Clear-RecycleBin -Force ## Empties Recycle Bin
+	Write-Host "Reclaim space from .NET Native Images" ; Get-Item "$Env:windir\Microsoft.NET\Framework\*\ngen.exe" | % { & $($_.FullName) update} ## Reclaim space from .NET Native Images
+	Write-Host "Emptying Recycle Bin" ;Clear-RecycleBin -Force ## Empties Recycle Bin
 	## Reduce the size of the WinSxS folder
+	Write-Host "Reducing the size of the WinSxS folder" 
 		Dism.exe /online /Cleanup-Image /StartComponentCleanup
 		Dism.exe /online /Cleanup-Image /StartComponentCleanup /ResetBase
 		Dism.exe /online /Cleanup-Image /SPSuperseded
 		DISM.exe /Online /Set-ReservedStorageState /State:Disabled
-	Winmgmt /salvagerepository ## Cleans up WMI Repository
-	Start-Process -FilePath rundll32.exe -ArgumentList 'inetcpl.cpl,ClearMyTracksByProcess 4351' -Wait -NoNewWindow ## erase Internet Explorer temp data
-		Remove-WindowsRestorePoints
-	Remove-EventLogs
-	Remove-DuplicateDrivers
+	Write-Host "Cleaning up the WMI Repository" ; Winmgmt /salvagerepository ## Cleans up WMI Repository
+	Write-Host "Erasing IE Temp Data" ;Start-Process -FilePath rundll32.exe -ArgumentList 'inetcpl.cpl,ClearMyTracksByProcess 4351' -Wait -NoNewWindow ## erase Internet Explorer temp data
+	Write-Host "Removing Restore Points" ;Remove-WindowsRestorePoints
+	Write-Host "Clearing Event Logs" ;Remove-EventLogs
+	Write-Host "Removing Duplicate Drivers" ;Remove-DuplicateDrivers
 	Invoke-WindowsCleanMgr
 )
 
