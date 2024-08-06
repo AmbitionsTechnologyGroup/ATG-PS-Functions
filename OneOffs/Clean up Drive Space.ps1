@@ -279,7 +279,7 @@ $PathsToDelete = @(
 )
 
 #Show what we're working with
-Write-Host "`nAfter Clean-up:";($PreClean | Format-Table | Out-String).Trim()
+Write-Host "`nBefore Clean-up:";($PreClean | Format-Table | Out-String).Trim()
 Start-Sleep -Seconds 10
 
 #Clean up folders
@@ -339,7 +339,7 @@ $PostClean = Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object -Proper
 ## Sends some before and after info for ticketing purposes
 
 Hostname ; Get-Date | Select-Object DateTime
-Write-Host "`nAfter Clean-up:";($PreClean | Format-Table | Out-String).Trim()
+Write-Host "`nBefore Clean-up:";($PreClean | Format-Table | Out-String).Trim()
 Write-Host "`nAfter Clean-up:";($PostClean | Format-Table | Out-String).Trim()
 Write-Host "Freed up $($PostClean.'FreeSpace (GB)' - $PreClean.'FreeSpace (GB)') GB. $((($PostClean.PercentFree).Replace('%','')) - (($PreClean.PercentFree).Replace('%',''))) %"
 ## Completed Successfully!
