@@ -309,7 +309,7 @@ $PathsToDelete | %{
 }
 
 $CommandsToRun = @(
-	Start-ScheduledTask -TaskPath "\Microsoft\Windows\Servicing" -TaskName "StartComponentCleanup" ## Run the StartComponentCleanup task
+	Start-ScheduledTask -TaskPath "\Microsoft\Windows\Servicing" -TaskName "StartComponentCleanup" -Verbose:$false ## Run the StartComponentCleanup task
 	Write-Host "Reclaim space from .NET Native Images" ; Get-Item "$Env:windir\Microsoft.NET\Framework\*\ngen.exe" | % { & $($_.FullName) update} ## Reclaim space from .NET Native Images
 	Write-Host "Emptying Recycle Bin" ;Clear-RecycleBin -Force ## Empties Recycle Bin
 	## Reduce the size of the WinSxS folder
