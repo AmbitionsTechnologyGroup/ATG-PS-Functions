@@ -278,6 +278,10 @@ $PathsToDelete = @(
 	(Join-Path -Path ${Env:ProgramFiles(x86)} -ChildPath "Microsoft\EdgeUpdate\Download\*")
 )
 
+#Show what we're working with
+Write-Host "`nAfter Clean-up:";($PreClean | Format-Table | Out-String).Trim()
+Start-Sleep -Seconds 10
+
 #Clean up folders
 $FoldersToClean | %{
 	#Write-Host "$_ :"
@@ -335,6 +339,7 @@ $PostClean = Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object -Proper
 ## Sends some before and after info for ticketing purposes
 
 Hostname ; Get-Date | Select-Object DateTime
-@(("`n`n`tBefore Clean-up:`n{0}" -f $PreClean), ("`n`n`tAfter Clean-up:`n{0}`n" -f $PostClean)) | Write-Output
+Write-Host "`nAfter Clean-up:";($PreClean | Format-Table | Out-String).Trim()
+Write-Host "`nAfter Clean-up:";($PostClean | Format-Table | Out-String).Trim()
 Write-Host "Freed up $($PostClean.'FreeSpace (GB)' - $PreClean.'FreeSpace (GB)') GB. $((($PostClean.PercentFree).Replace('%','')) - (($PreClean.PercentFree).Replace('%',''))) %"
 ## Completed Successfully!
