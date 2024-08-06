@@ -16,10 +16,10 @@ Try {
 irm "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-Remove.txt" | iex
 
 
-$VerbosePreference = "Continue"
+$VerbosePreference = "SilentlyContinue"
 $DaysToDelete = 7
 $LogDate = get-date -format "MM-d-yy-HH"
-$ErrorActionPreference = "silentlycontinue"
+$ErrorActionPreference = "SilentlyContinue"
 
 # Assign the pre-cleanup storage state to a variable.
 $PreClean = Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object -Property DriveType -EQ 3 | Where-Object -Property DeviceID -EQ $Env:SystemDrive | Select-Object -Property @{ Name = 'Drive'; Expression = { ($PSItem.DeviceID) } },
@@ -78,7 +78,7 @@ Function Remove-DuplicateDrivers {
 	If ($DuplicateDrivers) {
 		$DuplicateDrivers | Out-GridView -Title 'Remove Duplicate Drivers' -PassThru | ForEach-Object -Process {
 			$Driver = $PSItem.Driver.Trim()
-			Write-Verbose ('Performing the action "Delete Driver" on target {0}' -f $Driver) -Verbose
+			#Write-Verbose ('Performing the action "Delete Driver" on target {0}' -f $Driver) -Verbose
 			Start-Process -FilePath PNPUTIL -ArgumentList ('/Delete-Driver {0} /Force' -f $Driver) -WindowStyle Hidden -Wait
 		}
 	}
