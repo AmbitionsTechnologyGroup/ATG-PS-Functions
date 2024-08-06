@@ -11,7 +11,6 @@ Try {
 #Load Functions without using disk space
 irm "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-Remove.txt" | iex
 
-
 $VerbosePreference = "SilentlyContinue"
 $DaysToDelete = 7
 $LogDate = get-date -format "MM-d-yy-HH"
