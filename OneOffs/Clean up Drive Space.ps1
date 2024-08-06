@@ -3,10 +3,6 @@ $ErrorActionPreference = "silentlycontinue"
 #Clean up Drive Space
 #Enable SSL/TLS
 Try {
-	# Set TLS 1.2 (3072), then TLS 1.1 (768), then TLS 1.0 (192)
-	# Use integers because the enumeration values for TLS 1.2 and TLS 1.1 won't
-	# exist in .NET 4.0, even though they are addressable if .NET 4.5+ is
-	# installed (.NET 4.5 is an in-place upgrade).
 	[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192
 } Catch {
 	Write-Output 'Unable to set PowerShell to use TLS 1.2 and TLS 1.1 due to old .NET Framework installed. If you see underlying connection closed or trust errors, you may need to upgrade to .NET Framework 4.5+ and PowerShell v3+.'
@@ -84,10 +80,53 @@ Function Remove-DuplicateDrivers {
 	}
 }
 
+Function Remove-StaleProfiles {
+	$thresholdDays = 365 #Days
+
+	# Get a list of user profiles
+	$profiles = Get-CimInstance -ClassName Win32_UserProfile | Where {$_.CreationTime -lt (get-date).adddays(-$thresholdDays)} | where {$_.Loaded -eq $False} | Where-Object { $_.LocalPath -notmatch 'atg|Remote Support' }
+	If ($profiles) {
+		foreach ($profile in $profiles) {
+			
+			$localPath = $profile.LocalPath
+			$localPath.FullName
+			$directories = Get-ChildItem -Path $localPath -Directory
+			if ($directories.Count -gt 0) {
+			# Find the most recently modified directory
+				$mostRecentDir = $directories | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+				# Calculate the age in days
+				$ageInDays = (Get-Date) - $mostRecentDir.LastWriteTime
+				Write-Host "$($mostRecentDir.FullName) was most recently updated $([int]$ageInDays.TotalDays) days ago."
+				If ($ageInDays.TotalDays -gt 360) {
+					Write-Host "Deleting $localPath (Last modified: $($mostRecentDir.LastWriteTime))"
+					Write-Host "Deleting inactive profile: $($profile.LocalPath)"
+					Write-Host "$profile"
+					Write-Host $lastWriteTime
+					Remove-CimInstance $profile -Verbose -Confirm:$false 
+					# Replace 'S-1-5-21-2552263123-1652881823-690255818-2139' with the actual SID you want to delete
+					$targetSID = $profile.SID
+
+					# Construct the registry path for the user profile
+					$registryPath = "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\ProfileList\$targetSID"
+
+					# Delete the registry key
+					Remove-Item -Path $registryPath -Force
+					Write-Host "User profile with SID $targetSID has been deleted from the registry."
+					# Delete the Users Path
+					Remove-PathForcefully -Path $Profile.LocalPath
+				}
+			}
+		}
+	} Else {
+		Write-Host "No profiles older then $thresholdDays found."
+	}
+}
+
 $PreReqCommandsToRun = @(
 	Get-Service -Name wuauserv | Stop-Service -Force -Verbose -ErrorAction SilentlyContinue #Stops Windows Update so we can clean it out.
 	powercfg -h off
 	$EdgePackageName = Get-AppxPackage -Name Microsoft.MicrosoftEdge | Select-Object -ExpandProperty PackageFamilyName
+	Remove-StaleProfiles
 )
 
 ## State which files or folders to clean up old files
@@ -133,8 +172,9 @@ $PathsToDelete = @(
 		(Join-Path -Path $Env:SystemDrive -ChildPath 'C:\$GetCurrent')
 		(Join-Path -Path $Env:SystemDrive -ChildPath 'C:\$WINDOWS.~BT')
 		(Join-Path -Path $Env:SystemDrive -ChildPath 'C:\$WINDOWS.~WS')
-	@($(Get-Item -Path (Join-Path -Path $LocalAppData -ChildPath "Microsoft\Outlook\*.ost" | Where-Object -Property "LastWriteTime" -lt $(Get-Date).AddDays(-30)))) ## OST files that haven't been used in more then 30 days
+	@($(Get-Item -Path (Join-Path -Path $LocalAppData -ChildPath "Microsoft\Outlook\*.ost" | Where-Object -Property "LastWriteTime" -lt $(Get-Date).AddDays(-30)) -Force)) ## OST files that haven't been used in more then 30 days
 	(Join-Path -Path $Env:SystemDrive -ChildPath "Windows.old") ##Old windows install
+	(Join-Path -Path $Env:SystemDrive -ChildPath "Ambitions\NiniteDownloads")
 	(Join-Path -Path $Env:SystemRoot -ChildPath "debug\WIA\*.log")
 	(Join-Path -Path $Env:SystemRoot -ChildPath "INF\*.log*")
 	(Join-Path -Path $Env:SystemRoot -ChildPath "Logs\CBS\*Persist*")
@@ -144,7 +184,10 @@ $PathsToDelete = @(
 	(Join-Path -Path $Env:SystemRoot -ChildPath "Logs\SIH\*.*")
 	(Join-Path -Path $Env:SystemRoot -ChildPath "Logs\WindowsBackup\*.etl")
 	(Join-Path -Path $Env:SystemRoot -ChildPath "Panther\UnattendGC\*.log")
-	(Join-Path -Path $Env:SystemRoot -ChildPath Temp)
+	(Join-Path -Path $Env:SystemDrive -ChildPath "Temp")
+	(Join-Path -Path $Env:SystemDrive -ChildPath "TMP")
+	(Join-Path -Path $Env:SystemDrive -ChildPath "TempPath")
+	(Join-Path -Path $Env:SystemDrive -ChildPath "OneDriveTemp")
 	(Join-Path -Path $Env:SystemRoot -ChildPath "WinSxS\ManifestCache\*")
 	#(Join-Path -Path $Env:SystemRoot -ChildPath "*.log")
 	(Join-Path -Path $Env:SystemRoot -ChildPath "*.dmp")
@@ -152,8 +195,8 @@ $PathsToDelete = @(
 	(Join-Path -Path $Env:SystemDrive -ChildPath "File*.chk")
 	(Join-Path -Path $Env:SystemDrive -ChildPath "Found.*\*.chk")
 	(Join-Path -Path $Env:SystemDrive -ChildPath "LiveKernelReports\*.dmp")
-	(Join-Path -Path $Env:HOMEDRIVE -ChildPath Intel)
-	(Join-Path -Path $Env:HOMEDRIVE -ChildPath PerfLogs)
+	(Join-Path -Path $Env:HOMEDRIVE -ChildPath "Intel")
+	(Join-Path -Path $Env:HOMEDRIVE -ChildPath "PerfLogs")
 	#Chrome
 	(Join-Path -Path $RootAppData -ChildPath "Google\Chrome\User Data\Default\Cache*\*")
 	(Join-Path -Path $LocalAppData -ChildPath "Google\Chrome\User Data\Default\Cache*\*")
@@ -276,6 +319,9 @@ $PathsToDelete = @(
 	(Join-Path -Path $Env:ProgramData -ChildPath "Microsoft\EdgeUpdate\Log\*")
 	(Join-Path -Path ${Env:ProgramFiles(x86)} -ChildPath "Microsoft\Edge\Application\SetupMetrics\*.pma")
 	(Join-Path -Path ${Env:ProgramFiles(x86)} -ChildPath "Microsoft\EdgeUpdate\Download\*")
+	#Quickbooks
+	(Join-Path -Path $Env:ProgramData "Intuit\QuickBooks*\Components\DownloadQB*")
+	(Join-Path -Path $Env:ProgramData "Intuit\QuickBooks*\Components\QBUpdateCache")
 )
 
 #Show what we're working with
@@ -284,11 +330,9 @@ Start-Sleep -Seconds 10
 
 #Clean up folders
 $FoldersToClean | %{
-	#Write-Host "$_ :"
-	#@(Get-Item $_).Count
-	If (@(Get-Item $_)){
+	If (@(Get-Item $_ -Force)){
 		ForEach ($SubItem in $_) {
-			Get-Item $_ | ForEach-Object {
+			Get-Item $_ -Force| ForEach-Object {
 				#$_.FullName
 				Remove-StaleObjects -targetDirectory $($_.FullName) -DaysOld $DaysToDelete
 			}
@@ -298,9 +342,9 @@ $FoldersToClean | %{
 
 #Delete the folders / files
 $PathsToDelete | %{
-	If (@(Get-Item $_)){
+	If (@(Get-Item $_ -Force)){
 		ForEach ($SubItem in $_) {
-			Get-Item $_ | ForEach-Object {
+			Get-Item $_ -Force | ForEach-Object {
 				#$_.FullName
 				Remove-PathForcefully -Path $($_.FullName)
 			}
@@ -310,7 +354,7 @@ $PathsToDelete | %{
 
 $CommandsToRun = @(
 	Start-ScheduledTask -TaskPath "\Microsoft\Windows\Servicing" -TaskName "StartComponentCleanup" -Verbose:$false ## Run the StartComponentCleanup task
-	Write-Host "Reclaim space from .NET Native Images" ; Get-Item "$Env:windir\Microsoft.NET\Framework\*\ngen.exe" | % { & $($_.FullName) update} ## Reclaim space from .NET Native Images
+	Write-Host "Reclaim space from .NET Native Images" ; Get-Item "$Env:windir\Microsoft.NET\Framework\*\ngen.exe" -Force | % { & $($_.FullName) update} ## Reclaim space from .NET Native Images
 	Write-Host "Emptying Recycle Bin" ;Clear-RecycleBin -Force ## Empties Recycle Bin
 	## Reduce the size of the WinSxS folder
 	Write-Host "Reducing the size of the WinSxS folder" 
