@@ -22,6 +22,11 @@ $PreClean = Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object -Propert
 	@{ Name = 'FreeSpace (GB)'; Expression = { '{0:N1}' -f ($PSItem.Freespace / 1GB) } },
 	@{ Name = 'PercentFree'; Expression = { '{0:P1}' -f ($PSItem.FreeSpace / $PSItem.Size) } }
 
+#Show what we're working with
+Write-Host "`nBefore Clean-up:`n$(($PreClean | Format-Table | Out-String).Trim())"
+Write-Host $((Get-Date).DateTime)
+Write-Host $($env:computername)
+
 # Assign the local and global paths to their own variables for easier path building.
 	$GlobalAppData = $Env:APPDATA.Replace($($Env:USERPROFILE),$(($Env:Public).Replace('Public','*')))
 	$LocalAppData = $Env:LOCALAPPDATA.Replace($($Env:USERPROFILE),$(($Env:Public).Replace('Public','*')))
@@ -34,14 +39,70 @@ Function Invoke-WindowsCleanMgr {
 	$Base = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\"
 	$VolCaches = Get-ChildItem $Base
 	$Locations = @($VolCaches.PSChildName)
-	foreach ($VC in $VolCaches) {New-ItemProperty -Path "$($VC.PSPath)" -Name $StateFlags -Value 1 -Type DWORD -Force | Out-Null}
+	# Set the path to cleanmgr.exe (adjust if needed)
+	$CleanMgrPath = "$env:SystemRoot\System32\cleanmgr.exe"
+	# Define the interval for checking process time (in seconds)
+	$CheckInterval = 30
+	# Initialize a counter for consecutive identical process times
+	$ConsecutiveIdenticalTimes = 0
+	ForEach ($VC in $VolCaches) {New-ItemProperty -Path "$($VC.PSPath)" -Name $StateFlags -Value 1 -Type DWORD -Force | Out-Null}
 	ForEach ($Location in $Locations) {Set-ItemProperty -Path $($Base + $Location) -Name $SageSet -Type DWORD -Value 2 -ea SilentlyContinue | Out-Null}
 	$Argss = "/sagerun:$([string]([int]$SageSet.Substring($SageSet.Length - 4)))"
-	#Write-Host "Running Windows CleanMgr /verylowdisk"
-	#Start-Process -Wait "$env:SystemRoot\System32\cleanmgr.exe" -ArgumentList "/verylowdisk /d c" -WindowStyle Hidden
-	Write-Host "Running Windows CleanMgr /everything"
-	Start-Process -Wait "$env:SystemRoot\System32\cleanmgr.exe" -ArgumentList $Argss -WindowStyle Hidden
-	Write-Host "Done Windows CleanMgr"
+	function Monitor-Cleanmgr {
+		$prevTicks = 0
+		$sameTickCount = 0
+		$WaitInterval = 30
+		$SameTickMax = 8
+		$process = Get-Process cleanmgr -ErrorAction SilentlyContinue
+
+		if ($null -eq $process) {
+			Write-Host "cleanmgr.exe is not running."
+			return $false
+		}
+
+		for ($i = 0; $i -lt 3; $i++) {
+			Start-Sleep -Seconds $WaitInterval
+			
+			$currentTicks = (Get-Process cleanmgr).TotalProcessorTime.Ticks
+			Write-Host "Checking on cleanmgr CPU usage:$currentTicks"
+			if ($currentTicks -eq $prevTicks) {
+				$sameTickCount++
+				Write-Host "Cleanmgr hasn't used the CPU in the last $WaitInterval seconds. If it does this $SameTickMax times, we'll move on."
+				if ($sameTickCount -eq $SameTickMax) { #CPU count hasn't changed for 2 minutes (30 seconds * 4)
+					Write-Host "cleanmgr.exe appears to be inactive. Terminating process."
+					Stop-Process -Name cleanmgr -Force
+					return $true
+				}
+			} else {
+				$sameTickCount = 0
+			}
+
+			$prevTicks = $currentTicks
+		}
+
+		return $false
+	}
+	Write-Host "Starting cleanmgr.exe /verylowdisk for a first attempt."
+	Start-Process "$env:SystemRoot\System32\cleanmgr.exe" -ArgumentList "/verylowdisk /d c" -WindowStyle Hidden
+	$terminated = Monitor-Cleanmgr
+
+	# Second attempt if the first one was terminated
+	if ($terminated) {
+		Write-Host "Restarting cleanmgr.exe for a second attempt."
+		Start-Process "$env:SystemRoot\System32\cleanmgr.exe" -ArgumentList "/verylowdisk /d c" -WindowStyle Hidden
+		Monitor-Cleanmgr
+	}
+	
+	Write-Host "Starting cleanmgr.exe $Argss for a first attempt."
+	Start-Process "$env:SystemRoot\System32\cleanmgr.exe" -ArgumentList $Argss -WindowStyle Hidden
+	$terminated = Monitor-Cleanmgr
+
+	# Second attempt if the first one was terminated
+	if ($terminated) {
+		Write-Host "Restarting cleanmgr.exe $Argss for a second attempt."
+		Start-Process "$env:SystemRoot\System32\cleanmgr.exe" -ArgumentList $Argss -WindowStyle Hidden
+		Monitor-Cleanmgr
+	}
 }
 
 Function Remove-WindowsRestorePoints {
@@ -323,10 +384,6 @@ $PathsToDelete = @(
 	(Join-Path -Path $Env:ProgramData "Intuit\QuickBooks*\Components\DownloadQB*")
 	(Join-Path -Path $Env:ProgramData "Intuit\QuickBooks*\Components\QBUpdateCache")
 )
-
-#Show what we're working with
-Write-Host "`nBefore Clean-up:";($PreClean | Format-Table | Out-String).Trim()
-Start-Sleep -Seconds 10
 
 #Clean up folders
 $FoldersToClean | %{
