@@ -67,7 +67,7 @@ Function Invoke-WindowsCleanMgr {
 			Write-Host "Checking on cleanmgr CPU usage:$currentTicks"
 			if ($currentTicks -eq $prevTicks) {
 				$sameTickCount++
-				Write-Host "Cleanmgr hasn't used the CPU in the last $WaitInterval seconds. If it does this $($SameTickMax - $sameTickCount) times, we'll move on."
+				Write-Host "Cleanmgr hasn't used the CPU in the last $WaitInterval seconds. If it does this $($SameTickMax - $sameTickCount) more times, we'll move on."
 				if ($sameTickCount -eq $SameTickMax) { #CPU count hasn't changed for 2 minutes (30 seconds * 4)
 					Write-Host "cleanmgr.exe appears to be inactive. Terminating process."
 					Stop-Process -Name cleanmgr -Force
