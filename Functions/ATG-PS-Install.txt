@@ -229,7 +229,9 @@ Function Install-UmbrellaDNS {
 	param(
 		[string]$Code #Shortcode of the site you want to install, list available at https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/blob/master/Scripts/ITS247Agent/SiteAgentURLs.csv
 	)
-
+	$SiteConfigs = @()
+	$SiteConfigs = (Invoke-WebRequest -uri "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Umbrella/UDNS-Client-Mapping.csv" -Headers @{"Cache-Control"="no-cache"} -UseBasicParsing).Content | convertfrom-csv -Delimiter ','
+	$MSIUrl = 'https://download.ambitionsgroup.com/Software/cisco-secure-client-win-5.1.4.74-predeploy-k9.zip'
 	
 	Write-Host "Checking Status Indicator"
 	$IndicKey = Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator | Select-Object -ExpandProperty UseGlobalDNS -ea SilentlyContinue
@@ -262,12 +264,35 @@ Function Install-UmbrellaDNS {
 	Write-Host "Checking Umbrella DNS client."
 	$OldIsInstalled = Get-Service -Name Umbrella_RC -ErrorAction SilentlyContinue
 	$NewIsInstalled = Get-Service -Name csc_umbrellaagent -ErrorAction SilentlyContinue
+	$UpdateAvailable = $False
+	
 	If ($NewIsInstalled) {
 		Write-Host -ForegroundColor Green "Cisco Secure Client Umbrella DNS agent is already installed. Exiting."
+		[Version]$InstalledVersion = ((Get-Item "C:\Program Files (x86)\Cisco\Cisco Secure Client\acumbrellaagent.exe").VersionInfo).ProductVersion
+		[Version]$AvailableVersion = ([regex]::Match($MSIUrl, 'win-(\d+\.\d+\.\d+\.\d+)-predeploy')).Groups[1].Value
+		If ($AvailableVersion -gt $InstalledVersion) {
+			Write-Host "Hooray! Available version ($AvailableVersion) is greater than installed version ($InstalledVersion)."
+			$UpdateAvailable = $True
+		} else {
+			Write-Host "Available version ($AvailableVersion) is not greater than installed version ($InstalledVersion)."
+		}
+	}
+
+	If ($NewIsInstalled -and $UpdateAvailable -eq $False) {
+		Write-Host -ForegroundColor Green "Cisco Secure Client Umbrella DNS agent is already installed and up to date. Exiting."
 	} Else {
 		If ($OldIsInstalled) {
 			Write-Host "The old Umbrella Client has been detected. Updating to the new Cisco Secure Client Umbrella DNS agent"
 			$OldOrgData = (Get-Content -Path $Env:ProgramData\OpenDNS\ERC\OrgInfo.json | ConvertFrom-Json).organizationId
+			$DetectedSite = $SiteConfigs | Where-Object {$_.Command -match $OldOrgData}
+			If ($DetectedSite) {
+				Write-Host "$($DetectedSite.Site) has been detected."
+				$Code = $DetectedSite.Code
+			}
+		}
+		If ($UpdateAvailable) {
+			Write-Host "The old Umbrella Client has been detected. Updating to the new Cisco Secure Client Umbrella DNS agent"
+			$OldOrgData = (Get-Content -Path "$env:ProgramData\Cisco\Cisco Secure Client\Umbrella\OrgInfo.json" | ConvertFrom-Json).organizationId
 			$DetectedSite = $SiteConfigs | Where-Object {$_.Command -match $OldOrgData}
 			If ($DetectedSite) {
 				Write-Host "$($DetectedSite.Site) has been detected."
@@ -291,9 +316,7 @@ Function Install-UmbrellaDNS {
 		#nslookup -q=txt debug.opendns.com
 		Start-Sleep -Seconds 10
 		#Dowload config file index
-		$SiteConfigs = @()
-		$SiteConfigs = (Invoke-WebRequest -uri "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Umbrella/UDNS-Client-Mapping.csv" -Headers @{"Cache-Control"="no-cache"} -UseBasicParsing).Content | convertfrom-csv -Delimiter ','
-		$MSIUrl = 'https://download.ambitionsgroup.com/Software/cisco-secure-client-win-5.1.2.42-predeploy-k9.zip'
+
 
 		Function InstallAgent {
 			Write-Host
