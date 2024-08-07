@@ -81,13 +81,14 @@ Function Remove-DuplicateDrivers {
 
 Function Remove-StaleProfiles {
 	$thresholdDays = 365 #Days
-
+	Write-Host "Checking for stale profiles to clean up"
 	# Get a list of user profiles
-	$profiles = Get-CimInstance -ClassName Win32_UserProfile | Where {$_.CreationTime -lt (get-date).adddays(-$thresholdDays)} | where {$_.Loaded -eq $False} | Where-Object { $_.LocalPath -notmatch 'atg|Remote Support' }
+	$profiles = Get-CimInstance -ClassName Win32_UserProfile | Where {$_.CreationTime -lt (get-date).adddays(-$thresholdDays)} | where {$_.Loaded -eq $False} | Where-Object { $_.LocalPath -notmatch 'atg|Remote Support|admin' }
 	If ($profiles) {
 		foreach ($profile in $profiles) {
 			
 			$localPath = $profile.LocalPath
+			Write-Host "Assessing $localpath"
 			$localPath.FullName
 			$directories = Get-ChildItem -Path $localPath -Directory
 			if ($directories.Count -gt 0) {
@@ -380,9 +381,11 @@ $PostClean = Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object -Proper
 	@{ Name = 'PercentFree'; Expression = { '{0:P1}' -f ($PSItem.FreeSpace / $PSItem.Size) } }
 
 ## Sends some before and after info for ticketing purposes
-
-Hostname ; Get-Date | Select-Object DateTime
-Write-Host "`nBefore Clean-up:";($PreClean | Format-Table | Out-String).Trim()
-Write-Host "`nAfter Clean-up:";($PostClean | Format-Table | Out-String).Trim()
-Write-Host "Freed up $($PostClean.'FreeSpace (GB)' - $PreClean.'FreeSpace (GB)') GB. $((($PostClean.PercentFree).Replace('%','')) - (($PreClean.PercentFree).Replace('%',''))) %"
-## Completed Successfully!
+$Wrapup = @(
+	Write-Host "`nBefore Clean-up:`n$(($PreClean | Format-Table | Out-String).Trim())"
+	Write-Host "`nAfter Clean-up:`n$(($PostClean | Format-Table | Out-String).Trim())"
+	Write-Host -ForegroundColor Green "`nFreed up :$($PostClean.'FreeSpace (GB)' - $PreClean.'FreeSpace (GB)') GB  ($((($PostClean.PercentFree).Replace('%','')) - (($PreClean.PercentFree).Replace('%',''))) %)"
+	## Completed Successfully!
+	Write-Host $((Get-Date).DateTime)
+	Write-Host $($env:computername)
+)
