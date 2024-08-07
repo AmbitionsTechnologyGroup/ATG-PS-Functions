@@ -223,6 +223,7 @@ $FoldersToClean = @(
 	(Join-Path -Path $Env:SystemDrive -ChildPath swsetup)
 	(Join-Path -Path $Env:SystemDrive -ChildPath swtools)
 	(Join-Path -Path ${env:ProgramFiles(x86)} -ChildPath "Dropbox\Temp")
+	(Join-Path -Path $Env:SystemRoot -ChildPath "SysWOW64\config\systemprofile\AppData\Local\Microsoft\Windows\INetCache\IE")
 )
 
 ## State which files or folders to just delete
