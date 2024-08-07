@@ -308,6 +308,7 @@ $PathsToDelete = @(
 	(Join-Path -Path $RootAppData -ChildPath "Microsoft\Windows\IEDownloadHistory\*")
 	(Join-Path -Path $LocalAppData -ChildPath "Microsoft\Windows\INetCookies\*")
 	(Join-Path -Path $RootAppData -ChildPath "Microsoft\Windows\INetCookies\*")
+	(Join-Path -Path $Env:SystemRoot -ChildPath "SysWOW64\config\systemprofile\AppData\Local\Microsoft\Windows\INetCache\IE\*")
 	#Edge
 	(Join-Path -Path $RootAppData -ChildPath "Packages\$EdgePackageName\AC\#!00*")
 	(Join-Path -Path $LocalAppData -ChildPath "Packages\$EdgePackageName\AC\#!00*")
