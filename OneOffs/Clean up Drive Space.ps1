@@ -231,12 +231,13 @@ $PathsToDelete = @(
 	(Join-Path -Path $Env:SystemRoot -ChildPath "MEMORY.dmp") ## Delete Windows memory dumps
 	(Join-Path -Path $Env:SystemDrive -ChildPath "hiberfil.sys") #Removes Hibernate file
 	## Remove folders related to windows update process
-		(Join-Path -Path $Env:SystemDrive -ChildPath 'C:\$GetCurrent')
-		(Join-Path -Path $Env:SystemDrive -ChildPath 'C:\$WINDOWS.~BT')
-		(Join-Path -Path $Env:SystemDrive -ChildPath 'C:\$WINDOWS.~WS')
+		(Join-Path -Path $Env:SystemDrive -ChildPath '$GetCurrent')
+		(Join-Path -Path $Env:SystemDrive -ChildPath '$WINDOWS.~BT')
+		(Join-Path -Path $Env:SystemDrive -ChildPath '$WINDOWS.~WS')
 	@($(Get-Item -Path (Join-Path -Path $LocalAppData -ChildPath "Microsoft\Outlook\*.ost" | Where-Object -Property "LastWriteTime" -lt $(Get-Date).AddDays(-30)) -Force)) ## OST files that haven't been used in more then 30 days
 	(Join-Path -Path $Env:SystemDrive -ChildPath "Windows.old") ##Old windows install
 	(Join-Path -Path $Env:SystemDrive -ChildPath "Ambitions\NiniteDownloads")
+	(Join-Path -Path $Env:SystemDrive -ChildPath "adobeTemp")
 	(Join-Path -Path $Env:SystemRoot -ChildPath "debug\WIA\*.log")
 	(Join-Path -Path $Env:SystemRoot -ChildPath "INF\*.log*")
 	(Join-Path -Path $Env:SystemRoot -ChildPath "Logs\CBS\*Persist*")
