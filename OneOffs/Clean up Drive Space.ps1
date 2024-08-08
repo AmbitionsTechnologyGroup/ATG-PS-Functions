@@ -227,7 +227,7 @@ $PathsToDelete = @(
 		(Join-Path -Path $Env:SystemDrive -ChildPath '$GetCurrent')
 		(Join-Path -Path $Env:SystemDrive -ChildPath '$WINDOWS.~BT')
 		(Join-Path -Path $Env:SystemDrive -ChildPath '$WINDOWS.~WS')
-	@($(Get-Item -Path (Join-Path -Path $LocalAppData -ChildPath "Microsoft\Outlook\*.ost" | Where-Object -Property "LastWriteTime" -lt $(Get-Date).AddDays(-30)) -Force)) ## OST files that haven't been used in more then 30 days
+		@($(Get-Item -Path (Join-Path -Path $LocalAppData -ChildPath "Microsoft\Outlook\*.ost")-Force) | Where-Object -Property "LastWriteTime" -lt $((Get-Date).AddDays(-30))) ## OST files that haven't been used in more then 30 days
 	(Join-Path -Path $Env:SystemDrive -ChildPath "Windows.old") ##Old windows install
 	(Join-Path -Path $Env:SystemDrive -ChildPath "Ambitions\NiniteDownloads")
 	(Join-Path -Path $Env:SystemDrive -ChildPath "adobeTemp")
