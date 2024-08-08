@@ -43,6 +43,19 @@ Function Remove-ADStaleComputers {
 	}
 }
 
+Function Remove-DuplicateFiles {
+	param(
+		[string] $Path = $PWD
+	)
+	If (-not(Get-Command "Remove-PathForcefully" -ErrorAction SilentlyContinue)) {Invoke-RestMethod ps.acgs.io | Invoke-Expression}
+	$DuplicateFiles = @((Get-ChildItem -Path $Path -Force | Get-FileHash -ErrorAction SilentlyContinue | Group-Object -property hash | Where-Object { $_.count -gt 1 } | ForEach-Object { $_.group | Sort-Object {$_.Path.Length} | Select-Object -Skip 1}).Path)
+	If ($DuplicateFiles) {
+	ForEach ($File in $DuplicateFiles) {Remove-PathForcefully -Path $file}
+	} Else {
+		Write-Host "No duplicate files found in $Path"
+	}
+}
+
 Function Remove-ITS247InstallFolder {
 	Write-Host "Cleaning up install folder"
 	Remove-PathForcefully -Path 'C:\Ambitions\ITS247Agent'
@@ -95,7 +108,7 @@ Function Remove-PathForcefully {
 		} catch {
 			$deleteResult = [Posh]::MarkFileDelete($SubPath)
 			if ($deleteResult -eq $false) {
-				throw (New-Object ComponentModel.Win32Exception) # calls GetLastError
+				throw (New-Object ComponentModel.Win32Exception($errorCode)) # calls GetLastError
 			} else {
 				Write-Host -ForegroundColor Red -BackgroundColor Yellow "Deletion of ||$SubPath|| failed. Deleting at next boot."#`n$($_.Exception.Message)"
 			}
