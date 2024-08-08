@@ -25,6 +25,7 @@ $PreClean = Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object -Propert
 Write-Host "`nBefore Clean-up:`n$(($PreClean | Format-Table | Out-String).Trim())"
 Write-Host $((Get-Date).DateTime)
 Write-Host $($env:computername)
+Start-Sleep -Seconds 10
 
 # Assign the local and global paths to their own variables for easier path building.
 	$GlobalAppData = $Env:APPDATA.Replace($($Env:USERPROFILE),$(($Env:Public).Replace('Public','*')))
