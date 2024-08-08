@@ -395,7 +395,7 @@ $FoldersToClean | ForEach-Object {
 			If (Get-Item $SubItem -Force -ErrorAction SilentlyContinue) {
 				Try {
 					Get-Item $SubItem -Force -ErrorAction SilentlyContinue | ForEach-Object {
-						Remove-StaleObjects -Path $($_.FullName)
+						Remove-StaleObjects -targetDirectory $($_.FullName) -DaysOld $DaysToDelete
 				}
 				} Catch {
 					Write-Host "Not worth it for $SubItem"
