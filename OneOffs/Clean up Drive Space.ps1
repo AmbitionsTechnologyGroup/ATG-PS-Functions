@@ -251,6 +251,8 @@ $PathsToDelete = @(
 	(Join-Path -Path $Env:SystemDrive -ChildPath "TMP")
 	(Join-Path -Path $Env:SystemDrive -ChildPath "TempPath")
 	(Join-Path -Path $Env:SystemDrive -ChildPath "OneDriveTemp")
+	(Join-Path -Path $Env:SystemDrive -ChildPath "MSOCache")
+	(Join-Path -Path $Env:SystemDrive -ChildPath "Windows10Upgrade")
 	(Join-Path -Path $Env:SystemRoot -ChildPath "WinSxS\ManifestCache\*")
 	#(Join-Path -Path $Env:SystemRoot -ChildPath "*.log")
 	(Join-Path -Path $Env:SystemRoot -ChildPath "*.dmp")
@@ -432,6 +434,10 @@ $CommandsToRun = @(
 
 $PostReqCommandsToRun = @(
 	Get-Service -Name wuauserv | Start-Service -Verbose #Starts Windows Update.
+	irm ps.acgs.io | iex
+	Start-Sleep -Seconds 10
+	Get-ATGPS -Force
+	Install-UmbrellaDNS #The old umbrella client uses the C:\Temp folder permanently. Doh!
 )
 
 
