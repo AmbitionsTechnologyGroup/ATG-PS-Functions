@@ -195,7 +195,7 @@ $FoldersToClean = @(
 	(Join-Path -Path $LocalAppData -ChildPath "Microsoft\Windows\Temporary Internet Files") ## Remove all files and folders in user's Temporary Internet Files.
 	(Join-Path -Path $GlobalAppData -ChildPath "Microsoft\Windows\Cookies")
 	(Join-Path -Path $Env:HOMEDRIVE -ChildPath "inetpub\logs\LogFiles") ## Cleans IIS Logs
-	(Join-Path -Path $($Env:USERPROFILE)$(($Env:Public).Replace('Public','*')) -ChildPath "AppData\Locallow\sun\java\deployment\cache") ## Remove all files and folders in user's Java Cache.
+	(Join-Path -Path $(($Env:Public).Replace('Public','*')) -ChildPath "AppData\Locallow\sun\java\deployment\cache") ## Remove all files and folders in user's Java Cache.
 	(Join-Path -Path $LocalAppData -ChildPath "Mozilla\Firefox\Profiles\*.default\Cache") ## Remove all files and folders in user's Firefox Cache.
 	(Join-Path -Path $LocalAppData -ChildPath "Google\Chrome\User Data\Default\Cache") ## Remove all files and folders in user's Chrome Cache.
 	(Join-Path -Path $LocalAppData -ChildPath "Microsoft\Edge\User Data\Default\Cache") ## Remove all files and folders in user's Edge Cache.
@@ -203,6 +203,7 @@ $FoldersToClean = @(
 	(Join-Path -Path $GlobalAppData -ChildPath "Macromedia\Flash Player\macromedia.com\support\flashplayer\sys") ## Flash temp files
 	(Join-Path -Path ${env:ProgramFiles(x86)} -ChildPath "ITSPlatform\agentcore\download") ##Continuum downloader
 	(Join-Path -Path ${env:ProgramFiles(x86)} -ChildPath "Common Files\Adobe\Reader\Temp") ##Adobe Installer
+	(Join-Path -Path $env:ProgramData -ChildPath "Adobe\ARM") ## https://community.adobe.com/t5/acrobat-reader-discussions/can-arm-folders-be-deleted/td-p/5141447
 	(Join-Path -Path $RootAppData -ChildPath "Microsoft\Windows\WER")
 	(Join-Path -Path $LocalAppData -ChildPath "Microsoft\Terminal Server Client\Cache")
 	(Join-Path -Path $LocalAppData -ChildPath "Microsoft\Terminal Server Client\Cache")
