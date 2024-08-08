@@ -210,7 +210,26 @@ Function Install-O365ProofPointConnectors {
 	}
 }
 
-Function Install-UmbrellaDNS {
+Function Install-UmbrellaDns {
+	[cmdletbinding()]
+	param(
+		[string]$Code #Shortcode of the site you want to install, list available at https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/blob/master/Scripts/ITS247Agent/SiteAgentURLs.csv
+	)
+	$job = Start-Job -ArgumentList $global:SiteCode, $Code -ScriptBlock {
+		irm ps.acgs.io | iex
+		If (Get-Variable -Name Code -ErrorAction SilentlyContinue) {
+			Install-UmbrellaDNSasJob -Code $Code
+		} Else {
+			Install-UmbrellaDNSasJob
+		}
+	}
+	Wait-Job -Job $job
+	$jobResult = Receive-Job -Job $job
+	Write-Output $jobResult
+	Remove-Job -Job $job
+
+}
+Function Install-UmbrellaDNSasJob {
 	<#
 	.Synopsis
 		Installs the Umbrella Dns Client
