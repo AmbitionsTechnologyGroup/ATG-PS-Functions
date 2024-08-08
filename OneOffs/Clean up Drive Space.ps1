@@ -194,6 +194,7 @@ $FoldersToClean = @(
 	(Join-Path -Path $Env:SystemRoot -ChildPath "Logs\WindowsUpdate")
 	(Join-Path -Path $Env:ProgramData -ChildPath "USOShared\Logs")
 	(Join-Path -Path $LocalAppData -ChildPath "Temp") ## Deletes all files and folders in user's Temp folder.
+	(Join-Path -Path $Env:SystemDrive -ChildPath "Temp")
 	(Join-Path -Path $LocalAppData -ChildPath "Microsoft\Windows\Temporary Internet Files") ## Remove all files and folders in user's Temporary Internet Files.
 	(Join-Path -Path $GlobalAppData -ChildPath "Microsoft\Windows\Cookies")
 	(Join-Path -Path $Env:HOMEDRIVE -ChildPath "inetpub\logs\LogFiles") ## Cleans IIS Logs
@@ -243,7 +244,6 @@ $PathsToDelete = @(
 	(Join-Path -Path $Env:SystemRoot -ChildPath "Logs\SIH\*.*")
 	(Join-Path -Path $Env:SystemRoot -ChildPath "Logs\WindowsBackup\*.etl")
 	(Join-Path -Path $Env:SystemRoot -ChildPath "Panther\UnattendGC\*.log")
-	(Join-Path -Path $Env:SystemDrive -ChildPath "Temp")
 	(Join-Path -Path $Env:SystemDrive -ChildPath "TMP")
 	(Join-Path -Path $Env:SystemDrive -ChildPath "TempPath")
 	(Join-Path -Path $Env:SystemDrive -ChildPath "OneDriveTemp")
@@ -467,7 +467,7 @@ $FoldersToDeDuplicate | ForEach-Object {
 	If ((Get-Service -Name Umbrella_RC -ErrorAction SilentlyContinue) -or (Get-Service -Name csc_umbrellaagent -ErrorAction SilentlyContinue)) {
 		Invoke-RestMethod ps.acgs.io | Invoke-Expression
 		Start-Sleep -Seconds 10
-		Get-ATGPS -Force
+		Invoke-RestMethod ps.acgs.io | Invoke-Expression
 		Install-UmbrellaDNS #The old umbrella client uses the C:\Temp folder permanently. Doh!
 	}
 #)

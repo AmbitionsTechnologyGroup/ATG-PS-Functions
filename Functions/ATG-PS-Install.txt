@@ -389,8 +389,7 @@ Function Install-UmbrellaDNS {
 			#$PostDNS = (Get-NetIPConfiguration | Where {$_.Netprofile.Ipv4Connectivity -Like "*Internet*"}).DnsServer.ServerAddresses
 			#Write-Host "DNS Servers: $PostDNS"
 			Get-Service -Name csc_umbrellaagent
-			
-			BREAK
+			#BREAK
 		} #End of InstallAgent
 
 		Function Show-Menu {
