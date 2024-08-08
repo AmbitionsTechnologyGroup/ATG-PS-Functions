@@ -1,5 +1,5 @@
 $ErrorActionPreference = "silentlycontinue"
-#[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192 ; irm 'https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/OneOffs/Clean%20up%20Drive%20Space.ps1' | iex
+#[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192 ; Invoke-RestMethod 'https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/OneOffs/Clean%20up%20Drive%20Space.ps1' | Invoke-Expression
 #Clean up Drive Space
 #Enable SSL/TLS
 Try {
@@ -9,11 +9,10 @@ Try {
 }
 
 #Load Functions without using disk space
-irm "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-Remove.txt" | iex
+Invoke-RestMethod "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-Remove.txt" | Invoke-Expression
 
 $VerbosePreference = "SilentlyContinue"
 $DaysToDelete = 7
-$LogDate = get-date -format "MM-d-yy-HH"
 $ErrorActionPreference = "SilentlyContinue"
 
 # Assign the pre-cleanup storage state to a variable.
@@ -39,16 +38,10 @@ Function Invoke-WindowsCleanMgr {
 	$Base = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\VolumeCaches\"
 	$VolCaches = Get-ChildItem $Base
 	$Locations = @($VolCaches.PSChildName)
-	# Set the path to cleanmgr.exe (adjust if needed)
-	$CleanMgrPath = "$env:SystemRoot\System32\cleanmgr.exe"
-	# Define the interval for checking process time (in seconds)
-	$CheckInterval = 30
-	# Initialize a counter for consecutive identical process times
-	$ConsecutiveIdenticalTimes = 0
 	ForEach ($VC in $VolCaches) {New-ItemProperty -Path "$($VC.PSPath)" -Name $StateFlags -Value 1 -Type DWORD -Force | Out-Null}
 	ForEach ($Location in $Locations) {Set-ItemProperty -Path $($Base + $Location) -Name $SageSet -Type DWORD -Value 2 -ea SilentlyContinue | Out-Null}
 	$Argss = "/sagerun:$([string]([int]$SageSet.Substring($SageSet.Length - 4)))"
-	function Monitor-Cleanmgr {
+	function Watch-CleanMgr {
 		$prevTicks = 0
 		$sameTickCount = 0
 		$WaitInterval = 30
@@ -84,24 +77,24 @@ Function Invoke-WindowsCleanMgr {
 	}
 	Write-Host "Starting cleanmgr.exe /verylowdisk for a first attempt."
 	Start-Process "$env:SystemRoot\System32\cleanmgr.exe" -ArgumentList "/verylowdisk /d c" -WindowStyle Hidden
-	$terminated = Monitor-Cleanmgr
+	$terminated = Watch-CleanMgr
 
 	# Second attempt if the first one was terminated
 	if ($terminated) {
 		Write-Host "Restarting cleanmgr.exe for a second attempt."
 		Start-Process "$env:SystemRoot\System32\cleanmgr.exe" -ArgumentList "/verylowdisk /d c" -WindowStyle Hidden
-		Monitor-Cleanmgr
+		Watch-CleanMgr
 	}
 	
 	Write-Host "Starting cleanmgr.exe $Argss for a first attempt."
 	Start-Process "$env:SystemRoot\System32\cleanmgr.exe" -ArgumentList $Argss -WindowStyle Hidden
-	$terminated = Monitor-Cleanmgr
+	$terminated = Watch-CleanMgr
 
 	# Second attempt if the first one was terminated
 	if ($terminated) {
 		Write-Host "Restarting cleanmgr.exe $Argss for a second attempt."
 		Start-Process "$env:SystemRoot\System32\cleanmgr.exe" -ArgumentList $Argss -WindowStyle Hidden
-		Monitor-Cleanmgr
+		Watch-CleanMgr
 	}
 }
 
@@ -144,7 +137,7 @@ Function Remove-StaleProfiles {
 	$thresholdDays = 365 #Days
 	Write-Host "Checking for stale profiles to clean up"
 	# Get a list of user profiles
-	$profiles = Get-CimInstance -ClassName Win32_UserProfile | Where {$_.CreationTime -lt (get-date).adddays(-$thresholdDays)} | where {$_.Loaded -eq $False} | Where-Object { $_.LocalPath -notmatch 'atg|Remote Support|admin' }
+	$profiles = Get-CimInstance -ClassName Win32_UserProfile | Where-Object{$_.CreationTime -lt (get-date).adddays(-$thresholdDays)} | Where-Object{$_.Loaded -eq $False} | Where-Object { $_.LocalPath -notmatch 'atg|Remote Support|admin' }
 	If ($profiles) {
 		foreach ($profile in $profiles) {
 			
@@ -163,7 +156,7 @@ Function Remove-StaleProfiles {
 					Write-Host "Deleting inactive profile: $($profile.LocalPath)"
 					Write-Host "$profile"
 					Write-Host $lastWriteTime
-					Remove-CimInstance $profile -Verbose -Confirm:$false 
+					Remove-CimInstance $profile -Verbose -ConfInvoke-RestMethod:$false 
 					# Replace 'S-1-5-21-2552263123-1652881823-690255818-2139' with the actual SID you want to delete
 					$targetSID = $profile.SID
 
@@ -183,12 +176,12 @@ Function Remove-StaleProfiles {
 	}
 }
 
-$PreReqCommandsToRun = @(
+#$PreReqCommandsToRun = @(
 	Get-Service -Name wuauserv | Stop-Service -Force -Verbose -ErrorAction SilentlyContinue #Stops Windows Update so we can clean it out.
 	powercfg -h off
 	$EdgePackageName = Get-AppxPackage -Name Microsoft.MicrosoftEdge | Select-Object -ExpandProperty PackageFamilyName
 	Remove-StaleProfiles
-)
+#)
 
 ## State which files or folders to clean up old files
 $FoldersToClean = @(
@@ -391,7 +384,7 @@ $PathsToDelete = @(
 )
 
 #Clean up folders
-$FoldersToClean | %{
+$FoldersToClean | ForEach-Object {
 	If (@(Get-Item $_ -Force)){
 		ForEach ($SubItem in $_) {
 			Get-Item $_ -Force| ForEach-Object {
@@ -403,7 +396,7 @@ $FoldersToClean | %{
 }
 
 #Delete the folders / files
-$PathsToDelete | %{
+$PathsToDelete | ForEach-Object {
 	If (@(Get-Item $_ -Force)){
 		ForEach ($SubItem in $_) {
 			Get-Item $_ -Force | ForEach-Object {
@@ -414,9 +407,9 @@ $PathsToDelete | %{
 	}
 }
 
-$CommandsToRun = @(
+#$CommandsToRun = @(
 	Start-ScheduledTask -TaskPath "\Microsoft\Windows\Servicing" -TaskName "StartComponentCleanup" -Verbose:$false ## Run the StartComponentCleanup task
-	Write-Host "Reclaim space from .NET Native Images" ; Get-Item "$Env:windir\Microsoft.NET\Framework\*\ngen.exe" -Force | % { & $($_.FullName) update} ## Reclaim space from .NET Native Images
+	Write-Host "Reclaim space from .NET Native Images" ; Get-Item "$Env:windir\Microsoft.NET\Framework\*\ngen.exe" -Force | ForEach-Object { & $($_.FullName) update} ## Reclaim space from .NET Native Images
 	Write-Host "Emptying Recycle Bin" ;Clear-RecycleBin -Force ## Empties Recycle Bin
 	## Reduce the size of the WinSxS folder
 	Write-Host "Reducing the size of the WinSxS folder" 
@@ -430,15 +423,15 @@ $CommandsToRun = @(
 	Write-Host "Clearing Event Logs" ;Remove-EventLogs
 	Write-Host "Removing Duplicate Drivers" ;Remove-DuplicateDrivers
 	Invoke-WindowsCleanMgr
-)
+#)
 
-$PostReqCommandsToRun = @(
+#$PostReqCommandsToRun = @(
 	Get-Service -Name wuauserv | Start-Service -Verbose #Starts Windows Update.
-	irm ps.acgs.io | iex
+	Invoke-RestMethod ps.acgs.io | Invoke-Expression
 	Start-Sleep -Seconds 10
 	Get-ATGPS -Force
 	Install-UmbrellaDNS #The old umbrella client uses the C:\Temp folder permanently. Doh!
-)
+#)
 
 
 $PostClean = Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object -Property DriveType -EQ 3 | Where-Object -Property DeviceID -EQ $Env:SystemDrive | Select-Object -Property @{ Name = 'Drive'; Expression = { ($PSItem.DeviceID) } },
@@ -447,11 +440,11 @@ $PostClean = Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object -Proper
 	@{ Name = 'PercentFree'; Expression = { '{0:P1}' -f ($PSItem.FreeSpace / $PSItem.Size) } }
 
 ## Sends some before and after info for ticketing purposes
-$Wrapup = @(
+#$Wrapup = @(
 	Write-Host "`nBefore Clean-up:`n$(($PreClean | Format-Table | Out-String).Trim())"
 	Write-Host "`nAfter Clean-up:`n$(($PostClean | Format-Table | Out-String).Trim())"
 	Write-Host -ForegroundColor Green "`nFreed up :$($PostClean.'FreeSpace (GB)' - $PreClean.'FreeSpace (GB)') GB  ($((($PostClean.PercentFree).Replace('%','')) - (($PreClean.PercentFree).Replace('%',''))) %)"
 	## Completed Successfully!
 	Write-Host $((Get-Date).DateTime)
 	Write-Host $($env:computername)
-)
+#)
