@@ -178,6 +178,7 @@ Function Remove-StaleProfiles {
 }
 
 #$PreReqCommandsToRun = @(
+	Write-Host "Reclaim space from .NET Native Images" ; Get-Item "$Env:windir\Microsoft.NET\Framework\*\ngen.exe" -Force | ForEach-Object { & $($_.FullName) update} ## Reclaim space from .NET Native Images	
 	Get-Service -Name wuauserv | Stop-Service -Force -Verbose -ErrorAction SilentlyContinue #Stops Windows Update so we can clean it out.
 	powercfg -h off
 	$EdgePackageName = Get-AppxPackage -Name Microsoft.MicrosoftEdge | Select-Object -ExpandProperty PackageFamilyName
@@ -445,7 +446,6 @@ $FoldersToDeDuplicate | ForEach-Object {
 
 #$CommandsToRun = @(
 	Start-ScheduledTask -TaskPath "\Microsoft\Windows\Servicing" -TaskName "StartComponentCleanup" -Verbose:$false ## Run the StartComponentCleanup task
-	Write-Host "Reclaim space from .NET Native Images" ; Get-Item "$Env:windir\Microsoft.NET\Framework\*\ngen.exe" -Force | ForEach-Object { & $($_.FullName) update} ## Reclaim space from .NET Native Images
 	Write-Host "Emptying Recycle Bin" ;Clear-RecycleBin -Force ## Empties Recycle Bin
 	## Reduce the size of the WinSxS folder
 	Write-Host "Reducing the size of the WinSxS folder" 
