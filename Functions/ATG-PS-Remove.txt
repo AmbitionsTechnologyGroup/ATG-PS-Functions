@@ -44,15 +44,24 @@ Function Remove-ADStaleComputers {
 }
 
 Function Remove-DuplicateFiles {
-	param(
-		[string] $Path = $PWD
+	param (
+		[string]$Path = $PWD.Path,
+		[switch]$Recurse = $False
 	)
 	If (-not(Get-Command "Remove-PathForcefully" -ErrorAction SilentlyContinue)) {Invoke-RestMethod ps.acgs.io | Invoke-Expression}
-	$DuplicateFiles = @((Get-ChildItem -Path $Path -Force | Get-FileHash -ErrorAction SilentlyContinue | Group-Object -property hash | Where-Object { $_.count -gt 1 } | ForEach-Object { $_.group | Sort-Object {$_.Path.Length} | Select-Object -Skip 1}).Path)
-	If ($DuplicateFiles) {
-	ForEach ($File in $DuplicateFiles) {Remove-PathForcefully -Path $file}
+	Function Remove-DuplicateFilesInt {
+		$DuplicateFiles = @((Get-ChildItem -Path $Path -Force | Get-FileHash -ErrorAction SilentlyContinue | Group-Object -property hash | Where-Object { $_.count -gt 1 } | ForEach-Object { $_.group | Sort-Object {$_.Path.Length} | Select-Object -Skip 1}).Path)
+		If ($DuplicateFiles) {
+		ForEach ($File in $DuplicateFiles) {Remove-PathForcefully -Path $file}
+		} Else {
+			Write-Host "No duplicate files found in $Path"
+		}
+	}
+	If ($Recurse) {
+		# Get all directories recursively and run Remove-DuplicateFiles for each directory
+		Get-ChildItem -Directory -Recurse | ForEach-Object { Remove-DuplicateFilesInt -Path $_.FullName }
 	} Else {
-		Write-Host "No duplicate files found in $Path"
+		Remove-DuplicateFilesInt
 	}
 }
 
@@ -99,18 +108,18 @@ Function Remove-PathForcefully {
 			[parameter(Mandatory=$true)]
 			[string] $SubPath
 		)
-
-
 		$SubPath = (Resolve-Path $SubPath -ErrorAction SilentlyContinue).Path
-		try {
-			Remove-Item $SubPath -Force -Recurse -ErrorAction Stop
-			Write-Host -ForegroundColor Green -BackgroundColor Black "Deletion of $SubPath succeeded."
-		} catch {
-			$deleteResult = [Posh]::MarkFileDelete($SubPath)
-			if ($deleteResult -eq $false) {
-				throw (New-Object ComponentModel.Win32Exception($errorCode)) # calls GetLastError
-			} else {
-				Write-Host -ForegroundColor Red -BackgroundColor Yellow "Deletion of ||$SubPath|| failed. Deleting at next boot."#`n$($_.Exception.Message)"
+		If ($SubPath) {
+			try {
+				Remove-Item $SubPath -Force -Recurse -ErrorAction Stop
+				Write-Host -ForegroundColor Green -BackgroundColor Black "Deletion of $SubPath succeeded."
+			} catch {
+				$deleteResult = [Posh]::MarkFileDelete($SubPath)
+				if ($deleteResult -eq $false) {
+					throw ($Error[0]) # calls GetLastError
+				} else {
+					Write-Host -ForegroundColor Red -BackgroundColor Yellow "Deletion of ||$SubPath|| failed. Deleting at next boot."#`n$($_.Exception.Message)"
+				}
 			}
 		}
 	}

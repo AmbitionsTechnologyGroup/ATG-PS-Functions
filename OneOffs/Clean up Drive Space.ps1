@@ -384,13 +384,22 @@ $PathsToDelete = @(
 	(Join-Path -Path $Env:ProgramData "Intuit\QuickBooks*\Components\QBUpdateCache")
 )
 
+$FoldersToDeDuplicate = @(
+	(Join-Path -Path $($(($Env:Public).Replace('Public','*'))) -ChildPath "Downloads")
+)
+
 #Clean up folders
 $FoldersToClean | ForEach-Object {
 	If (@(Get-Item $_ -Force)){
-		ForEach ($SubItem in $_) {
-			Get-Item $_ -Force| ForEach-Object {
-				#$_.FullName
-				Remove-StaleObjects -targetDirectory $($_.FullName) -DaysOld $DaysToDelete
+		ForEach ($SubItem in @($_)) {
+			If (Get-Item $SubItem -Force -ErrorAction SilentlyContinue) {
+				Try {
+					Get-Item $SubItem -Force -ErrorAction SilentlyContinue | ForEach-Object {
+						Remove-StaleObjects -Path $($_.FullName)
+				}
+				} Catch {
+					Write-Host "Not worth it for $SubItem"
+				}
 			}
 		}
 	}
@@ -399,10 +408,34 @@ $FoldersToClean | ForEach-Object {
 #Delete the folders / files
 $PathsToDelete | ForEach-Object {
 	If (@(Get-Item $_ -Force)){
-		ForEach ($SubItem in $_) {
-			Get-Item $_ -Force | ForEach-Object {
-				#$_.FullName
-				Remove-PathForcefully -Path $($_.FullName)
+		ForEach ($SubItem in @($_)) {
+			If (Get-Item $SubItem -Force -ErrorAction SilentlyContinue) {
+				Try {
+					Get-Item $SubItem -Force -ErrorAction SilentlyContinue | ForEach-Object {
+						Remove-PathForcefully -Path $($_.FullName)
+				}
+				} Catch {
+					Write-Host "Not worth it for $SubItem"
+				}
+			}
+		}
+	}
+}
+
+#DeDuplicate files in these folders
+$FoldersToDeDuplicate | ForEach-Object {
+	If (@(Get-Item $_ -Force)){
+		ForEach ($SubItem in @($_)) {
+			If (Get-Item $SubItem -Force -ErrorAction SilentlyContinue) {
+				Write-Host $SubItem
+				Try {
+					Get-Item $SubItem -Force -ErrorAction SilentlyContinue | ForEach-Object {
+						Write-Host "Searching $($_.FullName) for duplicate files"
+						Remove-DuplicateFiles -Path $($_.FullName)
+				}
+				} Catch {
+					Write-Host "Not worth it for $SubItem"
+				}
 			}
 		}
 	}
