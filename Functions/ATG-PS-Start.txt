@@ -30,6 +30,10 @@ Function Start-BackstageBrowser {
 	Start-Process -FilePath $executablePath
 }
 
+Function Start-SystemDriveCleanUp {
+	Invoke-RestMethod 'https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/OneOffs/Clean%20up%20Drive%20Space.ps1' | Invoke-Expression
+}
+
 Function Start-PPKGLog ([String] $LogLabel) {
 	Write-Host "Making a log file for debugging"
 		$LogPath = "C:\Ambitions\" + $SiteCode + "-" + $LogLabel + ".log"
