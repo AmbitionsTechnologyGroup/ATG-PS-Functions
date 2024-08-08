@@ -30,7 +30,7 @@ Function Start-BackstageBrowser {
 	Start-Process -FilePath $executablePath
 }
 
-Function Start-SystemDriveCleanUp {
+Function Start-CleanupOfSystemDrive {
 	Invoke-RestMethod 'https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/OneOffs/Clean%20up%20Drive%20Space.ps1' | Invoke-Expression
 }
 
