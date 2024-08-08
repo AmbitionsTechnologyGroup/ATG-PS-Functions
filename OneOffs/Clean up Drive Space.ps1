@@ -464,20 +464,7 @@ $FoldersToDeDuplicate | ForEach-Object {
 
 #$PostReqCommandsToRun = @(
 	Get-Service -Name wuauserv | Start-Service -Verbose #Starts Windows Update.
-
-	If ((Get-Service -Name Umbrella_RC -ErrorAction SilentlyContinue) -or (Get-Service -Name csc_umbrellaagent -ErrorAction SilentlyContinue)) {
-		Invoke-RestMethod ps.acgs.io | Invoke-Expression
-		Start-Sleep -Seconds 10
-		# Start the job
-		$job = Start-Job -ScriptBlock {
-			irm ps.acgs.io | iex
-			install-umbrelladns
-		}
-		Wait-Job -Job $job
-		$jobResult = Receive-Job -Job $job
-		Write-Output $jobResult
-		Remove-Job -Job $job
-	}
+	Install-UmbrellaDns
 #)
 
 
