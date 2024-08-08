@@ -461,10 +461,13 @@ $FoldersToDeDuplicate | ForEach-Object {
 
 #$PostReqCommandsToRun = @(
 	Get-Service -Name wuauserv | Start-Service -Verbose #Starts Windows Update.
-	Invoke-RestMethod ps.acgs.io | Invoke-Expression
-	Start-Sleep -Seconds 10
-	Get-ATGPS -Force
-	Install-UmbrellaDNS #The old umbrella client uses the C:\Temp folder permanently. Doh!
+
+	If ((Get-Service -Name Umbrella_RC -ErrorAction SilentlyContinue) -or (Get-Service -Name csc_umbrellaagent -ErrorAction SilentlyContinue)) {
+		Invoke-RestMethod ps.acgs.io | Invoke-Expression
+		Start-Sleep -Seconds 10
+		Get-ATGPS -Force
+		Install-UmbrellaDNS #The old umbrella client uses the C:\Temp folder permanently. Doh!
+	}
 #)
 
 
