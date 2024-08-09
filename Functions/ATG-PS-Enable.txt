@@ -1,3 +1,73 @@
+Function Enable-DellSecureBoot {
+	$Manufact = (Get-CimInstance -Class Win32_ComputerSystem -ErrorAction SilentlyContinue).Manufacturer
+	If ( $Manufact -match "Dell" -or $Manufact -match "Alienware") {
+		If (-not (Get-Module -Name DellBIOSProvider -ErrorAction SilentlyContinue) ) {
+			Install-Module DellBIOSProvider -Force
+			Import-Module DellBIOSProvider -Force
+		}
+		# Get the current Secure Boot setting
+		$SecureBootSetting = Get-Item -Path DellSmbios:\SecureBoot\SecureBoot -ErrorAction SilentlyContinue
+		If ($SecureBootSetting) {
+			if ($SecureBootSetting.CurrentValue -eq "Disabled") {
+				Write-Output "Secure Boot is currently disabled. Enabling it now..."
+				
+				# Enable Secure Boot
+				Set-Item -Path DellSmbios:\SecureBoot\SecureBoot -Value Enabled -ErrorAction Stop
+				# Confirm the change
+				$SecureBootSetting = Get-Item -Path DellSmbios:\SecureBoot\SecureBoot -ErrorAction SilentlyContinue
+				$SecureBootSetting
+				if ($SecureBootSetting.CurrentValue -eq "Enabled") {
+					Write-Output "Secure Boot has been successfully enabled."
+				} else {
+					Write-Output "Failed to enable Secure Boot."
+				}
+			} else {
+				Write-Output "Secure Boot is already enabled."
+			}
+		} Else {
+			Write-Output "Secure Boot is not able to be set via powershell on this computer."
+		}
+	} Else { Write-Host "This is not a Dell Computer" }
+}
+
+# Function to check and enable Wake Up
+Function Enable-DellWakeUpInMorning {
+	<#
+		.SYNOPSIS
+			Sets Dell Desktop Computers to wake up every morning at 5am. Allows for remote workers and maintenance.
+	#>
+	$GCI = Get-ComputerInfo -Property BiosManufacturer,CsPCSystemType
+	If (($GCI.BiosManufacturer -Match "Dell") -And ($GCI.CsPCSystemType -in "Desktop", "Workstation")){
+		If (-not (Get-Module -Name DellBIOSProvider -ErrorAction SilentlyContinue) ) {
+			Install-Module DellBIOSProvider -Force
+			Import-Module DellBIOSProvider -Force
+		}
+		# Get the current Wake Up setting
+		$WakeUpSetting = Get-Item -Path DellSmbios:\PowerManagement\AutoOn -ErrorAction SilentlyContinue
+		If ($WakeUpSetting) {
+			if ($WakeUpSetting.CurrentValue -ne "Everyday") {
+				Write-Output "Wake Up is currently disabled. Enabling it now..."
+				
+				# Enable Wake Up
+				Set-Item -Path DellSmbios:\PowerManagement\AutoOn -Value "Everyday" -ErrorAction Stop
+				Set-Item -Path DellSmbios:\PowerManagement\AutoOnHr -Value "5" -ErrorAction Stop
+				# Confirm the change
+				$WakeUpSetting = @(Get-Item -Path DellSmbios:\PowerManagement\AutoOn -ErrorAction SilentlyContinue;Get-Item -Path DellSmbios:\PowerManagement\AutoOnHr -ErrorAction SilentlyContinue)
+				$WakeUpSetting
+				if ($WakeUpSetting.CurrentValue -eq "Everyday") {
+					Write-Output "Wake Up has been successfully enabled."
+				} else {
+					Write-Output "Failed to enable Wake Up."
+				}
+			} else {
+				Write-Output "Wake Up is already enabled."
+			}
+		} Else {
+			Write-Output "Wake Up is not able to be set via powershell on this computer."
+		}
+	} Else { Write-Host "This is not a Dell Desktop Computer" }
+}
+
 Function Enable-O365AuditLog {
 	<#
 		.SYNOPSIS
