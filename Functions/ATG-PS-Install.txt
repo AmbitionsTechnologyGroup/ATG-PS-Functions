@@ -210,25 +210,30 @@ Function Install-O365ProofPointConnectors {
 	}
 }
 
+$Global:SiteCode = "NHFH"
+
+
+
 Function Install-UmbrellaDns {
 	[cmdletbinding()]
 	param(
 		[string]$Code #Shortcode of the site you want to install, list available at https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/blob/master/Scripts/ITS247Agent/SiteAgentURLs.csv
 	)
 	If (Get-Variable -Name SiteCode -ErrorAction SilentlyContinue) { $Code = $SiteCode ; $Silent = $True }
-	$job = Start-Job -ArgumentList $global:SiteCode, $Code, $Silent -ScriptBlock {
+	$job = Start-Job -ArgumentList $SiteCode, $Code, $Silent -ScriptBlock {
+		param($SiteCode, $Code, $Silent)
 		irm ps.acgs.io | iex
 		If (Get-Variable -Name Code -ErrorAction SilentlyContinue) {
+			Write-Host Install-UmbrellaDNSasJob -Code $Code
 			Install-UmbrellaDNSasJob -Code $Code
 		} Else {
+			Write-Host Install-UmbrellaDNSasJob
 			Install-UmbrellaDNSasJob
 		}
 	}
-	Get-Job | Where-Object -Property "Command" -match "Install-UmbrellaDNSasJob" | Wait-Job
-	$jobResult = Receive-Job -Job $job
-	Write-Output $jobResult
-	Get-Job | Where-Object -Property "Command" -match "Install-UmbrellaDNSasJob" | Remove-Job
-
+	Wait-Job -Id $job.id
+	Receive-Job -Id $job.id
+	Remove-Job -Id $Job.id
 }
 Function Install-UmbrellaDNSasJob {
 	<#
@@ -236,7 +241,7 @@ Function Install-UmbrellaDNSasJob {
 		Installs the Umbrella Dns Client
 	.Description
 		Determines the site code from IP or manually, then downloads and installs the appropriate config file for the site.
-	.Example
+	.Exampleget-
 		Install-UmbrellaDNS -Code ACG
 		Installs the agent for the site Ambitions Consulting Group. Will prompt for silent install confirmation.
 	.Notes
