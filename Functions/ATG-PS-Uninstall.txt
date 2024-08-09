@@ -36,14 +36,14 @@ Function Uninstall-Application {
 	Function Uninstall-WmiApp {
 		Write-Host -NoNewLine "Attempting Wmi method. "
 		$AppWmi = Get-WmiObject -Class Win32_Product -ErrorAction SilentlyContinue | Where-Object {$_.Name -match $AppToUninstall}
-		$AppWmiCopy = $AppWmi
+		$AppWmiName = $AppWmi.Name
 		If ($AppWmi) {
 			If ($AppWmi) {
 				$AppWmi.Uninstall()
 				$AppWmi = Get-WmiObject -Class Win32_Product -ErrorAction SilentlyContinue | Where-Object {$_.Name -match $AppToUninstall}
 			}
 			If (-not $AppWmi) {
-				Write-Host -ForegroundColor Green "$AppToUninstall appears to have been successfully uninstalled via Wmi method.`n$AppWmiCopy"
+				Write-Host -ForegroundColor Green "$AppToUninstall appears to have been successfully uninstalled via Wmi method.`n$AppWmiName"
 				$Global:Uninstalled = $True
 			} Else {
 				Write-Host -ForegroundColor Yellow "Uninstalling via `(Get-WmiObject`).Uninstall`(`) method didn`'t work."
