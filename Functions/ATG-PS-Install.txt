@@ -210,10 +210,6 @@ Function Install-O365ProofPointConnectors {
 	}
 }
 
-$Global:SiteCode = "NHFH"
-
-
-
 Function Install-UmbrellaDns {
 	[cmdletbinding()]
 	param(
