@@ -223,10 +223,10 @@ Function Install-UmbrellaDns {
 			Install-UmbrellaDNSasJob
 		}
 	}
-	Wait-Job -Job $job
+	Get-Job | Where-Object -Property "Command" -match "Install-UmbrellaDNSasJob" | Wait-Job
 	$jobResult = Receive-Job -Job $job
 	Write-Output $jobResult
-	Remove-Job -Job $job
+	Get-Job | Where-Object -Property "Command" -match "Install-UmbrellaDNSasJob" | Remove-Job
 
 }
 Function Install-UmbrellaDNSasJob {
