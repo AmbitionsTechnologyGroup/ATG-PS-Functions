@@ -231,7 +231,7 @@ Function Install-UmbrellaDns {
 			Install-UmbrellaDNSasJob
 		}
 	}
-	Wait-Job -Id $job.id
+	Wait-Job -Id $job.id -Force
 	Receive-Job -Id $job.id
 	Remove-Job -Id $Job.id
 }
@@ -434,7 +434,7 @@ Function Install-UmbrellaDNSasJob {
 
 		Function Create-Menu {
 			$selection = $null
-			Do {
+			#Do {
 				Show-Menu -Title 'Site Selection'
 				If (!($selection)) { $selection = Read-Host "Please make a selection" }
 				$SelectedSite = $SiteConfigs.Where( { $PSItem.Code -like $selection })
@@ -446,8 +446,7 @@ Function Install-UmbrellaDNSasJob {
 				} Else {
 					$selection = Read-Host "Invalid code. Please make a valid selection"
 				}
-			}
-			Until ($selection -eq 'q')
+			#} Until ($selection -eq 'q')
 		} #End of Create-Menu
 
 		# Check for preassigned site code, offer choices If not
