@@ -36,13 +36,14 @@ Function Uninstall-Application {
 	Function Uninstall-WmiApp {
 		Write-Host -NoNewLine "Attempting Wmi method. "
 		$AppWmi = Get-WmiObject -Class Win32_Product -ErrorAction SilentlyContinue | Where-Object {$_.Name -match $AppToUninstall}
+		$AppWmiCopy = $AppWmi
 		If ($AppWmi) {
 			If ($AppWmi) {
 				$AppWmi.Uninstall()
 				$AppWmi = Get-WmiObject -Class Win32_Product -ErrorAction SilentlyContinue | Where-Object {$_.Name -match $AppToUninstall}
 			}
 			If (-not $AppWmi) {
-				Write-Host -ForegroundColor Green "$AppToUninstall appears to have been successfully uninstalled via Wmi method."
+				Write-Host -ForegroundColor Green "$AppToUninstall appears to have been successfully uninstalled via Wmi method.`n$AppWmiCopy"
 				$Global:Uninstalled = $True
 			} Else {
 				Write-Host -ForegroundColor Yellow "Uninstalling via `(Get-WmiObject`).Uninstall`(`) method didn`'t work."
@@ -52,9 +53,10 @@ Function Uninstall-Application {
 
 	Function Uninstall-PowershellApp {
 		Write-Host -NoNewLine "Attempting Uninstall-Package method. "
+		$Package = Get-Package -Provider Programs -IncludeWindowsInstaller | Where-Object -Property 'Name' -Match $AppToUninstall
 		Get-Package -Provider Programs -IncludeWindowsInstaller | Where-Object -Property 'Name' -Match $AppToUninstall | Uninstall-Package -Force -AllVersions
 		If (-not (Get-Package -Provider Programs -IncludeWindowsInstaller | Where-Object -Property 'Name' -Match $AppToUninstall)){
-			Write-Host -ForegroundColor Green "$AppToUninstall appears to have been successfully uninstalled via Uninstall-Package method."
+			Write-Host -ForegroundColor Green "$AppToUninstall appears to have been successfully uninstalled via Uninstall-Package method.`n$Package"
 			$Global:Uninstalled = $True
 		} Else {
 			Write-Host -ForegroundColor Yellow "Uninstalling via Uninstall-Package method didn't work."
@@ -78,7 +80,7 @@ Function Uninstall-Application {
 		$MsiApps = (Get-ChildItem $uninstallX86RegPath | ForEach-Object { Get-ItemProperty $_.PSPath }).DisplayName
 		$MsiApps += (Get-ChildItem $uninstallX64RegPath | ForEach-Object { Get-ItemProperty $_.PSPath }).DisplayName
 		If (-not ($MsiApps -Match $AppToUninstall)) {
-			Write-Host -ForegroundColor Green "$AppToUninstall appears to have been successfully uninstalled via MSI UninstallString method."
+			Write-Host -ForegroundColor Green "$AppToUninstall appears to have been successfully uninstalled via MSI UninstallString method.`n$MsiApps"
 			$Global:Uninstalled = $True
 		} Else {
 			Write-Host -ForegroundColor Yellow "Uninstalling via Msi UninstallString method didn't work."
@@ -113,150 +115,7 @@ Function Uninstall-Application {
 }
 
 Function Uninstall-UmbrellaDNS {
-	Function Remove-PathForcefully {
-		param(
-			[parameter(Mandatory=$true)]
-			[string] $Path
-		)
-		<# the code below has been used from
-			- https://blogs.technet.com/b/heyscriptingguy/archive/2013/10/19/weekend-scripter-use-powershell-and-pinvoke-to-remove-stubborn-files.aspx
-		with inspiration from
-			- http://www.leeholmes.com/blog/2009/02/17/moving-and-deleting-really-locked-files-in-powershell/
-		and error handling from
-			- https://blogs.technet.com/b/heyscriptingguy/archive/2013/06/25/use-powershell-to-interact-with-the-windows-api-part-1.aspx
-		#>
-		Add-Type -ErrorAction Ignore @'
-			using System;
-			using System.Text;
-			using System.Runtime.InteropServices;
-			public class Posh
-			{
-				public enum MoveFileFlags
-				{
-					MOVEFILE_DELAY_UNTIL_REBOOT = 0x00000004
-				}
-				[DllImport("kernel32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
-				static extern bool MoveFileEx(string lpExistingFileName, string lpNewFileName, MoveFileFlags dwFlags);
-				public static bool MarkFileDelete (string sourcefile)
-				{
-					return MoveFileEx(sourcefile, null, MoveFileFlags.MOVEFILE_DELAY_UNTIL_REBOOT);
-				}
-			}
-'@
-		Function Remove-SubPath {
-			param(
-				[parameter(Mandatory=$true)]
-				[string] $SubPath
-			)
-
-
-			$SubPath = (Resolve-Path $SubPath -ErrorAction Stop).Path
-			try {
-				Remove-Item $SubPath -Force -Recurse -ErrorAction Stop
-				Write-Host -ForegroundColor Green -BackgroundColor Black "Deletion of $SubPath succeeded."
-			} catch {
-				$deleteResult = [Posh]::MarkFileDelete($SubPath)
-				if ($deleteResult -eq $false) {
-					throw (New-Object ComponentModel.Win32Exception) # calls GetLastError
-				} else {
-					Write-Host -ForegroundColor Red -BackgroundColor Yellow "Deletion of ||$SubPath|| failed. Deleting at next boot."#`n$($_.Exception.Message)"
-				}
-			}
-		}
-		If (Test-Path -Path $Path -Verbose) {
-			$SubFiles = Get-ChildItem -Path $Path -Recurse -Force -File
-			$SubFolders = Get-ChildItem -Path $Path -Recurse -Force -Directory
-			If ($SubFiles -or $SubFolders) {
-				$SubFiles | ForEach-Object {Remove-SubPath -SubPath $_.FullName}
-				$SubFolders | ForEach-Object {Remove-SubPath -SubPath $_.FullName}
-				Remove-SubPath -SubPath $Path
-			} Else {
-				Remove-SubPath -SubPath $Path
-			}
-		} Else {
-			Write-Warning "$Path was not found."
-		}
-	}
-	############################################### Uninstall Script ########################################################
-	$IsInstalled = Get-Service -Name Umbrella_RC -ErrorAction SilentlyContinue
-	$PreDNS = (Get-NetIPConfiguration | Where {$_.Netprofile.Ipv4Connectivity -Like "*Internet*"}).DnsServer.ServerAddresses
-	If ($IsInstalled) {
-		Write-Host "DNS Servers: $PreDNS"
-		Write-Host "Umbrella DNS Client found. Initiating uninstall using the command:`n  wmic.exe Product where `"name='Umbrella Roaming Client'`" call uninstall"
-		wmic.exe Product where "name='Umbrella Roaming Client'" call uninstall
-		Write-Host "Umbrella DNS Client found. Initiating uninstall using the command:`n  wmic.exe Product where `"name='Umbrella Roaming Client (x86)'`" call uninstall"
-		wmic.exe Product where "name='Umbrella Roaming Client (x86)'" call uninstall
-		$PostDNS = (Get-NetIPConfiguration | Where {$_.Netprofile.Ipv4Connectivity -Like "*Internet*"}).DnsServer.ServerAddresses
-		Write-Host "DNS Servers: $PostDNS"
-
-		Write-Host "Checking Root Certificate"
-		$CAHASH = "C5091132E9ADF8AD3E33932AE60A5C8FA939E824" #Thumbprint of the Cert set to expire in 2036
-		$RootCertPath = "Cert:\LocalMachine\Root\$CAHASH"
-		$CertInstalled = Get-Item -Path $RootCertPath -ea SilentlyContinue
-		If ((Test-Path $RootCertPath -ea SilentlyContinue)) {
-			Write-Host "Uninstalling the Umbrella Root Cert"
-
-			$CertInstalled | Remove-Item -Force
-			If(Test-Path "C:\Program Files\Mozilla Firefox\defaults\pref\") {Write-Host "Configuring Firefox settings.";Set-Content "C:\Program Files\Mozilla Firefox\defaults\pref\firefox-windows-truststore.js" "pref('security.enterprise_roots.enabled', false);"}
-		} Else {
-			Write-Host -ForegroundColor Green "The Umbrella Root Cert is not installed."
-		}
-
-		Write-Host "Checking Status Indicator"
-		$IndicKey = Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator | Select-Object -ExpandProperty UseGlobalDNS -ea SilentlyContinue
-		If ($IndicKey -eq 1) {
-			Write-Host "Removing Connectivity Indicator Reg Key"
-			Remove-ItemProperty -LiteralPath 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' -Name 'UseGlobalDNS' -Force -ea SilentlyContinue
-		} Else {
-			Write-Host -ForegroundColor Green "The Status Indicator not present."
-		}
-		
-		If (($PostDNS -match "127.0.0.1") -or (Get-Service -Name Umbrella_RC -ErrorAction SilentlyContinue)) {
-			Write-Host -ForegroundColor Red "`nNormal uninstall methods appear to have failed, performing manual uninstall."
-			Write-Host "Checking Service"
-			If (Get-Service -Name Umbrella_RC -ErrorAction SilentlyContinue) {
-				Write-Host "Service found, stopping service."
-				Stop-Service "Umbrella_RC" -Force
-				Set-Service "Umbrella_RC" -StartupType Disabled
-				Write-Host "Removing Service"
-				& sc.exe delete "Umbrella_RC"
-			} Else { Write-Host -ForegroundColor Green "Service not found."}
-			
-			Write-Host "Checking if $Env:ProgramData\OpenDNS\ERC exists."
-			If (Test-Path -Path "$Env:ProgramData\OpenDNS\ERC" -ErrorAction SilentlyContinue) {
-				Write-Host "$Env:ProgramData\OpenDNS\ERC was found, removing."
-				Get-ChildItem -Path "$Env:ProgramData\OpenDNS\ERC" -Recurse | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-				Get-Item -Path "$Env:ProgramData\OpenDNS\ERC" | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-				If (Test-Path -Path "$Env:ProgramData\OpenDNS\ERC" -ErrorAction SilentlyContinue) {
-					Remove-PathForcefully -Path "$Env:ProgramData\OpenDNS\ERC"
-				}
-			} Else {Write-Host -ForegroundColor Green "${Env:ProgramFiles(x86)}\OpenDNS does not exist."}
-
-			Write-Host "Checking if ${Env:ProgramFiles(x86)}\OpenDNS exists."
-			If (Test-Path -Path "${Env:ProgramFiles(x86)}\OpenDNS" -ErrorAction SilentlyContinue) {
-				Write-Host "${Env:ProgramFiles(x86)}\OpenDNS was found, removing."
-				Get-ChildItem -Path "${Env:ProgramFiles(x86)}\OpenDNS" -Recurse | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-				Get-Item -Path "${Env:ProgramFiles(x86)}\OpenDNS" | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-				If (Test-Path -Path "${Env:ProgramFiles(x86)}\OpenDNS" -ErrorAction SilentlyContinue) {
-					Remove-PathForcefully -Path "${Env:ProgramFiles(x86)}\OpenDNS"
-				}
-			} Else {Write-Host -ForegroundColor Green "${Env:ProgramFiles(x86)}\OpenDNS does not exist."}
-			
-			Write-Host "Checking if any network adapters are still pointing to 127.0.0.1."
-			$adapters = Get-WmiObject -Class Win32_NetworkAdapterConfiguration | Where-Object { $_.DHCPEnabled -eq $true -and $_.DNSServerSearchOrder -eq "127.0.0.1" }
-			If ($adapters) {
-				Write-Host "Adapters still pointing to 127.0.0.1 found, reconfiguring to pull DNS from DHCP."
-				foreach ($adapter in $adapters) {
-					$adapter.SetDNSServerSearchOrder()
-				}
-			} Else {Write-Host "No adapters still using Umbrella DNS found."}
-			$PostDNS = (Get-NetIPConfiguration | Where {$_.Netprofile.Ipv4Connectivity -Like "*Internet*"}).DnsServer.ServerAddresses
-			Write-Host "DNS Servers: $PostDNS"
-		}
-	} Else {
-		Write-Host "DNS Servers: $PreDNS"
-		Write-Host "Umbrella DNS Client not found."
-	}
+	Uninstall-Application -AppToUninstall "Cisco Secure Client"
 }
 
 # SIG # Begin signature block
