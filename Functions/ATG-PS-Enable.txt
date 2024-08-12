@@ -26,13 +26,13 @@ Function Enable-DellSecureBoot {
 				}
 			}
 		}
-
+		If (-not (Get-Module -Name DellBIOSProvider -ErrorAction SilentlyContinue) ) {
+			Import-Module PowerShellGet -Force
+			Install-Module DellBIOSProvider -Force -ErrorAction SilentlyContinue
+			Import-Module DellBIOSProvider -Force
+		}
 		If ($AllowSecureBoot -eq $True) {
-			If (-not (Get-Module -Name DellBIOSProvider -ErrorAction SilentlyContinue) ) {
-				Import-Module PowerShellGet -Force
-				Install-Module DellBIOSProvider -Force -ErrorAction SilentlyContinue
-				Import-Module DellBIOSProvider -Force
-			}
+
 		# Get the current Secure Boot setting
 			$SecureBootSetting = Get-Item -Path DellSmbios:\SecureBoot\SecureBoot -ErrorAction SilentlyContinue
 			If ($SecureBootSetting) {
@@ -55,6 +55,11 @@ Function Enable-DellSecureBoot {
 			} Else {
 				Write-Output "Secure Boot is not able to be set via powershell on this computer."
 			}
+		} Else {
+			Write-Host "Ensuring Secure Boot is disabled."
+			Set-Item -Path DellSmbios:\SecureBoot\SecureBoot -Value Disabled -ErrorAction SilentlyContinue -Verbose
+			Set-Item -Path DellSmbios:\AdvancedBootOptions\LegacyOrom -Value Enabled -ErrorAction SilentlyContinue -Verbose
+			Set-Item -Path DellSmbios:\BootSequence\BootList -Value 'Legacy' -ErrorAction SilentlyContinue -Verbose
 		}
 	} Else { Write-Host "This is not a Dell Computer" }
 }
