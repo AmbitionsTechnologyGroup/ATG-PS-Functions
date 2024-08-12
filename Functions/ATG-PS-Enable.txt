@@ -1,31 +1,60 @@
 Function Enable-DellSecureBoot {
 	$Manufact = (Get-CimInstance -Class Win32_ComputerSystem -ErrorAction SilentlyContinue).Manufacturer
 	If ( $Manufact -match "Dell" -or $Manufact -match "Alienware") {
-		If (-not (Get-Module -Name DellBIOSProvider -ErrorAction SilentlyContinue) ) {
-			Install-Module DellBIOSProvider -Force
-			Import-Module DellBIOSProvider -Force
-		}
-		# Get the current Secure Boot setting
-		$SecureBootSetting = Get-Item -Path DellSmbios:\SecureBoot\SecureBoot -ErrorAction SilentlyContinue
-		If ($SecureBootSetting) {
-			if ($SecureBootSetting.CurrentValue -eq "Disabled") {
-				Write-Output "Secure Boot is currently disabled. Enabling it now..."
-				
-				# Enable Secure Boot
-				Set-Item -Path DellSmbios:\SecureBoot\SecureBoot -Value Enabled -ErrorAction Stop
-				# Confirm the change
-				$SecureBootSetting = Get-Item -Path DellSmbios:\SecureBoot\SecureBoot -ErrorAction SilentlyContinue
-				$SecureBootSetting
-				if ($SecureBootSetting.CurrentValue -eq "Enabled") {
-					Write-Output "Secure Boot has been successfully enabled."
-				} else {
-					Write-Output "Failed to enable Secure Boot."
-				}
-			} else {
-				Write-Output "Secure Boot is already enabled."
-			}
+		If ($env:firmware_type -eq 'UEFI') {
+			$AllowSecureBoot = $True
 		} Else {
-			Write-Output "Secure Boot is not able to be set via powershell on this computer."
+			# Redirect error stream to success stream to also capture any errors
+			Write-Host "Legacy boot detected. Checking if we can convert to UEFI."
+			$MBRVAL = MBR2GPT.EXE /allowfullos /validate 2>&1
+
+			# Check if any error records exist and capture these in variable $errors
+			If ( $($MBRVAL | Select-String "Failed") ) {
+				Write-Host "We are unable to convert to UEFI, not proceeding with Secure boot since it'll break boot."
+				$AllowSecureBoot = $False
+			} Else {
+				Write-Host "Validation passed. Attempting to convert to UEFI."
+				$MBRCONVERT = MBR2GPT.EXE /allowfullos /convert 2>&1
+
+				# Check if any error records exist and capture these in variable $errors
+				If ( $($MBRCONVERT | Select-String "Conversion Failed") ) {
+					Write-Host "Convertion to UEFI failed, not proceeding with Secure boot since it'll break boot."
+					$AllowSecureBoot = $False
+				} Else {
+					"Convertion to UEFI succeeded, proceeding with Secure boot."
+					$AllowSecureBoot = $True
+				}
+			}
+		}
+
+		If ($AllowSecureBoot -eq $True) {
+			If (-not (Get-Module -Name DellBIOSProvider -ErrorAction SilentlyContinue) ) {
+				Import-Module PowerShellGet -Force
+				Install-Module DellBIOSProvider -Force -ErrorAction SilentlyContinue
+				Import-Module DellBIOSProvider -Force
+			}
+		# Get the current Secure Boot setting
+			$SecureBootSetting = Get-Item -Path DellSmbios:\SecureBoot\SecureBoot -ErrorAction SilentlyContinue
+			If ($SecureBootSetting) {
+				if ($SecureBootSetting.CurrentValue -eq "Disabled") {
+					Write-Output "Secure Boot is currently disabled. Enabling it now..."
+					
+					# Enable Secure Boot
+					Set-Item -Path DellSmbios:\SecureBoot\SecureBoot -Value Enabled -ErrorAction Stop
+					# Confirm the change
+					$SecureBootSetting = Get-Item -Path DellSmbios:\SecureBoot\SecureBoot -ErrorAction SilentlyContinue
+					$SecureBootSetting
+					if ($SecureBootSetting.CurrentValue -eq "Enabled") {
+						Write-Output "Secure Boot has been successfully enabled."
+					} else {
+						Write-Output "Failed to enable Secure Boot."
+					}
+				} else {
+					Write-Output "Secure Boot is already enabled."
+				}
+			} Else {
+				Write-Output "Secure Boot is not able to be set via powershell on this computer."
+			}
 		}
 	} Else { Write-Host "This is not a Dell Computer" }
 }
