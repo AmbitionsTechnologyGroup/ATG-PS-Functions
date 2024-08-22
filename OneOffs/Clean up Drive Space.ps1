@@ -40,14 +40,14 @@ Function Invoke-WindowsCleanMgr {
 	$VolCaches = Get-ChildItem $Base
 	$Locations = @($VolCaches.PSChildName)
 	ForEach ($VC in $VolCaches) {New-ItemProperty -Path "$($VC.PSPath)" -Name $StateFlags -Value 1 -Type DWORD -Force | Out-Null}
-	ForEach ($Location in $Locations) {Set-ItemProperty -Path $($Base + $Location) -Name $SageSet -Type DWORD -Value 2 -ea SilentlyContinue | Out-Null}
+	ForEach ($Location in $Locations) {Set-ItemProperty -Path $($Base + $Location) -Name $SageSet -Type DWORD -Value 2 | Out-Null}
 	$Argss = "/sagerun:$([string]([int]$SageSet.Substring($SageSet.Length - 4)))"
 	function Watch-CleanMgr {
 		$prevTicks = 0
 		$sameTickCount = 0
 		$WaitInterval = 30
 		$SameTickMax = 8
-		$process = Get-Process cleanmgr -ErrorAction SilentlyContinue
+		$process = Get-Process cleanmgr
 
 		if ($null -eq $process) {
 			Write-Host "cleanmgr.exe is not running."
@@ -179,7 +179,7 @@ Function Remove-StaleProfiles {
 
 #$PreReqCommandsToRun = @(
 	Write-Host "Reclaim space from .NET Native Images" ; Get-Item "$Env:windir\Microsoft.NET\Framework\*\ngen.exe" -Force | ForEach-Object { & $($_.FullName) update} | Out-Null## Reclaim space from .NET Native Images	
-	Get-Service -Name wuauserv | Stop-Service -Force -Verbose -ErrorAction SilentlyContinue #Stops Windows Update so we can clean it out.
+	Get-Service -Name wuauserv | Stop-Service -Force -Verbose #Stops Windows Update so we can clean it out.
 	powercfg -h off
 	$EdgePackageName = Get-AppxPackage -Name Microsoft.MicrosoftEdge | Select-Object -ExpandProperty PackageFamilyName
 	If ((Get-CimInstance -ClassName Win32_OperatingSystem | Select-Object -ExpandProperty Caption) -notlike "Microsoft Windows Server*") { #Let's not remove profiles on a server by default.
@@ -433,9 +433,9 @@ $FoldersToDeDuplicate = @(
 $FoldersToClean | ForEach-Object {
 	If (@(Get-Item $_ -Force)){
 		ForEach ($SubItem in @($_)) {
-			If (Get-Item $SubItem -Force -ErrorAction SilentlyContinue) {
+			If (Get-Item $SubItem -Force ) {
 				Try {
-					Get-Item $SubItem -Force -ErrorAction SilentlyContinue | ForEach-Object {
+					Get-Item $SubItem -Force | ForEach-Object {
 						Remove-StaleObjects -targetDirectory $($_.FullName) -DaysOld $DaysToDelete
 				}
 				} Catch {
@@ -450,9 +450,9 @@ $FoldersToClean | ForEach-Object {
 $PathsToDelete | ForEach-Object {
 	If (@(Get-Item $_ -Force)){
 		ForEach ($SubItem in @($_)) {
-			If (Get-Item $SubItem -Force -ErrorAction SilentlyContinue) {
+			If (Get-Item $SubItem -Force ) {
 				Try {
-					Get-Item $SubItem -Force -ErrorAction SilentlyContinue | ForEach-Object {
+					Get-Item $SubItem -Force | ForEach-Object {
 						Remove-PathForcefully -Path $($_.FullName)
 				}
 				} Catch {
@@ -467,10 +467,10 @@ $PathsToDelete | ForEach-Object {
 $FoldersToDeDuplicate | ForEach-Object {
 	If (@(Get-Item $_ -Force)){
 		ForEach ($SubItem in @($_)) {
-			If (Get-Item $SubItem -Force -ErrorAction SilentlyContinue) {
+			If (Get-Item $SubItem -Force ) {
 				Write-Host $SubItem
 				Try {
-					Get-Item $SubItem -Force -ErrorAction SilentlyContinue | ForEach-Object {
+					Get-Item $SubItem -Force | ForEach-Object {
 						Write-Host "Searching $($_.FullName) for duplicate files"
 						Remove-DuplicateFiles -Path $($_.FullName)
 						Write-Host
@@ -502,7 +502,7 @@ $FoldersToDeDuplicate | ForEach-Object {
 
 #$PostReqCommandsToRun = @(
 	Get-Service -Name wuauserv | Start-Service -Verbose #Starts Windows Update.
-	If ((Get-Service -Name Umbrella_RC -ErrorAction SilentlyContinue) -or (Get-Service -Name csc_umbrellaagent -ErrorAction SilentlyContinue)) {
+	If ((Get-Service -Name Umbrella_RC ) -or (Get-Service -Name csc_umbrellaagent )) {
 		Install-UmbrellaDns
 	}
 #)
@@ -517,7 +517,7 @@ $PostClean = Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object -Proper
 #$Wrapup = @(
 	Write-Host "`nBefore Clean-up:`n$(($PreClean | Format-Table | Out-String).Trim())"
 	Write-Host "`nAfter Clean-up:`n$(($PostClean | Format-Table | Out-String).Trim())"
-	Write-Host -ForegroundColor Green "`nFreed up :$($PostClean.'FreeSpace (GB)' - $PreClean.'FreeSpace (GB)') GB  ($((($PostClean.PercentFree).Replace('%','')) - (($PreClean.PercentFree).Replace('%',''))) %)"
+	Write-Host -ForegroundColor Green "`nFreed up :$($PostClean.'FreeSpace (GB)' - $PreClean.'FreeSpace (GB)') GB ($((($PostClean.PercentFree).Replace('%','')) - (($PreClean.PercentFree).Replace('%',''))) %)"
 	## Completed Successfully!
 	Write-Host $((Get-Date).DateTime)
 	Write-Host $($env:computername)
