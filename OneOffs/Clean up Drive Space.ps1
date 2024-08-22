@@ -182,7 +182,9 @@ Function Remove-StaleProfiles {
 	Get-Service -Name wuauserv | Stop-Service -Force -Verbose -ErrorAction SilentlyContinue #Stops Windows Update so we can clean it out.
 	powercfg -h off
 	$EdgePackageName = Get-AppxPackage -Name Microsoft.MicrosoftEdge | Select-Object -ExpandProperty PackageFamilyName
-	Remove-StaleProfiles
+	If ((Get-CimInstance -ClassName Win32_OperatingSystem | Select-Object -ExpandProperty Caption) -notlike "Microsoft Windows Server*") { #Let's not remove profiles on a server by default.
+		Remove-StaleProfiles
+	}
 #)
 
 ## State which files or folders to clean up old files
