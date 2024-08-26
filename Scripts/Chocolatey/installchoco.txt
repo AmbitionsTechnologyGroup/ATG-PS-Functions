@@ -20,7 +20,7 @@
 		if ($packageRepo -eq $null -or $packageRepo -eq '') {
 			Write-Host "Install Ambitions Chocolatey Server"
 			$ChocoName = "ACG-Choco"
-			$packageRepo = 'http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/'
+			$packageRepo = 'https://choco.ambitionsgroup.com/repository/chocolatey-group/'
 		} else {
 			Write-Host "Install local Chocolatey Server"
 			$ChocoName = $DetectedCode + "-Choco"
@@ -33,13 +33,20 @@
 	} else {
 		Write-Host "You're not at a specialized site."
 		Write-Host "Install Ambitions Chocolatey Server"
+			#Remove stale ambitions source if it is no longer needed.
+			If (Get-Command choco -errorAction SilentlyContinue) {
+				$Sources = (choco source) ; If ($Sources -match "ACG-Choco - http://choco.ambitionsgroup.com:8081"){choco source remove -n=ACG-Choco}
+			}
+			$ChocoName = "ACG-Choco"
+			$packageRepo = 'https://choco.ambitionsgroup.com/repository/chocolatey-group/'
+			$SourceAdd = "choco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=2"
+			If ((Test-NetConnection -ComputerName 10.40.0.41 -Port 8081).TcpTestSucceeded -eq $True) {
 			$ChocoName = "ACG-Choco-local"
 			$packageRepo = 'http://10.40.0.41:8081/repository/chocolatey-group/'
-			$SourceAdd += "`nchoco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=2"
-
-			$ChocoName = "ACG-Choco"
-			$packageRepo = 'http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/'
-			$SourceAdd = "choco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=1"
+			$SourceAdd += "`nchoco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=1"
+			} Else {
+				If ($Sources -match "ACG-Choco-local"){choco source remove -n=ACG-Choco-local}
+			}
 	}
 
 	<#
