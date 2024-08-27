@@ -40,13 +40,13 @@
 			$ChocoName = "ACG-Choco"
 			$packageRepo = 'https://choco.ambitionsgroup.com/repository/chocolatey-group/'
 			$SourceAdd = "choco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=2"
-			If ((Test-NetConnection -ComputerName 10.40.0.41 -Port 8081).TcpTestSucceeded -eq $True) {
+			<#If ((Test-NetConnection -ComputerName 10.40.0.41 -Port 8081).TcpTestSucceeded -eq $True) {
 			$ChocoName = "ACG-Choco-local"
 			$packageRepo = 'http://10.40.0.41:8081/repository/chocolatey-group/'
 			$SourceAdd += "`nchoco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=1"
 			} Else {
 				If ($Sources -match "ACG-Choco-local"){choco source remove -n=ACG-Choco-local}
-			}
+			}#>
 	}
 
 	<#
