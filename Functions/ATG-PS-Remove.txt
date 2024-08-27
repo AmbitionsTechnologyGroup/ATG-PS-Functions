@@ -17,11 +17,11 @@ Function Remove-ADStaleComputers {
 
 	# Display the list of computers that will be disabled
 	Write-Host "The following computers will be disabled:"
-	$computersToDisable | Select-Object Name, @{Name="LastLogonTimeStamp";Expression={[datetime]::FromFileTime($_.LastLogonTimeStamp).ToString("yyyy-MM-dd HH:mm:ss")}} | Format-Table
+	$computersToDisable | Select-Object Name, @{Name = "LastLogonTimeStamp"; Expression = { [datetime]::FromFileTime($_.LastLogonTimeStamp).ToString("yyyy-MM-dd HH:mm:ss") } } | Format-Table
 
 	# Display the list of computers that will be deleted
 	Write-Host "The following computers will be deleted:"
-	$computersToDelete | Select-Object Name, @{Name="LastLogonTimeStamp";Expression={[datetime]::FromFileTime($_.LastLogonTimeStamp).ToString("yyyy-MM-dd HH:mm:ss")}} | Format-Table
+	$computersToDelete | Select-Object Name, @{Name = "LastLogonTimeStamp"; Expression = { [datetime]::FromFileTime($_.LastLogonTimeStamp).ToString("yyyy-MM-dd HH:mm:ss") } } | Format-Table
 
 	# Ask for confirmation before proceeding
 	$confirm = Read-Host -Prompt "Do you want to proceed with disabling and deleting these computers? (y/n)"
@@ -48,19 +48,21 @@ Function Remove-DuplicateFiles {
 		[string]$Path = $PWD.Path,
 		[switch]$Recurse = $False
 	)
-	If (-not(Get-Command "Remove-PathForcefully" -ErrorAction SilentlyContinue)) {Invoke-RestMethod ps.acgs.io | Invoke-Expression}
+	If (-not(Get-Command "Remove-PathForcefully" -ErrorAction SilentlyContinue)) { Invoke-RestMethod ps.acgs.io | Invoke-Expression }
 	Function Remove-DuplicateFilesInt {
-		$DuplicateFiles = @((Get-ChildItem -Path $Path -Force | Get-FileHash -ErrorAction SilentlyContinue | Group-Object -property hash | Where-Object { $_.count -gt 1 } | ForEach-Object { $_.group | Sort-Object {$_.Path.Length} | Select-Object -Skip 1}).Path)
+		$DuplicateFiles = @((Get-ChildItem -Path $Path -Force | Get-FileHash -ErrorAction SilentlyContinue | Group-Object -property hash | Where-Object { $_.count -gt 1 } | ForEach-Object { $_.group | Sort-Object { $_.Path.Length } | Select-Object -Skip 1 }).Path)
 		If ($DuplicateFiles) {
-		ForEach ($File in $DuplicateFiles) {Remove-PathForcefully -Path $file}
-		} Else {
+			ForEach ($File in $DuplicateFiles) { Remove-PathForcefully -Path $file }
+		}
+		Else {
 			Write-Host "No duplicate files found in $Path"
 		}
 	}
 	If ($Recurse) {
 		# Get all directories recursively and run Remove-DuplicateFiles for each directory
 		Get-ChildItem -Directory -Recurse | ForEach-Object { Remove-DuplicateFilesInt -Path $_.FullName }
-	} Else {
+	}
+ Else {
 		Remove-DuplicateFilesInt
 	}
 }
@@ -72,7 +74,7 @@ Function Remove-ITS247InstallFolder {
 
 Function Remove-PathForcefully {
 	param(
-		[parameter(Mandatory=$true)]
+		[parameter(Mandatory = $true)]
 		[string] $Path
 	)
 	<# the code below has been used from
@@ -105,7 +107,7 @@ Function Remove-PathForcefully {
 '@
 	Function Remove-SubPath {
 		param(
-			[parameter(Mandatory=$true)]
+			[parameter(Mandatory = $true)]
 			[string] $SubPath
 		)
 		$SubPath = (Resolve-Path $SubPath -ErrorAction SilentlyContinue).Path
@@ -113,11 +115,13 @@ Function Remove-PathForcefully {
 			try {
 				Remove-Item $SubPath -Force -Recurse -ErrorAction Stop
 				Write-Host -ForegroundColor Green -BackgroundColor Black "Deletion of $SubPath succeeded."
-			} catch {
+			}
+			catch {
 				$deleteResult = [Posh]::MarkFileDelete($SubPath)
 				if ($deleteResult -eq $false) {
 					throw ($Error[0]) # calls GetLastError
-				} else {
+				}
+				else {
 					Write-Host -ForegroundColor Red -BackgroundColor Yellow "Deletion of ||$SubPath|| failed. Deleting at next boot."#`n$($_.Exception.Message)"
 				}
 			}
@@ -127,13 +131,15 @@ Function Remove-PathForcefully {
 		$SubFiles = Get-ChildItem -Path $Path -Recurse -Force -File
 		$SubFolders = Get-ChildItem -Path $Path -Recurse -Force -Directory
 		If ($SubFiles -or $SubFolders) {
-			$SubFiles | ForEach-Object {Remove-SubPath -SubPath $_.FullName}
-			$SubFolders | ForEach-Object {Remove-SubPath -SubPath $_.FullName}
-			Remove-SubPath -SubPath $Path
-		} Else {
+			$SubFiles | ForEach-Object { Remove-SubPath -SubPath $_.FullName }
+			$SubFolders | ForEach-Object { Remove-SubPath -SubPath $_.FullName }
 			Remove-SubPath -SubPath $Path
 		}
-	} Else {
+		Else {
+			Remove-SubPath -SubPath $Path
+		}
+	}
+ Else {
 		Write-Warning "$Path was not found."
 	}
 	<#
@@ -150,9 +156,9 @@ Function Remove-PathForcefully {
 
 Function Remove-StaleObjects {
 	param(
-		[parameter(Mandatory=$true)]
+		[parameter(Mandatory = $true)]
 		[string] $targetDirectory,
-		[parameter(Mandatory=$true)]
+		[parameter(Mandatory = $true)]
 		[Int] $DaysOld
 	)
 	# PowerShell script to delete files or folders older than 30 days in a specific directory
@@ -166,7 +172,7 @@ Function Remove-StaleObjects {
 	}
 	# Recursively get all files and folders in the target directory
 	$itemsToDelete = Get-ChildItem -Path $targetDirectory -Recurse | Where-Object {
-		$_.LastAccessTime -lt $thresholdDate
+		$_.LastWriteTime -lt $thresholdDate
 	}
 	#$itemsToDelete.FullName
 	#$itemsToDelete.Count
@@ -175,11 +181,12 @@ Function Remove-StaleObjects {
 			# If it's a folder, remove it recursively
 			Remove-Item -Path $item.FullName -Recurse -Force -ErrorAction SilentlyContinue
 			Write-Host $VerbosePreference
-			If ( $PSBoundParameters['Verbose'] -or $VerbosePreference -eq 'Continue' ){Write-Verbose "Deleted folder: $($item.FullName)"}
-		} else {
+			If ( $PSBoundParameters['Verbose'] -or $VerbosePreference -eq 'Continue' ) { Write-Verbose "Deleted folder: $($item.FullName)" }
+		}
+		else {
 			# If it's a file, remove it
 			Remove-Item -Path $item.FullName -Force -ErrorAction SilentlyContinue
-			If ( $PSBoundParameters['Verbose'] -or $VerbosePreference -eq 'Continue' ){Write-Verbose "Deleted file: $($item.FullName)"}
+			If ( $PSBoundParameters['Verbose'] -or $VerbosePreference -eq 'Continue' ) { Write-Verbose "Deleted file: $($item.FullName)" }
 		}
 	}
 
@@ -190,19 +197,36 @@ Function Remove-StaleObjects {
 
 	foreach ($folder in $emptyFolders) {
 		Remove-Item -Path $folder.FullName -Force -ErrorAction SilentlyContinue
-		If ( $PSBoundParameters['Verbose'] -or $VerbosePreference -eq 'Continue' ){Write-Host "Deleted empty folder: $($folder.FullName)"}
+		If ( $PSBoundParameters['Verbose'] -or $VerbosePreference -eq 'Continue' ) { Write-Host "Deleted empty folder: $($folder.FullName)" }
 	}
 	$itemsUnableToDelete = Get-ChildItem -Path $targetDirectory -Recurse | Where-Object {
 		$_.LastWriteTime -lt $thresholdDate
 	}
 
+	#Try again for stubborn items.
+	ForEach ($StubbornItem in $itemsUnableToDelete) {
+		Remove-PathForcefully -Path $StubbornItem.PSPath -Verbose
+	}
 
+	# Get all empty folders recursively
+	$emptyFolders = Get-ChildItem -Path $targetDirectory -Recurse | Where-Object {
+		$_.PSIsContainer -and @(Get-ChildItem -Path $_.FullName -Force).Count -eq 0
+	}
+
+	foreach ($folder in $emptyFolders) {
+		Remove-PathForcefully -Path $folder.FullName -Verbose
+		If ( $PSBoundParameters['Verbose'] -or $VerbosePreference -eq 'Continue' ) { Write-Host "Deleted empty folder: $($folder.FullName)" }
+	}
+	$itemsUnableToDelete = Get-ChildItem -Path $targetDirectory -Recurse | Where-Object {
+		$_.LastWriteTime -lt $thresholdDate
+	}
 	
 	$SuccessfulDelete = $(($itemsToDelete).Count - ($itemsUnableToDelete).Count)
 	If ($SuccessfulDelete) {
-	Write-Host "Removed $($SuccessfulDelete.Count) objects."
-	Write-Host "Cleanup of the directory $targetDirectory complete!"
-	} Else {
+		Write-Host "Removed $($SuccessfulDelete.Count) objects."
+		Write-Host "Cleanup of the directory $targetDirectory complete!"
+	}
+ Else {
 		Write-Host "No objects older then $DaysOld days were deleted from $targetDirectory."
 	}
 	If ($itemsUnableToDelete) {

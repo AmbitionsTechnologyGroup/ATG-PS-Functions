@@ -1,37 +1,39 @@
 Function Connect-O365AzureAD {
 	If (-not (Get-Command Connect-AzureAD -ErrorAction SilentlyContinue)) {
-			Write-Host "Installing the Azure AD module"
-			Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-			Install-Module -Name AzureAD -AllowClobber -Force
-			$ModVer = (Get-Command Connect-AzureAD).Version
-			If ($ModVer) {
-				Write-Host "Azure AD module version $ModVer has been installed."
-			} Else {
-				Write-Host "Azure AD module failed to install."
-				Break
-			}
-		} Else {
-			$Readhost = 'N'
-			$Readhost = Read-Host "Do you want to check for module updates? This should be done periodically. `n(y/N)"
-			Switch ($ReadHost)
-			{
-				Y {
-					$ModVer = (Get-Command Connect-AzureAD).Version
-					$AvailableModVer = (Find-Module AzureAD -Repository PSGallery).Version
-					If ($ModVer -ne $AvailableModVer) {
-						Write-host "AzureAD has an update from $ModVer to $AvailableModVer.`nInstalling the update."
-						Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-						Install-Module -Name AzureAD -AllowClobber -Force
-					} Else {
-						Write-host "AzureAD is already up to date at version $AvailableModVer."
-					}
-				}
-				N { Write-Host "Skipping update check." }
-				Default { Write-Host "Skipping update check." }
-			}
+		Write-Host "Installing the Azure AD module"
+		Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+		Install-Module -Name AzureAD -AllowClobber -Force
+		$ModVer = (Get-Command Connect-AzureAD).Version
+		If ($ModVer) {
+			Write-Host "Azure AD module version $ModVer has been installed."
 		}
+		Else {
+			Write-Host "Azure AD module failed to install."
+			Break
+		}
+	}
+ Else {
+		$Readhost = 'N'
+		$Readhost = Read-Host "Do you want to check for module updates? This should be done periodically. `n(y/N)"
+		Switch ($ReadHost) {
+			Y {
+				$ModVer = (Get-Command Connect-AzureAD).Version
+				$AvailableModVer = (Find-Module AzureAD -Repository PSGallery).Version
+				If ($ModVer -ne $AvailableModVer) {
+					Write-host "AzureAD has an update from $ModVer to $AvailableModVer.`nInstalling the update."
+					Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+					Install-Module -Name AzureAD -AllowClobber -Force
+				}
+				Else {
+					Write-host "AzureAD is already up to date at version $AvailableModVer."
+				}
+			}
+			N { Write-Host "Skipping update check." }
+			Default { Write-Host "Skipping update check." }
+		}
+	}
 
-			Connect-AzureAD
+	Connect-AzureAD
 
 
 	Write-Host -ForegroundColor White -BackgroundColor DarkRed @"
@@ -44,7 +46,7 @@ Function Connect-O365AzureAD {
 		Disconnect-AzureAD
 "@
 
-<#
+	<#
 	.SYNOPSIS
 		Initiates an Office 365 Azure AD connection.
 
@@ -60,19 +62,19 @@ Function Connect-O365AzureAD {
 Function Connect-NetExtender {
 	param
 	(
-		[Parameter(Mandatory=$False)]
+		[Parameter(Mandatory = $False)]
 		[string]$DC,
 
-		[Parameter(Mandatory=$true)]
+		[Parameter(Mandatory = $true)]
 		[string]$VPNuri,
 
-		[Parameter(Mandatory=$true)]
+		[Parameter(Mandatory = $true)]
 		[string]$VPNuser,
 
-		[Parameter(Mandatory=$true)]
+		[Parameter(Mandatory = $true)]
 		[string]$VPNpassword,
 
-		[Parameter(Mandatory=$true)]
+		[Parameter(Mandatory = $true)]
 		[string]$VPNdomain
 	)
 
@@ -86,7 +88,7 @@ Function Connect-NetExtender {
 		& "${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe" showstatus
 		Write-Host 'Try "Disconnect-NetExtender" or "Get-NetExtenderStatus"'
 	}
-<#
+	<#
 	.SYNOPSIS
 		Initiates an SSLVPN connection to a site using Sonicwall NetExtender
 	.PARAMETER DC
@@ -118,15 +120,18 @@ Function Connect-O365Exchange {
 		$ModVer = (Get-Command Connect-ExchangeOnline).Version
 		If ($ModVer) {
 			Write-Host "Exchange Online Management module version $ModVer has been installed."
-		} Else {
+		}
+		Else {
 			Write-Host "Exchange Online Management module failed to install."
 			Break
 		}
-	} Else {
+	}
+ Else {
 		If (-not $Quiet) {
 			$Readhost = 'N'
 			$Readhost = Read-Host "Do you want to check for module updates? This should be done periodically. n(y/N)"
-		} Else { $Readhost = 'Y' }
+		}
+		Else { $Readhost = 'Y' }
 		Switch ($ReadHost) {
 			Y {
 				$ModVer = (Get-Command Connect-ExchangeOnline).Version
@@ -142,7 +147,8 @@ Function Connect-O365Exchange {
 						Start-Process "cmd.exe" -ArgumentList $ArgumentList
 					}
 					Install-Module -Name ExchangeOnlineManagement -AllowClobber -Force
-				} Else {
+				}
+				Else {
 					Write-host "ExchangeOnlineManagement is already up to date at version $AvailableModVer."
 				}
 			}
@@ -201,15 +207,18 @@ Function Connect-O365Sharepoint {
 		$ModVer = (Get-Command Connect-SPOService).Version
 		If ($ModVer) {
 			Write-Host "Exchange Online Management module version $ModVer has been installed."
-		} Else {
+		}
+		Else {
 			Write-Host "Exchange Online Management module failed to install."
 			Break
 		}
-	} Else {
+	}
+ Else {
 		If (-not $Quiet) {
 			$Readhost = 'N'
 			$Readhost = Read-Host "Do you want to check for module updates? This should be done periodically. n(y/N)"
-		} Else { $Readhost = 'Y' }
+		}
+		Else { $Readhost = 'Y' }
 		Switch ($ReadHost) {
 	
 			Y {
@@ -219,7 +228,8 @@ Function Connect-O365Sharepoint {
 					Write-host "Microsoft.Online.SharePoint.PowerShell has an update from $ModVer to $AvailableModVer.nInstalling the update."
 					Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
 					Install-Module -Name Microsoft.Online.SharePoint.PowerShell -AllowClobber -Force
-				} Else {
+				}
+				Else {
 					Write-host "Microsoft.Online.SharePoint.PowerShell is already up to date at version $AvailableModVer."
 				}
 			}
@@ -236,7 +246,8 @@ Function Connect-O365Sharepoint {
 	If ($PSVersionTable.PSEdition -like "Desktop") {
 		Connect-SPOService -Url $url
 
-	} Else {
+	}
+ Else {
 		Write-Host -ForegroundColor Green -BackgroundColor DarkRed "Warning! You are using a CORE edition of Powershell. You will need to authenticate via a browser window."
 		Connect-SPOService -Url $url
 	}
@@ -266,10 +277,10 @@ Function Connect-O365Sharepoint {
 Function Connect-O365SharepointPNP {
 	param
 	(
-		[Parameter(Mandatory=$false)]
+		[Parameter(Mandatory = $false)]
 		[string]$url,
 
-		[Parameter(Mandatory=$False)]
+		[Parameter(Mandatory = $False)]
 		[switch]$Quiet
 	)
 	If (-not (Get-Command Connect-PnPOnline -ErrorAction SilentlyContinue)) {
@@ -279,17 +290,19 @@ Function Connect-O365SharepointPNP {
 		$ModVer = (Get-Command Connect-PnPOnline).Version
 		If ($ModVer) {
 			Write-Host "O365SharepointPNP module version $ModVer has been installed."
-		} Else {
-			Write-Host "O365SharepointPNP module failed to install."
-		Break
 		}
-	} Else {
+		Else {
+			Write-Host "O365SharepointPNP module failed to install."
+			Break
+		}
+	}
+ Else {
 		If (-not $Quiet) {
 			$Readhost = 'N'
 			$Readhost = Read-Host "Do you want to check for module updates? This should be done periodically. n(y/N)"
-		} Else {$Readhost = 'Y'}
-		Switch ($ReadHost)
-		{
+		}
+		Else { $Readhost = 'Y' }
+		Switch ($ReadHost) {
 			Y {
 				$ModVer = (Get-Command Connect-PnPOnline).Version
 				$AvailableModVer = (Find-Module PnP.PowerShell -Repository PSGallery).Version
@@ -297,7 +310,8 @@ Function Connect-O365SharepointPNP {
 					Write-host "PnP.PowerShell has an update from $ModVer to $AvailableModVer.nInstalling the update."
 					Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
 					Install-Module -Name PnP.PowerShell -AllowClobber -Force
-				} Else {
+				}
+				Else {
 					Write-host "PnP.PowerShell is already up to date at version $AvailableModVer."
 				}
 			}
@@ -313,7 +327,8 @@ Function Connect-O365SharepointPNP {
 
 	If ($PSVersionTable.PSEdition -like "Desktop") {
 		Connect-PnPOnline -Url $url -Interactive
-	} Else {
+	}
+ Else {
 		Write-Host -ForegroundColor Green -BackgroundColor DarkRed "Warning! You are using a CORE edition of Powershell. You will need to authenticate via a browser window."
 		Connect-PnPOnline -Url $url -Interactive
 	}
@@ -342,21 +357,21 @@ Function Connect-O365SharepointPNP {
 
 Function Connect-Wifi {
 	param
-		(
-			[Parameter(Mandatory=$False)]
-			[string]$NetworkSSID,
+	(
+		[Parameter(Mandatory = $False)]
+		[string]$NetworkSSID,
 
-			[Parameter(Mandatory=$true)]
-			[string]$NetworkPassword,
+		[Parameter(Mandatory = $true)]
+		[string]$NetworkPassword,
 
-			[ValidateSet('WEP','WPA','WPA2','WPA2PSK')]
-			[Parameter(Mandatory=$False)]
-			[string]$Authentication = 'WPA2PSK',
+		[ValidateSet('WEP', 'WPA', 'WPA2', 'WPA2PSK')]
+		[Parameter(Mandatory = $False)]
+		[string]$Authentication = 'WPA2PSK',
 
-			[ValidateSet('AES','TKIP')]
-			[Parameter(Mandatory=$False)]
-			[string]$Encryption = 'AES'
-		)
+		[ValidateSet('AES', 'TKIP')]
+		[Parameter(Mandatory = $False)]
+		[string]$Encryption = 'AES'
+	)
 
 	# Create the WiFi profile, set the profile to auto connect
 	$WirelessProfile = @'
@@ -407,7 +422,8 @@ Function Connect-Wifi {
 		Catch {
 			Remove-Item -Force $tempProfileXML
 		}
-	} Else {
+	}
+ Else {
 		Write-Host "Did not find SSID: $NetworkSSID `nConnection profile stored for later use."
 	}
 	Remove-Item -Force $tempProfileXML

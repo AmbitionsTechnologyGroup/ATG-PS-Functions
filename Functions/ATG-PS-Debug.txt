@@ -14,18 +14,21 @@ Function Debug-UmbrellaDNS {
 	$X86exe = $ENV:ProgramFiles + "\OpenDNS\Umbrella Roaming Client\UmbrellaDiagnostic.exe"
 	If (Test-Path $X64exe -ea SilentlyContinue) {
 		$UDexe = $X64exe
-	} ElseIf (Test-Path $X86exe -ea SilentlyContinue) {
+	}
+ ElseIf (Test-Path $X86exe -ea SilentlyContinue) {
 		$UDexe = $X86exe
-	} ElseIf (Get-Service csc_umbrellaagent) {
+	}
+ ElseIf (Get-Service csc_umbrellaagent) {
 		$CSCAgent = (Get-Service csc_umbrellaagent)
 		Write-Warning "The new $($CSCAgent.DisplayName) is installed and it is $($CSCAgent.Status).`nThis troubleshooting command does not apply."
 		Break
-	} Else {
+	}
+ Else {
 		Write-Warning "Umbrella Diagnostics do not appear to be installed."
 		Break
 	}
 	Write-Host "Here is the help file for UmbrellaDiagnostic.exe:"
-Write-Host @"
+	Write-Host @"
 
   -d, --domain=VALUE         A specific URL to target with tests (e.g.
 							   opendns.com)
@@ -48,10 +51,11 @@ If run without -o or -c arguments, -i is the default output; if run with -o or -
 
 "@
 	Write-Host "Recommend running with arguments '--silent --internet --console'.`nAdd --domain=<domain> to test internal or external targets.`n"
-	$Args = Read-Host "What arguments would you like to add? Just press enter if you wish to launch the window.`n"
-	If ($Args) {
-		Start-Process $UDexe -ArgumentList $Args
-	} Else {
+	$Arggs = Read-Host "What arguments would you like to add? Just press enter if you wish to launch the window.`n"
+	If ($Arggs) {
+		Start-Process $UDexe -ArgumentList $Arggs
+	}
+ Else {
 		Start-Process $UDexe
 	}
 }
@@ -64,20 +68,21 @@ Function Debug-SharedMailboxRestoreRequest {
 	$Stats = Get-MailboxRestoreRequest -Status "Failed" | Get-MailboxRestoreRequestStatistics -IncludeReport
 	Write-Host "$Stats.Name"
 	$stats.Report.Failures | Format-List FailureType, Message
-	$stats.Report.MailboxVerification | where { $_.DataConsistencyScore -ne "Perfect" } | Format-List TargetFolder, MissingItemsInTargetBucket
+	$stats.Report.MailboxVerification | Where-Object { $_.DataConsistencyScore -ne "Perfect" } | Format-List TargetFolder, MissingItemsInTargetBucket
 }
 
 Function Debug-ServerRebootScript {
-# All scripts and funtions are now run from ps.ambitionsgroup.com (github)
+	# All scripts and funtions are now run from ps.ambitionsgroup.com (github)
 	Write-Host "Checking Scheduled Task"
 	$Task = Get-ScheduledTask -TaskName "ATG*Scheduled*Server*Reboot*"
 	If ($Task) {
 		Write-Host -NoNewLine "Task State: $($Task.State)"
 		#$Task | Format-List State
-		$Task | Get-ScheduledTaskInfo | Format-List LastRunTime,LastTaskResult,NextRunTime
+		$Task | Get-ScheduledTaskInfo | Format-List LastRunTime, LastTaskResult, NextRunTime
 		If ($Task.Actions.Execute -eq 'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe') {
 			Write-Host -ForegroundColor Green "Scheduled Program Path looks correct."
-		} Else {
+		}
+		Else {
 			Write-Host -ForegroundColor Red "Scheduled Program looks incorrect."
 			Write-Host -ForegroundColor Yellow "$($Task.Actions.Execute)"
 			Write-Host -ForegroundColor Red "It should be `'C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe`'"
@@ -85,12 +90,14 @@ Function Debug-ServerRebootScript {
 
 		If ($Task.Actions.Arguments -eq '-ExecutionPolicy Bypass -NoProfile -File "C:\Ambitions\scripts\ServerReboots.ps1"') {
 			Write-Host -ForegroundColor Green "Scheduled Program arguments looks correct."
-		} Else {
+		}
+		Else {
 			Write-Host -ForegroundColor Red "Scheduled Program arguments looks incorrect."
 			Write-Host -ForegroundColor Yellow "$($Task.Actions.Arguments)"
 			Write-Host -ForegroundColor Red "It should be `'-ExecutionPolicy Bypass -NoProfile -File `"C:\Ambitions\scripts\ServerReboots.ps1`"`'"
 		}
-	} Else {
+	}
+ Else {
 		Write-Warning "Scheduled task does not exist!"
 	}
 	Pause
@@ -106,15 +113,16 @@ Function Debug-ServerRebootScript {
 	$ServerList = Get-Content -Path C:\Ambitions\Scripts\Server_Reboots.csv -ErrorAction SilentlyContinue | ConvertFrom-Csv
 	If (!($ServerList)) {
 		Write-Warning "Server List CSV File does not exist!"
-	} Else {
+	}
+ Else {
 		$ServerList | Format-Table
 		Pause
 		Write-Host -NoNewLine "`n - Retrieving Ambitions Server Reboot Script -"
 		$greenCheck = @{
-			Object = [Char]8730
+			Object          = [Char]8730
 			ForegroundColor = 'Green'
-			NoNewLine = $true
-			}
+			NoNewLine       = $true
+		}
 		$progressPreference = 'silentlyContinue'
 		[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192
 		Set-ExecutionPolicy Bypass -Scope Process -Force
@@ -131,10 +139,11 @@ Function Debug-UmbrellaProxiedDnsServer {
 		Write-Host "------------------------------------------------------------------`nProxied DNS servers:"
 		$Servers = Get-ChildItem -Path $OpenDnsPath -Filter "Resolver*.conf"
 		ForEach ($Server in $Servers) {
-			If ($Server -ne $Servers[-1]){
+			If ($Server -ne $Servers[-1]) {
 				$Server | Get-Content
 				Write-Host "########################"
-			} Else {
+			}
+			Else {
 				$Server | Get-Content
 			}
 		}
@@ -148,16 +157,19 @@ Function Debug-UmbrellaProxiedDnsServer {
 				$FQDN = $((Resolve-DnsName -Name $Server -Server $Server -DnsOnly -QuickTimeout -ErrorAction Stop).NameHost)
 				Write-Host -ForegroundColor Green "$Server is responsive. FQDN: $FQDN"
 				Clear-Variable FQDN -Force -ErrorAction SilentlyContinue
-			} Catch {
+			}
+			Catch {
 				Write-Host -ForegroundColor Red "$Server is unresponsive."
 			}
 		}
 		Write-Host "------------------------------------------------------------------`nExcluded IP / DNS values:"
 		Get-ChildItem -Path $OpenDnsPath -Filter "*list.txt" | Get-Content
-	} ElseIf (Get-Service csc_umbrellaagent) {
+	}
+ ElseIf (Get-Service csc_umbrellaagent) {
 		$CSCAgent = (Get-Service csc_umbrellaagent)
 		Write-Host "The new $($CSCAgent.DisplayName) is installed and it is $($CSCAgent.Status).`nThis troubleshooting command does not apply."
-	} Else {
+	}
+ Else {
 		Write-Host -ForegroundColor Red "Umbrella DNS client is NOT installed."
 	}
 }
