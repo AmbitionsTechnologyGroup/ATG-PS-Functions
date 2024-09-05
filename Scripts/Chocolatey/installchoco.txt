@@ -32,10 +32,12 @@ If ($DetectedSite.Choco) {
 	Write-Host "Install Ambitions Chocolatey Server"
 	#Remove stale ambitions source if it is no longer needed.
 	If (Get-Command choco -errorAction SilentlyContinue) {
-		$Sources = (choco source) ; If ($Sources -match "ACG-Choco - http://choco.ambitionsgroup.com:8081") { choco source remove -n=ACG-Choco }
+		$Sources = (choco source)
+		If ($Sources -match "ACG-Choco - http://choco.ambitionsgroup.com:8081") { choco source remove -n=ACG-Choco }
+		If ($Sources -match "ACG-Choco - https://choco.ambitionsgroup.com/repository/chocolatey-group/") { choco source remove -n=ACG-Choco }
 	}
 	$ChocoName = "ACG-Choco"
-	$packageRepo = 'https://choco.ambitionsgroup.com/repository/chocolatey-group/'
+	$packageRepo = 'https://choco.ambitionsgroup.com/nuget/chocolatey-group/'
 	$SourceAdd = "choco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=2"
 }
 
