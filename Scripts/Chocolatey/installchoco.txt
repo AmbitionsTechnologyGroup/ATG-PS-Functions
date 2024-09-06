@@ -41,7 +41,7 @@ If ($DetectedSite.Choco) {
 	$SourceAdd = "choco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=2"
 }
 
-If (Get-Command choco.exe -ErrorAction Stop) {
+If (Get-Command choco.exe -ErrorAction SilentlyContinue) {
 	#Custom
 	Invoke-Expression $SourceAdd
 	Choco Source Remove -n:chocolatey
