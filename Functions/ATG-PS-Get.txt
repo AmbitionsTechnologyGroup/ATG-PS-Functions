@@ -730,6 +730,97 @@ Function Get-PSWinGetUpdatablePackages {
 	Start-PSWinGet -Command 'Get-WinGetPackage | Where {$_.IsUpdateAvailable -eq $True}'
 }
 
+Function Get-RandomPassword {
+	# Function to get a random word from a list
+	function Get-RandomWord($wordList) {
+		return $wordList | Get-Random
+	}
+
+	# Function to replace a random character with a leet speak symbol
+	function Replace-WithLeetSpeak($word) {
+		$leetMap = @{
+			'a' = '@'; 'c' = '('; 'e' = '&'; 'i' = '!'; 'o' = '*'; 's' = '$'; 't' = '+';
+			'l' = '|'; 'z' = '%'; 'h' = '#'; 'x' = ')('; 'v' = '\/'
+		}
+		$chars = $word.ToCharArray()
+		$replaceable = $chars | Where-Object { $leetMap.ContainsKey($_.ToString().ToLower()) }
+
+		if ($replaceable.Count -gt 0) {
+			$replaceChar = $replaceable | Get-Random
+			$replaceIndex = [Array]::IndexOf($chars, $replaceChar)
+			$chars[$replaceIndex] = $leetMap[$replaceChar.ToString().ToLower()]
+		}
+
+		return -join $chars
+	}
+
+	# Lists of words (all between 4 and 7 characters long, without spaces)
+	$adjectives = @('happy', 'silly', 'funny', 'brave', 'clever', 'quiet', 'smart',
+					'strong', 'shiny', 'smooth', 'rough', 'sweet', 'clean', 'dirty', 'joyful',
+					'eager', 'proud', 'active', 'calm', 'daring', 'gentle', 'humble', 'kind',
+					'lively', 'merry', 'nice', 'polite', 'quick', 'shy', 'tough', 'witty',
+					'zesty', 'bold', 'bright', 'cheery', 'dapper', 'eager', 'fair', 'fine',
+					'fresh', 'grand', 'keen', 'neat', 'perky', 'prime', 'spry', 'super',
+					'swift', 'trim', 'zippy', 'alert', 'apt', 'brisk', 'chipper', 'dandy',
+					'deft', 'earthy', 'flash', 'game', 'gutsy', 'hardy', 'hip', 'peppy',
+					'plush', 'punchy', 'sassy', 'savvy', 'snappy', 'spunky', 'staunch',
+					'sturdy', 'sunny', 'upbeat', 'vivid', 'zappy', 'blithe', 'breezy',
+					'bubbly', 'chirpy', 'comfy', 'cool', 'crisp', 'cushy', 'cute', 'droll',
+					'fluffy', 'frisky', 'genial', 'giddy', 'giggly', 'groovy', 'hearty',
+					'jolly', 'jaunty', 'jazzy', 'keen', 'nifty', 'perky', 'plucky', 'primo',
+					'spiffy', 'sporty', 'spruce', 'stellar', 'swank', 'swell', 'tidy')
+
+	$animals = @('rabbit', 'turtle', 'panda', 'lion', 'tiger', 'monkey', 'koala', 'horse', 'sheep',
+				'zebra', 'jaguar', 'camel', 'coyote', 'donkey', 'hyena', 'iguana', 'jackal',
+				'lemur', 'llama', 'lynx', 'otter', 'sloth', 'tapir', 'toucan', 'walrus', 'weasel',
+				'alpaca', 'beagle', 'bison', 'cicada', 'dingo', 'falcon', 'gecko', 'gopher',
+				'ibex', 'impala', 'kiwi', 'liger', 'mole', 'newt', 'puffin', 'quail', 'raven',
+				'seal', 'shark', 'skunk', 'swan', 'viper', 'wasp', 'wolf', 'bass', 'bear',
+				'bull', 'carp', 'clam', 'crab', 'crow', 'deer', 'dove', 'duck', 'eel', 'elk',
+				'emu', 'flea', 'fowl', 'frog', 'goat', 'hare', 'hawk', 'heron', 'lark', 'mink',
+				'moth', 'mule', 'owl', 'pike', 'pony', 'rat', 'sole', 'stag', 'stork', 'swift',
+				'teal', 'trout', 'wren', 'calf', 'chick', 'cod', 'colt', 'doe', 'fawn', 'lamb',
+				'hound', 'finch', 'toad', 'mole', 'snail', 'boar', 'hare')
+
+	# Generate password components
+	$adjective = Get-RandomWord $adjectives
+	$animal = Get-RandomWord $animals
+	$number = Get-Random -Minimum 10 -Maximum 100
+
+	# Apply transformations
+	$wordToLeet = Get-Random -InputObject @($adjective)
+	$wordToCapitalize = if ($wordToLeet -eq $adjective) { $animal } else { $adjective }
+
+	$leetWord = Replace-WithLeetSpeak $wordToLeet
+	if ($leetWord -notmatch '[!@#$%^&*()_+\-=\[\]{};:''",.<>?/]') {
+		$specialChars = '!@#$%^&*()_+-=[]{}|;:,.<>?/'
+		$leetWord += $specialChars[(Get-Random -Maximum $specialChars.Length)]
+	}
+	$capitalizedWord = (Get-Culture).TextInfo.ToTitleCase($wordToCapitalize)
+
+	# Construct the password
+	$password = "$leetWord$capitalizedWord$number"
+
+	# Ensure password is at least 10 characters long
+	while ($password.Length -lt 10) {
+		$extraChar = Get-Random -InputObject @('!', '@', '#', '$', '%', '&', '*', '?')
+		$password += $extraChar
+	}
+
+	# Output the generated password
+	Write-Host "$password"
+
+	# Offer to copy the password to the clipboard
+	$copyToClipboard = Read-Host "Do you want to copy the password to the clipboard? (Y/n)"
+
+	if ($copyToClipboard -eq '' -or $copyToClipboard -eq 'y' -or $copyToClipboard -eq 'Y') {
+		$password | Set-Clipboard
+		Write-Host "Password copied to clipboard."
+	} else {
+		Write-Host "Password not copied to clipboard."
+	}
+}
+
 Function Get-SharedMailboxRestoreRequest {
 	Get-MailboxRestoreRequest | Get-MailboxRestoreRequestStatistics -IncludeReport | FT TargetAlias, Status, StatusDetail, PercentComplete, DataConsistencyScore -AutoSize
 	<#
