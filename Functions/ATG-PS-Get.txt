@@ -740,7 +740,7 @@ Function Get-RandomPassword {
 	function Replace-WithLeetSpeak($word) {
 		$leetMap = @{
 			'a' = '@'; 'c' = '('; 'e' = '&'; 'i' = '!'; 'o' = '*'; 's' = '$'; 't' = '+';
-			'l' = '|'; 'z' = '%'; 'h' = '#'; 'x' = ')('; 'v' = '\/'
+			'l' = '|'; 'z' = '%'; 'h' = '#'; 'x' = ')('; 'v' = '\/'; 'j' = ']'; 'f' = '='; 'k' = '<'
 		}
 		$chars = $word.ToCharArray()
 		$replaceable = $chars | Where-Object { $leetMap.ContainsKey($_.ToString().ToLower()) }
@@ -776,10 +776,10 @@ Function Get-RandomPassword {
 				'alpaca', 'beagle', 'bison', 'cicada', 'dingo', 'falcon', 'gecko', 'gopher',
 				'ibex', 'impala', 'kiwi', 'liger', 'mole', 'newt', 'puffin', 'quail', 'raven',
 				'seal', 'shark', 'skunk', 'swan', 'viper', 'wasp', 'wolf', 'bass', 'bear',
-				'bull', 'carp', 'clam', 'crab', 'crow', 'deer', 'dove', 'duck', 'eel', 'elk',
-				'emu', 'flea', 'fowl', 'frog', 'goat', 'hare', 'hawk', 'heron', 'lark', 'mink',
-				'moth', 'mule', 'owl', 'pike', 'pony', 'rat', 'sole', 'stag', 'stork', 'swift',
-				'teal', 'trout', 'wren', 'calf', 'chick', 'cod', 'colt', 'doe', 'fawn', 'lamb',
+				'bull', 'carp', 'clam', 'crab', 'crow', 'deer', 'dove', 'duck', 'apple', 'buffalo',
+				'raccoon', 'flea', 'fowl', 'frog', 'goat', 'hare', 'hawk', 'heron', 'lark', 'mink',
+				'moth', 'mule', 'reptile', 'pike', 'pony', 'hippo', 'sole', 'stag', 'stork', 'swift',
+				'teal', 'trout', 'wren', 'calf', 'chick', 'dugong', 'colt', 'kitten', 'fawn', 'lamb',
 				'hound', 'finch', 'toad', 'mole', 'snail', 'boar', 'hare')
 
 	# Generate password components
