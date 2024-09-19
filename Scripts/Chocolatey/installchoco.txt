@@ -57,10 +57,11 @@ If (Get-Command choco.exe -ErrorAction SilentlyContinue) {
 		Get-Command choco.exe -ErrorAction Stop
 	}
 	catch {
-		Register-PSRepository -Name ACGNexus -SourceLocation https://choco.ambitionsgroup.com/repository/chocolatey-group/ -PublishLocation https://choco.ambitionsgroup.com/repository/chocolatey-group/ -PackageManagementProvider nuget -InstallationPolicy Trusted
-		Install-Package chocolatey -Source ACGNexus
-		& (Get-ChildItem -Path $Env:LOCALAPPDATA -Recurse | Where-Object { $_.Name -match "Install-Chocolatey.ps1" }).PSPath
-		Get-PSRepository -Name ACGNexus | Unregister-PSRepository
+		Register-PSRepository -Name ACGProGet -SourceLocation https://choco.ambitionsgroup.com/nuget/chocolatey-group/ -PublishLocation https://choco.ambitionsgroup.com/nuget/chocolatey-group/ -PackageManagementProvider nuget -InstallationPolicy Trusted
+		Save-Package chocolatey -Source ACGProGet -Path "$Env:SystemDrive\Ambitions\Chocolatey" -Force
+		& (Get-ChildItem -Path "$Env:SystemDrive\Ambitions\Chocolatey" -Recurse | Where-Object { $_.Name -match "Install-Chocolatey.ps1" }).PSPath
+		Get-PSRepository -Name ACGProGet | Unregister-PSRepository
+		Remove-Item -path "$Env:SystemDrive\Ambitions\Chocolatey" -Recurse -Force
 		Get-Command choco.exe -ErrorAction Stop
 	}
 	finally {
