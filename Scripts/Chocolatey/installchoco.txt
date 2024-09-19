@@ -59,7 +59,9 @@ If (Get-Command choco.exe -ErrorAction SilentlyContinue) {
 	}
 	catch {
 		Write-Host "Attempting to use nuget to install chocolatey."
-		Register-PSRepository -Name ACGProGet -SourceLocation https://choco.ambitionsgroup.com/nuget/chocolatey-group/ -PublishLocation https://choco.ambitionsgroup.com/nuget/chocolatey-group/ -PackageManagementProvider nuget -InstallationPolicy Trusted
+		if (-not (Get-PSRepository -Name ACGProGet -ErrorAction SilentlyContinue)) {
+			Register-PSRepository -Name ACGProGet -SourceLocation https://choco.ambitionsgroup.com/nuget/chocolatey-group/ -PublishLocation https://choco.ambitionsgroup.com/nuget/chocolatey-group/ -PackageManagementProvider nuget -InstallationPolicy Trusted
+		}
 		Save-Package chocolatey -Source ACGProGet -Path "$Env:SystemDrive\Ambitions\Chocolatey" -Force
 		& (Get-ChildItem -Path "$Env:SystemDrive\Ambitions\Chocolatey" -Recurse -Force | Where-Object { $_.Name -match "chocolateyinstall.ps1" }).PSPath
 		Get-PSRepository -Name ACGProGet | Unregister-PSRepository
