@@ -14,7 +14,7 @@ If ($DetectedSite.Choco) {
 	$DetectedTitle = $DetectedSite.Site
 	[string]$packageRepo = $DetectedSite.Choco
 
-	if ($packageRepo -eq $null -or $packageRepo -eq '') {
+	if ($null -eq $packageRepo -or '' -eq $packageRepo) {
 		Write-Host "Install Ambitions Chocolatey Server"
 		$ChocoName = "ACG-Choco"
 		$packageRepo = 'https://choco.ambitionsgroup.com/nuget/chocolatey-group/'
@@ -53,18 +53,21 @@ If (Get-Command choco.exe -ErrorAction SilentlyContinue) {
 } else {
 
 	try {
+		Write-Host "Attempting to use winget to install chocolatey."
 		winget install --id chocolatey.chocolatey --source winget -h --accept-package-agreements --accept-source-agreements
 		Get-Command choco.exe -ErrorAction Stop
 	}
 	catch {
+		Write-Host "Attempting to use nuget to install chocolatey."
 		Register-PSRepository -Name ACGProGet -SourceLocation https://choco.ambitionsgroup.com/nuget/chocolatey-group/ -PublishLocation https://choco.ambitionsgroup.com/nuget/chocolatey-group/ -PackageManagementProvider nuget -InstallationPolicy Trusted
 		Save-Package chocolatey -Source ACGProGet -Path "$Env:SystemDrive\Ambitions\Chocolatey" -Force
-		& (Get-ChildItem -Path "$Env:SystemDrive\Ambitions\Chocolatey" -Recurse | Where-Object { $_.Name -match "Install-Chocolatey.ps1" }).PSPath
+		& (Get-ChildItem -Path "$Env:SystemDrive\Ambitions\Chocolatey" -Recurse -Force | Where-Object { $_.Name -match "chocolateyinstall.ps1" }).PSPath
 		Get-PSRepository -Name ACGProGet | Unregister-PSRepository
 		Remove-Item -path "$Env:SystemDrive\Ambitions\Chocolatey" -Recurse -Force
 		Get-Command choco.exe -ErrorAction Stop
 	}
 	finally {
+		Write-Host "Attempting to use chocolatey's script to install chocolatey."
 		#$packageRepo = 'http://choco.ambitionsgroup.com:8081/repository/chocolatey-group/'
 
 		# If the above $packageRepo repository requires authentication, add the username and password here. Otherwise these leave these as empty strings.
@@ -119,7 +122,7 @@ If (Get-Command choco.exe -ErrorAction SilentlyContinue) {
 		}
 		#Get the latest and store it as the search url.
 		$searchUrl = ($SearchResults | Sort-Object { [version]$_.Version } -Descending | Select-Object -First 1).id
-		$searchUrl
+		$searchUrl = (Invoke-RestMethod -Uri $Searchurl -UseBasicParsing).entry.content.src
 
 		# Reroute TEMP to a local location
 		New-Item $env:ALLUSERSPROFILE\choco-cache -ItemType Directory -Force
@@ -136,7 +139,7 @@ If (Get-Command choco.exe -ErrorAction SilentlyContinue) {
 		# position is not what FileStream expected. Do not use a handle
 		# simultaneously in one FileStream and in Win32 code or another
 		# FileStream."
-		function Fix-PowerShellOutputRedirectionBug {
+		function Repair-PowerShellOutputRedirectionBug {
 			$poshMajorVerion = $PSVersionTable.PSVersion.Major
 
 			if ($poshMajorVerion -lt 4) {
@@ -160,7 +163,7 @@ If (Get-Command choco.exe -ErrorAction SilentlyContinue) {
 			}
 		}
 
-		Fix-PowerShellOutputRedirectionBug
+		Repair-PowerShellOutputRedirectionBug
 
 		# Attempt to set highest encryption available for SecurityProtocol.
 		# PowerShell will not set this by default (until maybe .NET 4.6.x). This
@@ -203,10 +206,10 @@ If (Get-Command choco.exe -ErrorAction SilentlyContinue) {
 				$explicitProxy = $env:chocolateyProxyLocation
 				$explicitProxyUser = $env:chocolateyProxyUser
 				$explicitProxyPassword = $env:chocolateyProxyPassword
-				if ($explicitProxy -ne $null -and $explicitProxy -ne '') {
+				if ($null -ne $explicitProxy  -and $explicitProxy -ne '') {
 					# explicit proxy
 					$proxy = New-Object System.Net.WebProxy($explicitProxy, $true)
-					if ($explicitProxyPassword -ne $null -and $explicitProxyPassword -ne '') {
+					if ($null -ne $explicitProxyPassword -and $explicitProxyPassword -ne '') {
 						$passwd = ConvertTo-SecureString $explicitProxyPassword -AsPlainText -Force
 						$proxy.Credentials = New-Object System.Management.Automation.PSCredential ($explicitProxyUser, $passwd)
 					}
