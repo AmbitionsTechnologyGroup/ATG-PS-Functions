@@ -17,7 +17,7 @@ If ($DetectedSite.Choco) {
 	if ($packageRepo -eq $null -or $packageRepo -eq '') {
 		Write-Host "Install Ambitions Chocolatey Server"
 		$ChocoName = "ACG-Choco"
-		$packageRepo = 'https://choco.ambitionsgroup.com/repository/chocolatey-group/'
+		$packageRepo = 'https://choco.ambitionsgroup.com/nuget/chocolatey-group/'
 	} else {
 		Write-Host "Install local Chocolatey Server"
 		$ChocoName = $DetectedCode + "-Choco"
@@ -106,8 +106,20 @@ If (Get-Command choco.exe -ErrorAction SilentlyContinue) {
 			$securePassword = ConvertTo-SecureString $repoPassword -AsPlainText -Force
 			$repoCreds = New-Object System.Management.Automation.PSCredential ($repoUsername, $securePassword)
 		}
-
-		$searchUrl = ($packageRepo.Trim('/'), "FindPackagesById()?id='chocolatey'&IsLatestVersion='True'") -join '/'
+		# Isolate the latest version
+		$searchUrl = ($packageRepo.Trim('/'), "FindPackagesById()?id='chocolatey'") -join '/'
+		$SearchResults = Invoke-RestMethod -Uri $Searchurl -UseBasicParsing
+		#Isolate the version number from each result and add it as sortable attribue
+		$SearchResults| ForEach-Object {
+			$_ | Add-Member -MemberType NoteProperty -Name Version -Value ([regex]::Match($_.id, "Version='([^']+)'").Groups[1].Value)
+		}
+		#Filter out non-standard versions such as betas and release candidates.
+		$SearchResults = $SearchResults | Where-Object {
+			$_.Version -match '^\d+(\.\d+){0,3}$'
+		}
+		#Get the latest and store it as the search url.
+		$searchUrl = ($SearchResults | Sort-Object { [version]$_.Version } -Descending | Select-Object -First 1).id
+		$searchUrl
 
 		# Reroute TEMP to a local location
 		New-Item $env:ALLUSERSPROFILE\choco-cache -ItemType Directory -Force
