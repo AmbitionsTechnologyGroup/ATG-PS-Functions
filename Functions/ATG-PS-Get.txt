@@ -731,6 +731,11 @@ Function Get-PSWinGetUpdatablePackages {
 }
 
 Function Get-RandomPassword {
+	[CmdletBinding()]
+	param(
+		[switch]$silent
+	)
+
 	# Function to get a random word from a list
 	function Get-RandomWord($wordList) {
 		return $wordList | Get-Random
@@ -807,17 +812,21 @@ Function Get-RandomPassword {
 		$password += $extraChar
 	}
 
-	# Output the generated password
-	Write-Host "$password"
+	if (!$silent) {
+		# Output the generated password
+		Write-Host "$password"
 
-	# Offer to copy the password to the clipboard
-	$copyToClipboard = Read-Host "Do you want to copy the password to the clipboard? (Y/n)"
+		# Offer to copy the password to the clipboard
+		$copyToClipboard = Read-Host "Do you want to copy the password to the clipboard? (Y/n)"
 
-	if ($copyToClipboard -eq '' -or $copyToClipboard -eq 'y' -or $copyToClipboard -eq 'Y') {
-		$password | Set-Clipboard
-		Write-Host "Password copied to clipboard."
+		if ($copyToClipboard -eq '' -or $copyToClipboard -eq 'y' -or $copyToClipboard -eq 'Y') {
+			$password | Set-Clipboard
+			Write-Host "Password copied to clipboard."
+		} else {
+			Write-Host "Password not copied to clipboard."
+		}
 	} else {
-		Write-Host "Password not copied to clipboard."
+		return $password
 	}
 }
 
