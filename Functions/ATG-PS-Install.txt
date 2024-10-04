@@ -227,10 +227,12 @@ Function Install-UmbrellaDns {
 			Install-UmbrellaDNSasJob
 		}
 	}
-	Wait-Job -Id $job.id -Force
-	Receive-Job -Id $job.id
-	Remove-Job -Id $Job.id
+	Start-Sleep -Seconds 60
+	Get-Job | Wait-Job
+	Get-Job | Receive-Job
+	Get-Job | Remove-Job
 }
+
 Function Install-UmbrellaDNSasJob {
 	<#
 	.Synopsis
