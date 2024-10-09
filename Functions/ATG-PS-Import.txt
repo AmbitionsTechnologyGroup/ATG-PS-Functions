@@ -634,7 +634,7 @@ Function Import-WindowsInstallerDrivers {
 															 
   
 
-	Write-Host "Downloading drivers from Dell"
+	#Write-Host "Downloading drivers from Dell"
 	$DellUrls = @(
 	#"https://dl.dell.com/FOLDER08107340M/4/Intel-Rapid-Storage-Technology-Driver-and-Application_0F5G4_WIN64_19.2.0.1003_A01_03.EXE"
 	#"https://dl.dell.com/FOLDER09445327M/3/Intel-Rapid-Storage-Technology-Driver-and-Application_88DXV_WIN64_18.7.6.1010_A05.EXE"
@@ -657,12 +657,12 @@ Function Import-WindowsInstallerDrivers {
 	$UpdateURLs = @(
 		#"https://catalog.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/d73b698e-6d66-4f6d-942e-6a980db92d07/public/windows11.0-kb5023778-x64_204c2f5ab1eb71d80eb470b5af079dd8e56c20e7.msu"
 	)
-	Write-Host "Check out https://learn.microsoft.com/en-us/windows/release-health/windows11-release-information for latest CU updates."
+	Write-Host "Make sure you're aware of which version of Windows you're working with, i.e. ""Windows 11 24H2 x64"".`nHead to https://www.catalog.update.microsoft.com/Search.aspx `nDo a search for that version + ""Cumulative x64""`ni.e. Windows 11 24H2 Cumulative x64.`nIdentify the lasted and download it."
 	$UpdateURLs | ForEach-Object {
 		Get-FileDownload -URL $_ -SaveToFolder $UpdatesDir
 	}
 
-	Write-Host -NoNewLine "Automatic downloads complete. Please add any manual drivers to $WorkingDirectory `nPress any key to continue...";
+	Write-Host -NoNewLine "Automatic downloads complete.`nPlease add any manual drivers to $DriversDir`nPlease add the latest Windows cumulative update to $UpdatesDir`nPress any key to continue...";
 	$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
 
 	#Get USB drive BOOT WIM
