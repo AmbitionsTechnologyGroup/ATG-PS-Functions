@@ -678,7 +678,7 @@ Function Import-WindowsInstallerDrivers {
 
 	
 	#Move Boot File from USB to local Computer
-	Write-Host "Copying Boot.wim to local computer for processing"
+	Write-Host "`n`nCopying Boot.wim to local computer for processing"
 	$WIMBootWorkingFile = $WIMBootDir + "\boot.wim"
 	Write-Host "Copy-Item -Path $BootWimPath -Destination $WIMBootWorkingFile -Force"
 	Copy-Item -Path $BootWimPath -Destination $WIMBootWorkingFile -Force
