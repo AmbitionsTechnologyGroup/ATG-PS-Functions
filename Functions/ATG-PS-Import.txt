@@ -657,12 +657,12 @@ Function Import-WindowsInstallerDrivers {
 	$UpdateURLs = @(
 		#"https://catalog.sf.dl.delivery.mp.microsoft.com/filestreamingservice/files/d73b698e-6d66-4f6d-942e-6a980db92d07/public/windows11.0-kb5023778-x64_204c2f5ab1eb71d80eb470b5af079dd8e56c20e7.msu"
 	)
-	Write-Host -ForegroundColor Yellow "DOWNLOADS NEEDED`n - Make sure you're aware of which version of Windows you're working with, i.e. ""Windows 11 24H2 x64"".`n - Head to https://www.catalog.update.microsoft.com/Search.aspx `nDo a search for that version + ""Cumulative x64""`ni.e. Windows 11 24H2 Cumulative x64.`nIdentify the lated and download it."
+	Write-Host -ForegroundColor Yellow "DOWNLOADS NEEDED`n - Make sure you're aware of which version of Windows you're working with, i.e. ""Windows 11 24H2 x64"".`n - Head to https://www.catalog.update.microsoft.com/Search.aspx `n - Do a search for that version + ""Cumulative x64"" i.e. Windows 11 24H2 Cumulative x64.`n - Identify the latest and download it."
 	$UpdateURLs | ForEach-Object {
 		Get-FileDownload -URL $_ -SaveToFolder $UpdatesDir
 	}
 
-	Write-Host -NoNewLine "Please add any manual drivers to $DriversDir`nPlease add the latest Windows cumulative update to $UpdatesDirIm`nPress any key to continue...";
+	Write-Host -NoNewLine "Please add any manual drivers to $DriversDir`nPlease add the latest Windows cumulative update to $UpdatesDir`nPress any key to continue...";
 	$null = $Host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown');
 
 	#Get USB drive BOOT WIM
