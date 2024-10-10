@@ -87,7 +87,7 @@ param (
 #Apps to keep. Wildcard is implied so try to be specific enough to not overlap with apps you do want removed.
 #Make sure not begin or end with a "|". ex: "app|app2" - good. "|app|app2|" - bad.
 
-$GoodApps =	"Dell|WindowsTerminal|WavesAudio|store|calculator|camera|sticky|store|windows.photos|soundrecorder|mspaint|microsoft.paint|windowsnotepad|screensketch|Microsoft.HEIFImageExtension|Microsoft.WindowsNotepad|Microsoft.HEVCVideoExtension|Microsoft.VP9VideoExtensions|Microsoft.WebMediaExtensions|Microsoft.WebpImageExtension|Extension|Microsoft.YourPhone|Microsoft.MicrosoftEdge|Alarms"
+$GoodApps =	"AppUp.IntelOptaneMemoryandStorageManagement|AppUp.IntelGraphicsExperience|Windows.PrintDialog|NotepadPlusPlus|MicrosoftWindows.Client|MicrosoftCorporationII.QuickAssist|Microsoft.Winget.Source|Microsoft.WindowsAppRuntime|Microsoft.Windows.PrintQueueActionCenter|Microsoft.Win32WebViewHost|Microsoft.Todos|Microsoft.CredDialogHost|Dell|WindowsTerminal|WavesAudio|store|calculator|camera|sticky|store|windows.photos|soundrecorder|mspaint|microsoft.paint|windowsnotepad|screensketch|Microsoft.HEIFImageExtension|Microsoft.WindowsNotepad|Microsoft.HEVCVideoExtension|Microsoft.VP9VideoExtensions|Microsoft.WebMediaExtensions|Microsoft.WebpImageExtension|Extension|Microsoft.YourPhone|Microsoft.MicrosoftEdge|Alarms"
 
 #Start Menu XML. If you run the script without -ClearStart, the XML below will be used for a custom start layout. By default it just leaves File Explorer, classic Control Panel, and Snipping Tool tiles.
 #Place your XML like so:
