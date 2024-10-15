@@ -194,6 +194,8 @@ $FoldersToClean = @(
 	(Join-Path -Path $Env:SystemRoot -ChildPath "SoftwareDistribution\DataStore\Logs")
 	(Join-Path -Path $Env:SystemRoot -ChildPath "Logs\WindowsUpdate")
 	(Join-Path -Path $Env:ProgramData -ChildPath "USOShared\Logs")
+	(Join-Path -Path $Env:ProgramData -ChildPath "\Microsoft\Windows\WER\ReportArchive")
+	(Join-Path -Path $Env:ProgramData -ChildPath "\Microsoft\Windows\WER\ReportQueue")
 	(Join-Path -Path $LocalAppData -ChildPath "Temp") ## Deletes all files and folders in user's Temp folder.
 	(Join-Path -Path $Env:SystemDrive -ChildPath "Temp")
 	(Join-Path -Path $LocalAppData -ChildPath "Microsoft\Windows\Temporary Internet Files") ## Remove all files and folders in user's Temporary Internet Files.
@@ -502,9 +504,6 @@ $FoldersToDeDuplicate | ForEach-Object {
 
 #$PostReqCommandsToRun = @(
 	Get-Service -Name wuauserv | Start-Service -Verbose #Starts Windows Update.
-	If ((Get-Service -Name Umbrella_RC ) -or (Get-Service -Name csc_umbrellaagent )) {
-		Install-UmbrellaDns
-	}
 #)
 
 $PostClean = Get-CimInstance -ClassName Win32_LogicalDisk | Where-Object -Property DriveType -EQ 3 | Where-Object -Property DeviceID -EQ $Env:SystemDrive | Select-Object -Property @{ Name = 'Drive'; Expression = { ($PSItem.DeviceID) } },
