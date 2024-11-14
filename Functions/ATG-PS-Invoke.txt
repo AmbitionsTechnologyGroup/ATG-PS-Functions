@@ -689,6 +689,28 @@ Function Invoke-NDDCScan {
 	$title = $env:userdomain + ': Automated NDDC Upload Notification'
 	$color = '808080'
 
+Write-Host "Checking for NDDC Utility"
+	[version]$ModVer = (Get-Module -ListAvailable -Name Posh-SSH).Version
+	[version]$AvailableModVer = (Find-Module Posh-SSH -Repository PSGallery).Version
+	If ($ModVer -ne $AvailableModVer) {
+		Write-host "Posh-SSH has an update from $ModVer to $AvailableModVer.`nInstalling the update."
+		Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+		Install-PackageProvider -Name NuGet -Force
+		Remove-Module -Name Posh-SSH -Force -ErrorAction SilentlyContinue
+		Uninstall-Module -Name Posh-SSH -AllVersions -Force -ErrorAction SilentlyContinue
+		If (Get-Module -Name Posh-SSH -ListAvailable) {
+			$ModPath = (Get-Module -Name Posh-SSH -ListAvailable).ModuleBase
+			$ArgumentList = '/C "taskkill /IM powershell.exe /F & rd /s /q "' + $ModPath + '" & start powershell -NoExit -ExecutionPolicy Bypass -Command "irm ps.acgs.io|iex ; Invoke-NDDCScan"'
+			Remove-PathForcefully -Path $ModPath
+			If (Get-Item -Path $ModPath -ErrorAction SilentlyContinue) {
+				Start-Process "cmd.exe" -ArgumentList $ArgumentList
+			}
+		}
+		Install-Module -Name Posh-SSH -AllowClobber -Force
+	}	Else {
+		Write-host "Posh-SSH is already up to date at version $AvailableModVer."
+	}
+
 Write-Host "Downloading the NDDC Utility"
 	$NddcURL = "https://s3.amazonaws.com/networkdetective/download/NetworkDetectiveDataCollector.exe"
 	$NddcFolder = $ENV:SystemDrive + '\Ambitions\NddcAuto'
@@ -730,15 +752,6 @@ Write-Host "Running NDDC"
 	& $Nddcexe -file $RunNdpFile
 	Clear-Content -Path $RunNdpFile -Force
 	$ExportedFile = $($outputfolder + "\" + $nddcountbase + ".ndf")
-
-Write-Host;Write-Host -NoNewLine "Preparing for connection to nddc.ambitionsgroup.com | "
-	If (Get-Module -ListAvailable -Name Posh-SSH) {
-		Write-Host @greenCheck;Write-Host " SSH already enabled"
-	} Else {
-		Write-Host "Enabling SSH"
-		Install-PackageProvider -Name NuGet -MinimumVersion 3.0.0.1 -Force -ErrorAction SilentlyContinue
-		Install-Module -Name Posh-SSH -AllowClobber -Confirm:$False -Force
-	}
 
 # Check for credentials
 	$SshKeyPath = $ENV:SystemDrive + '\Ambitions\.ssh\nddc.id_rsa'
