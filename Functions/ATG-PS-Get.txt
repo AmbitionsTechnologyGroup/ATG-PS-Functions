@@ -223,6 +223,18 @@ Function Get-BitLockerKey {
 	#>
 }
 
+function Get-ComputerEntraStatus {
+    $joinStatus = dsregcmd.exe /status
+    $statusObject = @{
+        EntraIDJoined = $joinStatus | Select-String "AzureAdJoined : YES" -Quiet
+        WorkplaceJoined = $joinStatus | Select-String "WorkplaceJoined : YES" -Quiet
+        DomainJoined = $joinStatus | Select-String "DomainJoined : YES" -Quiet
+        TenantName = ($joinStatus | Select-String "TenantName :(.*)").Matches.Groups[1].Value.Trim()
+        TenantId = ($joinStatus | Select-String "TenantId :(.*)").Matches.Groups[1].Value.Trim()
+    }
+    return [PSCustomObject]$statusObject
+}
+
 Function Global:Get-DellWarranty {
 	Param(
 		[Switch] $Brand,
