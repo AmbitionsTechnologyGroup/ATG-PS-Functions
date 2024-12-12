@@ -38,7 +38,10 @@ If ($DetectedSite.Choco) {
 	}
 	$ChocoName = "ACG-Choco"
 	$packageRepo = 'https://choco.ambitionsgroup.com/nuget/chocolatey-group/'
-	$SourceAdd = "choco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=2"
+	$SourceAdd = @()
+	$SourceAdd += "choco source add -n=" + $ChocoName + " -s=" + $packageRepo + " --priority=2"
+	$SourceAdd += "choco source add -n=openmw -s=`"https://repo.openmw.org/repository/Chocolatey/`" --priority=10"
+	$SourceAdd += "choco source add -n=chocolatey -s=`"https://chocolatey.org/api/v2`" --priority=100"
 }
 
 If (Get-Command choco.exe -ErrorAction SilentlyContinue) {
