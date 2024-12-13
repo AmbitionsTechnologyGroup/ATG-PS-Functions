@@ -46,8 +46,7 @@ If ($DetectedSite.Choco) {
 
 If (Get-Command choco.exe -ErrorAction SilentlyContinue) {
 	#Custom
-	Invoke-Expression $SourceAdd
-	Choco Source Remove -n:chocolatey
+	$SourceAdd | ForEach-Object {Invoke-Expression -Command $_}
 	#Update Chocolatey if Needed
 	If (Get-Command choco -errorAction SilentlyContinue) {
 		choco upgrade chocolatey -y
