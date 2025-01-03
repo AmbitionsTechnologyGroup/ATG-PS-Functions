@@ -40,7 +40,7 @@ Function Install-NetExtender {
 
 	If ($App) {
 		$Name = $App.Name
-		Write-Host "$Name is already installed. Pleas uninstall and reboot before attempting a fresh install."
+		Write-Host "$Name is already installed. Please uninstall and reboot before attempting a fresh install."
 	} Else {
 		Write-Host "Downloading & Installing NetExtender"
 		If (Get-Command winget -ErrorAction SilentlyContinue) {
