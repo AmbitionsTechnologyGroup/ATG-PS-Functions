@@ -35,7 +35,7 @@
 		#Enables latest version of TLS
 		[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192
 		$date = Get-Date -Format g
-		$uri = "$([System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String("aHR0cHM6Ly9hbWJpdGlvbnNncm91cC53ZWJob29rLm9mZmljZS5jb20vd2ViaG9va2IyLzg5N2QyYjRjLTUwYzYtNDljYi1hNjk0LTUwZTNjNzI2NWJkY0BjZjRiZGQwNi1iMDNkLTRiYWYtODU2NS0xMjY1NDY5YTg3NGYvSW5jb21pbmdXZWJob29rLzg0Nzg4YjBlOTI2ZDRjYWM4YTlkMDM0ZDFjM2YzZTFkLzA0ZDMzMjQ3LWVlNzItNDFhZi1hNWFlLTFjNDI4MTI2MjQ0MQ==")))"
+		$uri = "$([System.Text.Encoding]::ASCII.GetString([System.Convert]::FromBase64String("aHR0cHM6Ly9hbWJpdGlvbnNncm91cC53ZWJob29rLm9mZmljZS5jb20vd2ViaG9va2IyLzg5N2QyYjRjLTUwYzYtNDljYi1hNjk0LTUwZTNjNzI2NWJkY0BjZjRiZGQwNi1iMDNkLTRiYWYtODU2NS0xMjY1NDY5YTg3NGYvSW5jb21pbmdXZWJob29rL2FiYzRmZmY5NzhmNDQ4MWFhOGFmMmQ4NzIyMTFmZWI1LzA0ZDMzMjQ3LWVlNzItNDFhZi1hNWFlLTFjNDI4MTI2MjQ0MS8wMDAxaVV6aS1oTE42SFBKLXdRSGR1R21HbkFUUkVjY0MzQXN4X19PM2NlRldjczE=")))"
 
 		$body = ConvertTo-Json -Depth 4 @{
 			themeColor = $color
