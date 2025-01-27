@@ -148,6 +148,148 @@ Function Export-365DistributionGroup {
 	}
 }
 
+Function Export-UnifiDevicesToItGlue {
+	<#
+.SYNOPSIS
+	Exports Unifi device information to a CSV file formatted for ITGlue import.
+
+.DESCRIPTION
+	This function retrieves device information from a Unifi controller via the UI.com API
+	and formats it for ITGlue import. It includes device details such as name, model,
+	IP address, MAC address, installation date, and warranty information.
+
+.PARAMETER ApiKey
+	The API key for accessing the UI.com API. If not provided, the user will be 
+	directed to retrieve it from ITGlue.
+
+.EXAMPLE
+	Export-UnifiDevicesToItGlue -ApiKey "YourApiKeyHere"
+
+.EXAMPLE
+	Export-UnifiDevicesToItGlue
+
+.NOTES
+	Author: [Your Name]
+	Last Modified: 2024-01-27
+	Requires: PowerShell 5.1 or later
+#>
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory=$false)]
+		[string]$ApiKey
+	)
+
+	# If API key is not provided, guide user to retrieve it
+	if (-not $ApiKey) {
+		Write-Host "Please retrieve the API key from: https://ambitions.itglue.com/806129/passwords/29782233"
+		$ApiKey = Read-Host -Prompt "Enter your UI.com API key"
+	}
+
+	# Set up API headers with authentication
+	$Headers = @{
+		'X-API-KEY' = $ApiKey
+	}
+
+	# Retrieve list of Unifi controllers
+	try {
+		$Hosts = (Invoke-RestMethod -Uri 'https://api.ui.com/ea/hosts' -Method Get -Headers $Headers).data
+	}
+	catch {
+		Write-Error "Failed to retrieve hosts: $_"
+		return
+	}
+
+	# Display available controllers in numbered format
+	$HostsList = $Hosts | Select-Object `
+		@{Name = 'Index'; Expression = {[array]::IndexOf($Hosts, $_) + 1}},`
+		@{Name = 'Name' ; Expression = {$_.ReportedState.HostName}},`
+		@{Name = 'Model'; Expression = {$_.ReportedState.hardware.name}},`
+		@{Name = 'IP Address'; Expression = {$_.ipAddress}},`
+		@{Name = 'id'; Expression = {$_.id}}
+
+	# Display the numbered list
+	$HostsList | Format-Table
+
+	# Get user selection by number and convert to ID
+	do {
+		$Selection = Read-Host -Prompt "Enter the number of the controller to use (1-$($HostsList.Count))"
+		if ($Selection -match '^\d+$' -and [int]$Selection -ge 1 -and [int]$Selection -le $HostsList.Count) {
+			$GetID = $HostsList[$Selection - 1].id
+			break
+		} else {
+			Write-Host "Invalid selection. Please enter a number between 1 and $($HostsList.Count)"
+		}
+	} while ($true)
+
+	# Construct URI for device retrieval
+	$GetDevicesUri = 'https://api.ui.com/ea/devices?hostIds[]=' + $GetID
+
+	# Retrieve devices from specified controller
+	try {
+		$UIDevices = (Invoke-RestMethod -Uri $GetDevicesUri -Method Get -Headers $Headers).Data.devices
+	}
+	catch {
+		Write-Error "Failed to retrieve devices: $_"
+		return
+	}
+
+	#Show how many devices found.
+	Write-Host "$($UIDevices.Count) found."
+	
+	# Find console device name for reference
+	$Console = ($UIDevices | Where-Object -Property isConsole -eq True).Name
+
+	# Get organization name from user
+	$OrganizationName = Read-Host -Prompt "Enter the exact Organization Name from ITGlue for device $Console"
+
+	# Format device data for ITGlue import 
+	$ITGlueExport = $UIDevices | Select-Object `
+		@{Name = 'Organization'; Expression = {$OrganizationName}},`
+		@{Name = 'Name'; Expression = {$_.name}},`
+		@{Name = 'configuration_type'; Expression = {'Network Device'}},`
+		@{Name = 'configuration_status'; Expression = {
+			if ($_.status -eq 'online') {'Active'}
+			else {'Inactive'}
+		}},`
+		@{Name = 'primary_ip'; Expression = {$_.ip}},`
+		@{Name = 'mac_address'; Expression = {$_.mac}},`
+		@{Name = 'serial_number'; Expression = {$_.id}},`
+		@{Name = 'manufacturer'; Expression = {'Unifi'}},`
+		@{Name = 'model'; Expression = {$_.model}},`
+		@{Name = 'installed_at'; Expression = {Get-Date $_.adoptionTime -Format "yyyy-MM-dd"}},`
+		@{Name = 'warranty_expires_at'; Expression = {Get-Date ((Get-Date $_.adoptionTime).AddYears(1)) -Format "yyyy-MM-dd"}}
+
+	# Generate default file name
+	$DefaultFileName = "Unifi-ITGlue-$OrganizationName-export.csv"
+
+	# Prompt for save folder
+	$SaveFolder = Read-Host -Prompt "Enter folder path to save file"
+
+	# Check if input includes a filename
+	if ($SaveFolder -match '\.[^\.]+$') {
+	   # Full path with filename was provided
+	   $SavePath = $SaveFolder
+	} else {
+	   # Only folder path provided, append default filename
+	   $SavePath = Join-Path -Path $SaveFolder -ChildPath $DefaultFileName
+	}
+
+	# Ensure directory exists
+	$Directory = Split-Path -Path $SavePath -Parent
+	if (-not (Test-Path -Path $Directory)) {
+	   New-Item -ItemType Directory -Path $Directory -Force | Out-Null
+	}
+
+	# Export to CSV
+	try {
+	   $ITGlueExport | ConvertTo-Csv -Delimiter "," | Out-File -Path $SavePath
+	   Write-Host "Export completed successfully to: $SavePath"
+	}
+	catch {
+	   Write-Error "Failed to export CSV: $_"
+	}
+}
+
 Function Export-UsersOneDrive {
 	param
 	(
