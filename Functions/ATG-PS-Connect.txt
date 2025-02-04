@@ -64,47 +64,66 @@ Function Connect-NetExtender {
 	(
 		[Parameter(Mandatory = $False)]
 		[string]$DC,
-
 		[Parameter(Mandatory = $true)]
 		[string]$VPNuri,
-
 		[Parameter(Mandatory = $true)]
 		[string]$VPNuser,
-
 		[Parameter(Mandatory = $true)]
 		[string]$VPNpassword,
-
 		[Parameter(Mandatory = $true)]
 		[string]$VPNdomain
 	)
 
+	# Define possible paths
+	$possiblePaths = @(
+		"${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe"
+		"${env:ProgramFiles(x86)}\SonicWall\SSL-VPN\NetExtender\nxcli.exe"
+		"${env:ProgramFiles}\SonicWall\SSL-VPN\NetExtender\nxcli.exe"
+	)
+
+	# Find the first valid path
+	$NEPath = $possiblePaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -Last 1
+
 	If (([string]::IsNullOrWhiteSpace($DC)) -or (-not (Test-Connection -comp $DC -quiet))) {
-		If (!(Test-Path -LiteralPath "${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe")) {
+		If (!$NEPath) {
 			Install-NetExtender
+			# After installation, check paths again
+			$NEPath = $possiblePaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -Last 1
+			if (!$NEPath) {
+				Write-Error "NetExtender executable not found after installation"
+				return
+			}
 		}
+
 		Write-host "Initiating VPN connection"
-		echo y | & "${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe" connect -s $VPNuri -u $VPNuser -p $VPNpassword -d $VPNdomain
-		Write-Host ""
-		& "${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe" showstatus
+		If ($NEPath -match "NEClI.exe") { #Older version
+			echo y | & "$NEPath" connect -s $VPNuri -u $VPNuser -p $VPNpassword -d $VPNdomain
+			Write-Host ""
+			Get-NetExtenderStatus
+		} elseif ($NEPath -match "nxcli.exe") { #Newer version
+			echo T | & "$NEPath" connect -s $VPNuri -u $VPNuser -p $VPNpassword -d $VPNdomain
+			Write-Host ""
+			Get-NetExtenderStatus
+		}
 		Write-Host 'Try "Disconnect-NetExtender" or "Get-NetExtenderStatus"'
 	}
 	<#
 	.SYNOPSIS
-		Initiates an SSLVPN connection to a site using Sonicwall NetExtender
+	Initiates an SSLVPN connection to a site using Sonicwall NetExtender
 	.PARAMETER DC
-		(Optional) A domain controller whose connection to can be tested to see if the vpn connection is needed. Example -DC "tsdc"
+	(Optional) A domain controller whose connection to can be tested to see if the vpn connection is needed. Example -DC "tsdc"
 	.PARAMETER VPNuri
-		The connection URL and port. Example -VPNuri "vpn.ambitinsgroup.com:4433"
+	The connection URL and port. Example -VPNuri "vpn.ambitinsgroup.com:4433"
 	.PARAMETER VPNuser
-		The vpn enable user to be used. Example -VPNuser "vpnuser"
+	The vpn enable user to be used. Example -VPNuser "vpnuser"
 	.PARAMETER VPNpassword
-		The vpn user's password to be used. Example -VPNpassword "s0m3Gr3@tPw"
+	The vpn user's password to be used. Example -VPNpassword "s0m3Gr3@tPw"
 	.PARAMETER VPNdomain
-		The SSLVPN domain to be used, found in the sonicwall settings. Example -VPNdomain "LocalDomain"
+	The SSLVPN domain to be used, found in the sonicwall settings. Example -VPNdomain "LocalDomain"
 	.EXAMPLE
-		Connect-NetExtender -DC "TSDC" -VPNuri "vpn.ts.com:4433" -VPNuser "tsadmin" -VPNpassword "R@nD0m!" -VPNdomain "LocalDomain"
-		This example connects to the client Test Site, if such a client were to exist.
-#>
+	Connect-NetExtender -DC "TSDC" -VPNuri "vpn.ts.com:4433" -VPNuser "tsadmin" -VPNpassword "R@nD0m!" -VPNdomain "LocalDomain"
+	This example connects to the client Test Site, if such a client were to exist.
+	#>
 }
 
 Function Connect-O365Exchange {

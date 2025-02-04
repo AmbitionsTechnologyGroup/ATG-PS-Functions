@@ -8,26 +8,34 @@ Function Disconnect-AllUsers {
 		}
 	}
 	
-	Function Disconnect-NetExtender {
+Function Disconnect-NetExtender {
+
+    # Define the possible paths where NetExtender can exist.
+    $possiblePaths = @(
+        "${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe"
+        "${env:ProgramFiles(x86)}\SonicWall\SSL-VPN\NetExtender\nxcli.exe"
+        "${env:ProgramFiles}\SonicWall\SSL-VPN\NetExtender\nxcli.exe"
+    )
 	
-			If (!(Test-Path -LiteralPath "${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe")) {
-				Write-Host "This command only works if you have Sonicwall NetExtender installed."
-			}
-			Write-host "Initiating VPN disconnection"
-			& "${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe" disconnect
-			& "${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe" disconnect
-			Write-Host ""
-			& "${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe" showstatus
-			Write-Host 'Try "Connect-NetExtender" or "Get-NetExtenderStatus"'
-	
-	<#
-		.SYNOPSIS
-			Disconnects an existing SSLVPN connection to a site using Sonicwall NetExtender
-		.EXAMPLE
-			Disconnect-NetExtender
-			This example disconnects from the VPN session.
-	#>
-	}
+    $NEPath = $possiblePaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -Last 1
+
+    If (!(Test-Path -LiteralPath $NEPath)) {
+        Write-Host "This command only works if you have Sonicwall NetExtender installed."
+    }
+    Write-host "Initiating VPN disconnection"
+    & $NEPath disconnect
+    & $NEPath disconnect
+    Write-Host ""
+    Get-NetExtenderStatus
+
+<#
+.SYNOPSIS
+    Disconnects an existing SSLVPN connection to a site using Sonicwall NetExtender
+.EXAMPLE
+    Disconnect-NetExtender
+    This example disconnects from the VPN session.
+#>
+}
 	
 	Function Disconnect-O365Exchange {
 		Disconnect-ExchangeOnline -Confirm:$false

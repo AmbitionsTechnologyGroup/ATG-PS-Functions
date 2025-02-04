@@ -224,40 +224,40 @@ Function Get-BitLockerKey {
 }
 
 function Get-ComputerEntraStatus {
-    # Capture the command output as an array of strings
-    # The @() ensures we always get an array, even if there's only one line
-    $joinStatus = @(dsregcmd.exe /status)
-    
-    # Initialize our status object with default values
-    $statusObject = @{
-        EntraIDJoined = $false
-        WorkplaceJoined = $false
-        DomainJoined = $false
-        TenantName = ""
-        TenantId = ""
-    }
+	# Capture the command output as an array of strings
+	# The @() ensures we always get an array, even if there's only one line
+	$joinStatus = @(dsregcmd.exe /status)
+	
+	# Initialize our status object with default values
+	$statusObject = @{
+		EntraIDJoined = $false
+		WorkplaceJoined = $false
+		DomainJoined = $false
+		TenantName = ""
+		TenantId = ""
+	}
 
-    # Only process if we actually got output
-    if ($joinStatus) {
-        # Check each property using safer pattern matching
-        $statusObject.EntraIDJoined = ($joinStatus | Where-Object { $_ -match "AzureAdJoined\s+:\s+YES" }).Length -gt 0
-        $statusObject.WorkplaceJoined = ($joinStatus | Where-Object { $_ -match "WorkplaceJoined\s+:\s+YES" }).Length -gt 0
-        $statusObject.DomainJoined = ($joinStatus | Where-Object { $_ -match "DomainJoined\s+:\s+YES" }).Length -gt 0
-        
-        # Extract tenant information more safely
-        $tenantNameLine = $joinStatus | Where-Object { $_ -match "TenantName\s+:\s+(.+)" }
-        if ($tenantNameLine) {
-            $statusObject.TenantName = $matches[1].Trim()
-        }
-        
-        $tenantIdLine = $joinStatus | Where-Object { $_ -match "TenantId\s+:\s+(.+)" }
-        if ($tenantIdLine) {
-            $statusObject.TenantId = $matches[1].Trim()
-        }
-    }
-    
-    # Convert to a proper PowerShell object and return
-    return [PSCustomObject]$statusObject
+	# Only process if we actually got output
+	if ($joinStatus) {
+		# Check each property using safer pattern matching
+		$statusObject.EntraIDJoined = ($joinStatus | Where-Object { $_ -match "AzureAdJoined\s+:\s+YES" }).Length -gt 0
+		$statusObject.WorkplaceJoined = ($joinStatus | Where-Object { $_ -match "WorkplaceJoined\s+:\s+YES" }).Length -gt 0
+		$statusObject.DomainJoined = ($joinStatus | Where-Object { $_ -match "DomainJoined\s+:\s+YES" }).Length -gt 0
+		
+		# Extract tenant information more safely
+		$tenantNameLine = $joinStatus | Where-Object { $_ -match "TenantName\s+:\s+(.+)" }
+		if ($tenantNameLine) {
+			$statusObject.TenantName = $matches[1].Trim()
+		}
+		
+		$tenantIdLine = $joinStatus | Where-Object { $_ -match "TenantId\s+:\s+(.+)" }
+		if ($tenantIdLine) {
+			$statusObject.TenantId = $matches[1].Trim()
+		}
+	}
+	
+	# Convert to a proper PowerShell object and return
+	return [PSCustomObject]$statusObject
 }
 
 Function Global:Get-DellWarranty {
@@ -749,20 +749,33 @@ Function Get-LoginHistory {
 
 Function Get-NetExtenderStatus {
 
-	If (!(Test-Path -LiteralPath "${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe")) {
-		Write-Host "This command only works if you have Sonicwall NetExtender installed."
+	# Definte the possible paths where NetExtender can exist.
+	$possiblePaths = @(
+		"${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NECli.exe"
+		"${env:ProgramFiles(x86)}\SonicWall\SSL-VPN\NetExtender\nxcli.exe"
+		"${env:ProgramFiles}\SonicWall\SSL-VPN\NetExtender\nxcli.exe"
+	)
+
+	$NEPath = $possiblePaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -Last 1
+
+	If (!(Test-Path -LiteralPath $NEpath)) {
+	Write-Host "This command only works if you have Sonicwall NetExtender installed."
 	}
-	& "${env:ProgramFiles(x86)}\SonicWALL\SSL-VPN\NetExtender\NEClI.exe" showstatus
-	Write-Host 'Try "Connect-NetExtender" or "Disconnect-NetExtender"'
-
-<#
-.SYNOPSIS
+	If ($NEPath -match "NECli.exe") { #Older version
+		& $NEPath showstatus
+		} elseif ($NEPath -match "nxcli.exe") { #Newer version
+		& $NEPath status
+		}
+		Write-Host 'Try "Connect-NetExtender" or "Disconnect-NetExtender"'
+	
+	<#
+	.SYNOPSIS
 	Displays the connection status of Sonicwall NetExtender
-.EXAMPLE
+	.EXAMPLE
 	Get-NetExtenderStatus
-#>
-}
-
+	#>
+	}
+	
 Function Get-PSWinGetUpdatablePackages {
 	Start-PSWinGet -Command 'Get-WinGetPackage | Where {$_.IsUpdateAvailable -eq $True}'
 }
