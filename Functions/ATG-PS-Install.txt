@@ -12,6 +12,7 @@ Function Install-Choco {
 	Set-ExecutionPolicy Bypass -Scope Process -Force
 	Enable-SSL
 	Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Chocolatey/installchoco.txt -UseBasicParsing | Invoke-Expression
+	Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Chocolatey/installchoco.txt -UseBasicParsing | Invoke-Expression
 }
 
 Function Install-ITS247Agent {
