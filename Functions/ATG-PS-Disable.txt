@@ -46,6 +46,18 @@ Function Disable-Sleep {
 	& C:\ProgramData\chocolatey\lib\dontsleep.portable\tools\DontSleep_x64_p.exe -bg please_sleep_mode=0 enable=1
 }
 
+Function Disable-SleepOnAC {
+	<#
+.Synopsis
+    Function to adjust the windows power plan to prevent a computer from going to sleep. Ever.
+	Still allows the monitor to sleep to prevent burnin.
+#>
+
+	# Prevent sleep when plugged in (AC)
+	powercfg /change standby-timeout-ac 0
+	powercfg /change hibernate-timeout-ac 0
+}
+
 
 # SIG # Begin signature block
 # MIIF0AYJKoZIhvcNAQcCoIIFwTCCBb0CAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
