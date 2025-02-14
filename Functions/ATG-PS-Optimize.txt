@@ -1,5 +1,7 @@
 Function Optimize-Powershell {
-	Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+	If ((Get-ExecutionPolicy -Scope CurrentUser) -ne 'RemoteSigned') {
+    	Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+	}
 	$Commands = @()
 		$Commands = @'
 		Function Get-HorizontalLine {
