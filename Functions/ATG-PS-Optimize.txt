@@ -28,55 +28,66 @@ Function Optimize-Powershell {
 				Write-Host ($InputString * $repetitions) + $InputString.Substring(0,$remainder) @ColorSplat 
 			}
 		}
+		# Custom prompt function
 		Function prompt {
-				$date = Get-Date
-				$time = $date.GetDateTimeFormats()[10]
-				$curdir = $ExecutionContext.SessionState.Path.CurrentLocation #.Path.Split('\')[-1]
-				If ($curdir.Length -eq 0) {$curdir = $ExecutionContext.SessionState.Drive.Current.Name+':\'}
-				Get-HorizontalLine -ForeColor Blue
-				Write-Host ''$env:USERNAME'@'$env:COMPUTERNAME' |' -NoNewLine -BackgroundColor Black -ForegroundColor Yellow
-				Write-Host ' DIR:'$curdir' |' -NoNewLine -BackgroundColor Black -ForegroundColor Yellow
-				Write-Host ''$time' ' -BackgroundColor Black -ForegroundColor Yellow
-				'[Command]: '
-			}
-			If ((Get-PSRepository -Name "PSGallery").InstallationPolicy -eq "Untrusted") {
-				Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted -ErrorAction SilentlyContinue
-			}
-			If (!(Get-Module -Name AdvancedHistory -ListAvailable)) {
-				Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue
-				Install-Module AdvancedHistory -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-			}
-				Import-Module AdvancedHistory -Force
-				Try {
-					Enable-AdvancedHistory -Unique
-				} Catch {
-					#Oh well
-				}
-
-			If (!(Get-Module -Name PSReadline -ListAvailable)) {
-				If ($Providers -NotContains "Nuget") {
-					Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.208 -Force -ErrorAction SilentlyContinue
-				}
-				Install-Module PSReadline -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-			}
-				Import-Module PSReadline -Force
-				Try {
-					Set-PSReadLineOption -PredictionSource HistoryAndPlugin -ErrorAction Stop
-				} Catch {
-					Try {
-						Set-PSReadLineOption -PredictionSource History
-					} Catch {
-						Set-PSReadLineOption -PredictionSource None
-					}
-				}
-
-				iex(iwr ps.acgs.io -useb)
-			If ($PSScriptRoot -notlike "C:\Program Files (x86)\ITSPlatform\tmp\scripting\*") {
-				Expand-Terminal
-			} Else {
-				#This is running from Continuum!
-			}
-'@
+		    $curdir = $ExecutionContext.SessionState.Path.CurrentLocation
+		    if ($curdir.Path.Length -eq 0) {
+		        $curdir = "$($ExecutionContext.SessionState.Drive.Current.Name):\"
+		    }
+		    
+		    Get-HorizontalLine -ForeColor Blue
+		    Write-Host "$env:USERNAME/$env:COMPUTERNAME" -NoNewLine -BackgroundColor Black -ForegroundColor DarkCyan
+			Write-Host " | " -NoNewLine -BackgroundColor Black -ForegroundColor Gray
+			Write-Host "$(Get-Date -Format 'yyyy-MM-dd') $((Get-Date).ToString("HH:mm:ss")) " -NoNewLine -BackgroundColor Black -ForegroundColor Magenta
+			Write-Host " | " -NoNewLine -BackgroundColor Black -ForegroundColor Gray
+			Write-Host "DIR: $($curdir.Path)" -BackgroundColor Black -ForegroundColor DarkYellow
+		    "[Command]: "
+		}
+		
+		# Module installation and configuration
+		$ErrorActionPreference = 'SilentlyContinue'
+		
+		# Configure PSGallery
+		if ((Get-PSRepository -Name "PSGallery").InstallationPolicy -eq "Untrusted") {
+		    Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted
+		}
+		
+		# Install and configure AdvancedHistory
+		if (!(Get-Module -Name AdvancedHistory -ListAvailable)) {
+		    Install-Module AdvancedHistory -Force -AllowClobber
+		}
+		Import-Module AdvancedHistory -Force
+		try {
+		    Enable-AdvancedHistory -Unique
+		} catch {}
+		
+		# Install and configure PSReadline
+		if (!(Get-Module -Name PSReadline -ListAvailable)) {
+		    if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+		        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.208 -Force
+		    }
+		    Install-Module PSReadline -Force -AllowClobber
+		}
+		Import-Module PSReadline -Force
+		
+		# Configure PSReadLine prediction source
+		try {
+		    Set-PSReadLineOption -PredictionSource HistoryAndPlugin
+		} catch {
+		    try {
+		        Set-PSReadLineOption -PredictionSource History
+		    } catch {
+		        Set-PSReadLineOption -PredictionSource None
+		    }
+		}
+		
+		# Execute additional configurations
+		irm ps.acgs.io | iex
+		
+		if ($PSScriptRoot -notlike "C:\Program Files (x86)\ITSPlatform\tmp\scripting\*") {
+		    Expand-Terminal
+		}
+'@.
 
 	$WinVer = [System.Environment]::OSVersion.Version.Major
 
