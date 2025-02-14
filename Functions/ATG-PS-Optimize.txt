@@ -35,12 +35,12 @@ Function Optimize-Powershell {
 		        $curdir = "$($ExecutionContext.SessionState.Drive.Current.Name):\"
 		    }
 		    
-		    Get-HorizontalLine -ForeColor Blue
+		    Get-HorizontalLine -ForeColor Cyan
 		    Write-Host "$env:USERNAME/$env:COMPUTERNAME" -NoNewLine -BackgroundColor Black -ForegroundColor DarkCyan
-			Write-Host " | " -NoNewLine -BackgroundColor Black -ForegroundColor Gray
+			Write-Host " | " -NoNewLine -BackgroundColor Black -ForegroundColor Red
 			Write-Host "$(Get-Date -Format 'yyyy-MM-dd') $((Get-Date).ToString("HH:mm:ss")) " -NoNewLine -BackgroundColor Black -ForegroundColor Magenta
-			Write-Host " | " -NoNewLine -BackgroundColor Black -ForegroundColor Gray
-			Write-Host "DIR: $($curdir.Path)" -BackgroundColor Black -ForegroundColor DarkYellow
+			Write-Host " | " -NoNewLine -BackgroundColor Black -ForegroundColor Red
+			Write-Host "DIR: $($curdir.Path)" -BackgroundColor Black -ForegroundColor Yellow
 		    "[Command]: "
 		}
 		
@@ -87,7 +87,7 @@ Function Optimize-Powershell {
 		if ($PSScriptRoot -notlike "C:\Program Files (x86)\ITSPlatform\tmp\scripting\*") {
 		    Expand-Terminal
 		}
-'@.
+'@
 
 	$WinVer = [System.Environment]::OSVersion.Version.Major
 
