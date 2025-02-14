@@ -38,6 +38,7 @@ Function Optimize-Powershell {
 		    }
 		    
 		    Get-HorizontalLine -ForeColor Cyan
+			Write-Host "| " -NoNewLine -BackgroundColor Black -ForegroundColor Red
 		    Write-Host "$env:USERNAME/$env:COMPUTERNAME" -NoNewLine -BackgroundColor Black -ForegroundColor DarkCyan
 			Write-Host " | " -NoNewLine -BackgroundColor Black -ForegroundColor Red
 			Write-Host "$(Get-Date -Format 'yyyy-MM-dd') $((Get-Date).ToString("HH:mm:ss"))" -NoNewLine -BackgroundColor Black -ForegroundColor Magenta
