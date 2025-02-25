@@ -44,7 +44,7 @@ Function Format-ComputerFleetReport {
     - Valid warranties with more than a year remaining: Green background
     - Systems with no warranty information: Blue background
     
-    Author: ASIO IT Team
+    Author: Ryan C Shoemaker
     Last Updated: February 2025
 #>
     [CmdletBinding()]
