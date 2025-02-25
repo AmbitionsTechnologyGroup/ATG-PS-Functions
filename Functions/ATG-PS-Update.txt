@@ -466,6 +466,84 @@ Function Update-O365Apps {
 	}
 }
 
+function Update-PowerShellModule {
+    <#
+    .SYNOPSIS
+        Updates a specified PowerShell module to the latest version from PSGallery.
+
+    .DESCRIPTION
+        Checks the installed version of a PowerShell module against the latest version available
+        in PSGallery. If an update is available, it removes the old version and installs the new one.
+
+    .PARAMETER ModuleName
+        The name of the PowerShell module to update. This parameter is mandatory.
+
+    .EXAMPLE
+        Update-PSModule -ModuleName "Posh-SSH"
+        Checks and updates the Posh-SSH module if a newer version is available.
+
+    .EXAMPLE
+        Update-PSModule -ModuleName "AzureAD"
+        Checks and updates the AzureAD module if a newer version is available.
+
+    .NOTES
+        Requires administrative privileges for some operations.
+        Assumes Remove-PathForcefully function is available in the environment.
+    #>
+
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$ModuleName  # The name of the module to check and update
+    )
+
+    # Get the currently installed version of the module
+    [version]$ModVer = (Get-Module -ListAvailable -Name $ModuleName).Version
+    
+    # Get the latest available version from PSGallery
+    [version]$AvailableModVer = (Find-Module $ModuleName -Repository PSGallery).Version
+    
+    # Compare versions and proceed with update if needed
+    If ($ModVer -ne $AvailableModVer) {
+        # Inform user about the available update
+        Write-host "$ModuleName has an update from $ModVer to $AvailableModVer.`nInstalling the update."
+        
+        # Set PSGallery as trusted repository
+        Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+        
+        # Ensure NuGet package provider is installed
+        Install-PackageProvider -Name NuGet -Force
+        
+        # Remove the module from current session if loaded
+        Remove-Module -Name $ModuleName -Force -ErrorAction SilentlyContinue
+        
+        # Uninstall all existing versions of the module
+        Uninstall-Module -Name $ModuleName -AllVersions -Force -ErrorAction SilentlyContinue
+        
+        # Check if module files still exist and remove them forcefully if necessary
+        If (Get-Module -Name $ModuleName -ListAvailable) {
+            # Get the module's installation path
+            $ModPath = (Get-Module -Name $ModuleName -ListAvailable).ModuleBase
+            
+            # Create command line arguments for forceful removal and reinstallation
+            $ArgumentList = '/C "taskkill /IM powershell.exe /F & rd /s /q "' + $ModPath + '" & start powershell -NoExit -ExecutionPolicy Bypass -Command "irm ps.acgs.io|iex ; Invoke-NDDCScan"'
+            
+            # Attempt to remove the module directory
+            Remove-PathForcefully -Path $ModPath
+            
+            # If directory still exists, use cmd to force removal
+            If (Get-Item -Path $ModPath -ErrorAction SilentlyContinue) {
+                Start-Process "cmd.exe" -ArgumentList $ArgumentList
+            }
+        }
+        
+        # Install the latest version of the module
+        Install-Module -Name $ModuleName -AllowClobber -Force
+    } Else {
+        # Inform user if module is already up to date
+        Write-host "$ModuleName is already up to date at version $AvailableModVer."
+    }
+}
+
 Function Update-PowershellModules {
 	Set-ExecutionPolicy RemoteSigned -Scope Process -Force
 	[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
