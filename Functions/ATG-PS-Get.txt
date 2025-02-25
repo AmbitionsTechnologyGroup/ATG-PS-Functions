@@ -261,11 +261,70 @@ function Get-ComputerEntraStatus {
 }
 
 Function Global:Get-DellWarranty {
+<#
+.SYNOPSIS
+    Retrieves warranty information for Dell systems using the Dell API.
+
+.DESCRIPTION
+    This function queries the Dell API to retrieve warranty information for one or more Dell systems
+    identified by their Service Tags. It can process the local system's Service Tag, a provided list
+    of Service Tags, or Service Tags pasted by the user.
+
+.PARAMETER Brand
+    Currently not used, reserved for future functionality.
+
+.PARAMETER Local
+    Switch to use the local system's Service Tag. This is the default if no ServiceTags are provided.
+
+.PARAMETER ServiceTags
+    An array of Service Tags to query. Can be passed from the pipeline.
+
+.PARAMETER Paste
+    Prompts the user to paste a list of Service Tags, one per line.
+
+.PARAMETER Show
+    Displays the results in a formatted table.
+
+.PARAMETER CopyToClipBoard
+    Copies the results to the clipboard in a tab-delimited format.
+
+.PARAMETER ReturnObject
+    Returns the results as a PowerShell object that can be stored in a variable for further processing.
+
+.EXAMPLE
+    Get-DellWarranty -Local -Show
+    Queries the warranty information for the local system and displays the results.
+
+.EXAMPLE
+    Get-DellWarranty -ServiceTags "1234ABC","5678DEF" -CopyToClipBoard
+    Queries warranty information for the specified Service Tags and copies the results to the clipboard.
+
+.EXAMPLE
+    Get-DellWarranty -Paste -Show
+    Prompts the user to paste a list of Service Tags and displays the results.
+
+.EXAMPLE
+    $warrantyInfo = Get-DellWarranty -ServiceTags "1234ABC" -ReturnObject
+    Queries warranty information for the specified Service Tag and stores the results in the $warrantyInfo variable.
+
+.NOTES
+    Requires Dell API credentials to be stored in:
+    - $env:appdata\Microsoft\Windows\PowerShell\DellKey.txt
+    - $env:appdata\Microsoft\Windows\PowerShell\DellSec.txt
+
+    For more information on setting up Dell API credentials, refer to:
+    https://ambitions.itglue.com/806129/docs/10204492
+#>
 	Param(
+		# Currently not used, reserved for future functionality
 		[Switch] $Brand,
+
+		# Use the local system's Service Tag
 		[Parameter(ParameterSetName = "seta",
 			Position = 0)]
 		[Switch] $Local,
+
+		# Array of Service Tags to query
 		[Parameter(
 			ParameterSetName = "setb",
 			Mandatory = $false,
@@ -273,12 +332,22 @@ Function Global:Get-DellWarranty {
 			ValueFromPipeline = $true,
 			Position = 1)]
 		[String[]] $ServiceTags,
+
+		# Prompt user to paste a list of Service Tags
 		[Parameter(ParameterSetName = "setc")]
 		[Switch] $Paste,
+
+		# Display results in a formatted table
 		[Switch] $Show,
-		[Switch] $CopyToClipBoard
+
+		# Copy results to clipboard
+		[Switch] $CopyToClipBoard,
+
+		# Return results as a PowerShell object
+		[Switch] $ReturnObject
 	)
-	#$ServiceTags = $Null
+
+	# Check for required API credentials
 	If ((Test-Path "$env:appdata\Microsoft\Windows\PowerShell\DellKey.txt") -ne $true) {
 		Write-Host "Authentication Needed. Please refer to https://ambitions.itglue.com/806129/docs/10204492" -ForegroundColor White -BackgroundColor Red
 		Break
@@ -287,69 +356,93 @@ Function Global:Get-DellWarranty {
 		Write-Host "Authentication Needed. Please refer to https://ambitions.itglue.com/806129/docs/10204492" -ForegroundColor White -BackgroundColor Red
 		Break
 	}
+
+	# Initialize result array
 	$FinalObj = @()
+
+	# Determine which Service Tags to process
 	If (-not $ServiceTags) {
 		If ($Paste) {
+			# Prompt user to paste Service Tags
 			Write-Host -ForegroundColor Yellow "Paste or enter a list of service tags, one per line.`n`nIf copying from Excel: After you paste here, click into Excel then press ESC a couple of times.`nThen press enter 2x to continue:"
 			$ServiceTags = @()
 			While ($a = read-host) {
 				$ServiceTags += $a
 			}
-			#$ServiceTags = @($List.split("``n"))
 			$Local = $False
 		}
 		Else {
+			# Default to local system if no Service Tags provided
 			$Local = $True
 		}
 	}
 
+	# Get local system's Service Tag if specified
 	If ($Local) {
 		$ServiceTags = ((Get-WmiObject -Class "Win32_Bios").SerialNumber)
 	}
+
 	Write-Host "Getting Warranties for $($ServiceTags.Count) Service Tag(s)."
+
+	# Process each Service Tag
 	Foreach ($ServiceTag in $ServiceTags) {
+		# Show processing status if requested
 		If ($Show) { Write-Host "Processing $ServiceTag" }
-		#If ($ServiceTag -eq $(Get-WmiObject -Class "Win32_Bios").SerialNumber) { $Show = $true }
+
+		# Get API credentials
 		$ApiKey = Get-Content "$env:appdata\Microsoft\Windows\PowerShell\DellKey.txt"
 		$ApiSecret = Get-Content "$env:appdata\Microsoft\Windows\PowerShell\DellSec.txt"
+
+		# Set TLS 1.2 for API security
 		[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+		# Authenticate to Dell API
 		$Auth = Invoke-WebRequest $('https://apigtwb2c.us.dell.com/auth/oauth/v2/token?client_id=' + ${ApiKey} + '&client_secret=' + ${ApiSecret} + '&grant_type=client_credentials') -Method Post
 		$AuthSplit = $Auth.Content -split ('"')
 		$AuthKey = $AuthSplit[3]
 
-		#$ServiceTag = $(Get-WmiObject -Class "Win32_Bios").SerialNumber
-
+		# Build API query parameters
 		$body = "?servicetags=" + $ServiceTag + "&Method=Get"
 
+		# Query Dell API for warranty information
 		$response = Invoke-WebRequest -uri https://apigtwb2c.us.dell.com/PROD/sbil/eapi/v5/asset-entitlements${body} -Headers @{"Authorization" = "bearer ${AuthKey}"; "Accept" = "application/json" }
 		$content = $response.Content | ConvertFrom-Json
 
-		#Sort, then parse the first (start) and last (end) warranty entitlement
-		$sortedEntitlements = $content.entitlements | Sort-Object endDate #Dell doesn't list in order. This sorts so the latest entitlement is last.
+		# Sort entitlements by end date (Dell doesn't list in order)
+		$sortedEntitlements = $content.entitlements | Sort-Object endDate
+
+		# Extract warranty dates from response
 		$WarrantyEndDateRaw = (($sortedEntitlements.endDate | Select-Object -Last 1).split("T"))[0]
 		$WarrantyEndDate = [datetime]::ParseExact($WarrantyEndDateRaw, "yyyy-MM-dd", $null)
+
 		$WarrantyStartDateRaw = (($sortedEntitlements.startDate | Select-Object -First 1).split("T"))[0]
 		$WarrantyStartDate = [datetime]::ParseExact($WarrantyStartDateRaw, "yyyy-MM-dd", $null)
+
+		# Get support level
 		$WarrantyLevel = ($sortedEntitlements.serviceLevelDescription | Select-Object -Last 1)
+
+		# Get ship date
 		$ShipDateRaw = (($content.shipDate).split("T"))[0]
 		$ShipDate = [datetime]::ParseExact($ShipDateRaw, "yyyy-MM-dd", $null)
 
+		# Get system model - try systemDescription first, fallback to productLineDescription
 		If ($content.systemDescription) {
 			$Model = $content.systemDescription
 		}
 		Else {
-			$Model = $content.productLineDescription #Sometimes Dell blanks the systemDescription. systemDescription likely has the data
+			$Model = $content.productLineDescription # Sometimes Dell blanks the systemDescription
 		}
 
+		# Check if warranty is expired
 		$Today = get-date
 		If ($Today -ge $WarrantyEndDate) {
-			#Write-Host "`nWarranty has expired for $ServiceTag ($Model) " -ForegroundColor White -BackgroundColor Red
-			$WarrantyExpired = "Expired" #Variable useful for mass export
+			$WarrantyExpired = "Expired"
 		}
 		Else {
 			$WarrantyExpired = "Not Expired"
 		}
-		#Returns data as a PSObject which can be used for batch/scripting purposes
+
+		# Create result object with warranty information
 		$Obj = New-Object psobject
 		$Obj | Add-Member -Type NoteProperty -Name 'ServiceTag' -Value $ServiceTag
 		$Obj | Add-Member -Type NoteProperty -Name 'Model' -Value $Model
@@ -358,11 +451,17 @@ Function Global:Get-DellWarranty {
 		$Obj | Add-Member -Type NoteProperty -Name 'WarrantyEndDate' -Value $WarrantyEndDate
 		$Obj | Add-Member -Type NoteProperty -Name 'WarrantyExpired' -Value $WarrantyExpired
 		$Obj | Add-Member -Type NoteProperty -Name 'WarrantySupportLevel' -Value $WarrantyLevel
+
+		# Add to results array
 		$FinalObj += $Obj
 	}
+
+	# Display results if requested
 	If ($Show) {
 		$FinalObj | Format-Table -AutoSize
 	}
+
+	# Copy results to clipboard if requested
 	If ($CopyToClipBoard) {
 		$Path = $Env:Temp + '\' + [guid]::NewGuid().ToString() + '.csv'
 		$FinalObj | Export-CSV -Delimiter "`t" -NoTypeInformation -Path $Path
@@ -370,6 +469,13 @@ Function Global:Get-DellWarranty {
 		Remove-Item -Path $Path -Force
 		Write-Host "Results have been copied to the clipboard."
 	}
+
+	# Return the object if requested
+	If ($ReturnObject) {
+		return $FinalObj
+	}
+
+	# Clean up variables
 	Clear-Variable Show, FinalObj, Path, CopyToClipBoard -Force -ErrorAction SilentlyContinue
 }
 
