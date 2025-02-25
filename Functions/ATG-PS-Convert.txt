@@ -1,4 +1,4 @@
-Function Format-ComputerFleetReport {
+Function Convert-ComputerFleetReport {
 <#
 .SYNOPSIS
     Creates a formatted Excel report from a system information CSV file with hardware and warranty details.
@@ -23,13 +23,13 @@ Function Format-ComputerFleetReport {
     same filename as the input but with a .xlsx extension.
 
 .EXAMPLE
-    Format-ComputerFleetReport -InputFile "C:\Data\SystemInfo.csv"
+    Convert-ComputerFleetReport -InputFile "C:\Data\SystemInfo.csv"
     
     Processes the SystemInfo.csv file and creates SystemInfo.xlsx in the same folder with
     formatted warranty information.
 
 .EXAMPLE
-    Format-ComputerFleetReport -InputFile "C:\Data\SystemInfo.csv" -OutputFile "C:\Reports\FleetReport.xlsx"
+    Convert-ComputerFleetReport -InputFile "C:\Data\SystemInfo.csv" -OutputFile "C:\Reports\FleetReport.xlsx"
     
     Processes the SystemInfo.csv file and saves the formatted report to the specified output path.
 
@@ -58,6 +58,7 @@ Function Format-ComputerFleetReport {
 
     # Columns to remove
     $columnsToRemove = @(
+        "Device Type",
         "Company Name",
         "Company Friendly Name",
         "Site Name",
@@ -192,7 +193,15 @@ Function Format-ComputerFleetReport {
     foreach ($item in $newData) {
         # Clean up processor description
         if ($item.Processor) {
+            # Remove (R) and Core(TM)
             $item.Processor = $item.Processor -replace '\(R\)', '' -replace ' Core\(TM\)', ''
+            
+            # Keep only the string before "CPU" if it exists, otherwise before "@"
+            if ($item.Processor -match "(.+?)\s+CPU") {
+                $item.Processor = $matches[1].Trim()
+            } elseif ($item.Processor -match "(.+?)\s+@") {
+                $item.Processor = $matches[1].Trim()
+            }
         }
         
         # Clean up OS name
@@ -202,7 +211,52 @@ Function Format-ComputerFleetReport {
         
         # Clean up manufacturer name
         if ($item."Base Board Manufacturer") {
-            $item."Base Board Manufacturer" = $item."Base Board Manufacturer" -replace ' Corporations', ''
+            $item."Base Board Manufacturer" = $item."Base Board Manufacturer" -replace ' Corporation', ''
+        }
+        
+        # Format date fields
+        if ($item."Last Check Date") {
+            try {
+                # Get only the date part (before first space)
+                $datePart = $item."Last Check Date".Split(' ')[0]
+                # Parse and reformat as m/d/yyyy
+                $parsedDate = [DateTime]::Parse($datePart)
+                $item."Last Check Date" = $parsedDate.ToString('M/d/yyyy')
+            } catch {
+                # Keep original if parsing fails
+            }
+        }
+        
+        if ($item."WarrantyStartDate") {
+            try {
+                # If there's a space in the date string, get only the part before the space
+                if ($item."WarrantyStartDate" -match " ") {
+                    $datePart = $item."WarrantyStartDate".Split(' ')[0]
+                } else {
+                    $datePart = $item."WarrantyStartDate"
+                }
+                # Parse and reformat as m/d/yyyy
+                $parsedDate = [DateTime]::Parse($datePart)
+                $item."WarrantyStartDate" = $parsedDate.ToString('M/d/yyyy')
+            } catch {
+                # Keep original if parsing fails
+            }
+        }
+        
+        if ($item."WarrantyEndDate") {
+            try {
+                # If there's a space in the date string, get only the part before the space
+                if ($item."WarrantyEndDate" -match " ") {
+                    $datePart = $item."WarrantyEndDate".Split(' ')[0]
+                } else {
+                    $datePart = $item."WarrantyEndDate"
+                }
+                # Parse and reformat as m/d/yyyy
+                $parsedDate = [DateTime]::Parse($datePart)
+                $item."WarrantyEndDate" = $parsedDate.ToString('M/d/yyyy')
+            } catch {
+                # Keep original if parsing fails
+            }
         }
     }
 
@@ -212,6 +266,10 @@ Function Format-ComputerFleetReport {
         'Disk Volume (GB)' = 'Disk Size'
         'Device Serial Number' = 'Serial #'
         'Base Board Manufacturer' = 'Manufacturer'
+        'WarrantyStartDate' = 'Warranty Start'
+        'WarrantyEndDate' = 'Warranty End'
+        'WarrantyExpired' = 'Status'
+        'Last Check Date' = 'Last Check'
     }
 
     # Clean up and adjust column names in the column order list
@@ -270,36 +328,53 @@ Function Format-ComputerFleetReport {
         $rowCount = $workSheet.Dimension.Rows
         
         # Find column indexes
-        $warrantyExpiredCol = $null
-        $warrantyEndDateCol = $null
+        $statusCol = $null
+        $warrantyEndCol = $null
         $serialNumberCol = $null
+        $warrantyStartCol = $null
+        $lastCheckCol = $null
         
         for ($col = 1; $col -le $workSheet.Dimension.Columns; $col++) {
             $headerValue = $workSheet.Cells[1, $col].Value
             
-            if ($headerValue -eq "WarrantyExpired") {
-                $warrantyExpiredCol = $col
+            if ($headerValue -eq "Status") {
+                $statusCol = $col
             }
-            elseif ($headerValue -eq "WarrantyEndDate") {
-                $warrantyEndDateCol = $col
+            elseif ($headerValue -eq "Warranty End") {
+                $warrantyEndCol = $col
             }
             elseif ($headerValue -eq "Serial #") {
                 $serialNumberCol = $col
             }
+            elseif ($headerValue -eq "Warranty Start") {
+                $warrantyStartCol = $col
+            }
+            elseif ($headerValue -eq "Last Check") {
+                $lastCheckCol = $col
+            }
         }
         
-        # Format the Device Serial Number column as text to preserve leading zeros
+        # Format the Serial Number column as text to preserve leading zeros
         if ($serialNumberCol) {
             for ($row = 2; $row -le $rowCount; $row++) {
                 $workSheet.Cells[$row, $serialNumberCol].Style.Numberformat.Format = "@"
             }
         }
         
+        # Format date columns with short date format
+        foreach ($dateCol in @($warrantyStartCol, $warrantyEndCol, $lastCheckCol)) {
+            if ($dateCol) {
+                for ($row = 2; $row -le $rowCount; $row++) {
+                    $workSheet.Cells[$row, $dateCol].Style.Numberformat.Format = "m/d/yyyy"
+                }
+            }
+        }
+        
         # Apply conditional formatting based on warranty status
-        if ($warrantyExpiredCol -and $warrantyEndDateCol) {
+        if ($statusCol -and $warrantyEndCol) {
             for ($row = 2; $row -le $rowCount; $row++) {
-                $expiredValue = $workSheet.Cells[$row, $warrantyExpiredCol].Value
-                $endDateValue = $workSheet.Cells[$row, $warrantyEndDateCol].Value
+                $statusValue = $workSheet.Cells[$row, $statusCol].Value
+                $endDateValue = $workSheet.Cells[$row, $warrantyEndCol].Value
                 
                 # Convert end date from string if needed
                 if ($endDateValue -and $endDateValue -is [string]) {
@@ -313,15 +388,15 @@ Function Format-ComputerFleetReport {
                 # Apply styles based on conditions
                 $entireRow = $workSheet.Cells[$row, 1, $row, $workSheet.Dimension.Columns]
                 
-                if ([string]::IsNullOrWhiteSpace($expiredValue)) {
+                if ([string]::IsNullOrWhiteSpace($statusValue)) {
                     # Empty warranty - Note style (light blue)
                     $entireRow.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
                     $entireRow.Style.Fill.BackgroundColor.SetColor([System.Drawing.Color]::FromArgb(218, 238, 243))
-                } elseif ($expiredValue -eq "Expired") {
+                } elseif ($statusValue -eq "Expired") {
                     # Expired warranty - Bad style (light red)
                     $entireRow.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
                     $entireRow.Style.Fill.BackgroundColor.SetColor([System.Drawing.Color]::FromArgb(255, 199, 206))
-                } elseif ($expiredValue -eq "Not Expired" -and $endDateValue) {
+                } elseif ($statusValue -eq "Not Expired" -and $endDateValue) {
                     if ($endDateValue -le $oneYearFromNow) {
                         # Less than a year left - Neutral style (light yellow)
                         $entireRow.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
