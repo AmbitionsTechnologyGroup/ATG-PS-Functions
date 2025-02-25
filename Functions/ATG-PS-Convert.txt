@@ -1,3 +1,350 @@
+Function Format-ComputerFleetReport {
+<#
+.SYNOPSIS
+    Creates a formatted Excel report from a system information CSV file with hardware and warranty details.
+
+.DESCRIPTION
+    This function processes a CSV file containing system inventory information, performs data cleanup,
+    checks for Dell/Alienware warranty information, and creates a formatted Excel report.
+    
+    The function performs the following operations:
+    - Removes unnecessary columns
+    - Moves the serial number column to the far right
+    - Removes duplicate entries based on device name
+    - For Dell/Alienware systems, retrieves warranty information
+    - Formats the data in Excel with conditional formatting based on warranty status
+    - Renames columns and cleans up text for better readability
+
+.PARAMETER InputFile
+    Path to the input CSV file containing system information data.
+
+.PARAMETER OutputFile
+    Path where the output Excel file will be saved. If not specified, the output will use the
+    same filename as the input but with a .xlsx extension.
+
+.EXAMPLE
+    Format-ComputerFleetReport -InputFile "C:\Data\SystemInfo.csv"
+    
+    Processes the SystemInfo.csv file and creates SystemInfo.xlsx in the same folder with
+    formatted warranty information.
+
+.EXAMPLE
+    Format-ComputerFleetReport -InputFile "C:\Data\SystemInfo.csv" -OutputFile "C:\Reports\FleetReport.xlsx"
+    
+    Processes the SystemInfo.csv file and saves the formatted report to the specified output path.
+
+.NOTES
+    Requires:
+    - The ImportExcel PowerShell module (will attempt to install if not present)
+    - The Get-DellWarranty function to be available in the environment
+    
+    Output formatting:
+    - Expired warranties: Red background
+    - Warranties expiring within a year: Yellow background
+    - Valid warranties with more than a year remaining: Green background
+    - Systems with no warranty information: Blue background
+    
+    Author: ASIO IT Team
+    Last Updated: February 2025
+#>
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $true, Position = 0)]
+        [string]$InputFile,
+        
+        [Parameter(Mandatory = $false, Position = 1)]
+        [string]$OutputFile = [System.IO.Path]::ChangeExtension($InputFile, ".xlsx")
+    )
+
+    # Columns to remove
+    $columnsToRemove = @(
+        "Company Name",
+        "Company Friendly Name",
+        "Site Name",
+        "Site Friendly Name",
+        "OS Architecture",
+        "OS Language",
+        "IP Address",
+        "External IP Address",
+        "System Domain Role",
+        "Installed Date",
+        "Processor Type",
+        "Number Of Processors",
+        "Disk Manufacturer/Model",
+        "Disk Interface Type",
+        "Partitions",
+        "BIOS Version",
+        "BIOS Manufacturer",
+        "BIOS Serial No",
+        "Bios Product",
+        "Device Time Zone"
+    )
+
+    # Import the CSV
+    $data = Import-Csv -Path $InputFile
+
+    # Identify all column names in the CSV
+    $allColumns = $data[0].PSObject.Properties.Name
+
+    # Create a list of columns to keep (excluding both the ones to remove and Device Serial Number)
+    $columnsToKeep = $allColumns | Where-Object {
+        ($_ -notin $columnsToRemove) -and ($_ -ne "Device Serial Number")
+    }
+
+    # Add Device Serial Number as the last column
+    $newColumnOrder = $columnsToKeep + @("Device Serial Number")
+
+    # Process data to handle duplicates by "Name" property
+    $groupedData = $data | Group-Object -Property "Name"
+    $uniqueData = @()
+
+    foreach ($group in $groupedData) {
+        if ($group.Count -eq 1) {
+            # No duplicates, add the single entry
+            $uniqueData += $group.Group
+        } else {
+            # First, remove entries with "Disk Volume (GB)" of 0
+            $filteredEntries = $group.Group | Where-Object {
+                try {
+                    [double]$_."Disk Volume (GB)" -ne 0
+                } catch {
+                    $true # Keep entries where we can't convert to number
+                }
+            }
+            
+            # If all entries had 0 disk volume or we filtered everything out, keep original entries
+            if ($filteredEntries.Count -eq 0) {
+                $filteredEntries = $group.Group
+            }
+            
+            # If we still have duplicates, keep the one with the smallest disk volume
+            if ($filteredEntries.Count -gt 1) {
+                # Sort by disk volume (converted to number) and take the first (smallest)
+                $filteredEntries = $filteredEntries | Sort-Object -Property @{
+                    Expression = {
+                        try { [double]$_."Disk Volume (GB)" }
+                        catch { [double]::MaxValue } # If conversion fails, treat as maximum value
+                    }
+                } | Select-Object -First 1
+            }
+            
+            $uniqueData += $filteredEntries
+        }
+    }
+
+    # Add the new warranty columns to each entry
+    $uniqueData = $uniqueData | ForEach-Object {
+        $_ | Add-Member -NotePropertyName "OriginalShipDate" -NotePropertyValue "" -PassThru |
+              Add-Member -NotePropertyName "WarrantyStartDate" -NotePropertyValue "" -PassThru |
+              Add-Member -NotePropertyName "WarrantyEndDate" -NotePropertyValue "" -PassThru |
+              Add-Member -NotePropertyName "WarrantyExpired" -NotePropertyValue "" -PassThru |
+              Add-Member -NotePropertyName "WarrantySupportLevel" -NotePropertyValue ""
+        $_
+    }
+
+    # Get warranty information for Dell and Alienware systems
+    Write-Host "Getting warranty information for Dell and Alienware systems..."
+    $dellSystems = $uniqueData | Where-Object {
+        $_."Base Board Manufacturer" -match "Dell|Alienware" -and
+        -not [string]::IsNullOrWhiteSpace($_."Device Serial Number")
+    }
+
+    if ($dellSystems.Count -gt 0) {
+        Write-Host "Found $($dellSystems.Count) Dell/Alienware systems. Retrieving warranty information..."
+        foreach ($system in $dellSystems) {
+            try {
+                Write-Host "Processing warranty for system: $($system.Name) with Serial: $($system."Device Serial Number")"
+                $warrantyInfo = Get-DellWarranty -ServiceTags $system."Device Serial Number" -ReturnObject
+                
+                if ($warrantyInfo) {
+                    # Update the warranty fields in the original data
+                    $systemInData = $uniqueData | Where-Object { $_.Name -eq $system.Name }
+                    if ($systemInData) {
+                        $systemInData.OriginalShipDate = $warrantyInfo.OriginalShipDate
+                        $systemInData.WarrantyStartDate = $warrantyInfo.WarrantyStartDate
+                        $systemInData.WarrantyEndDate = $warrantyInfo.WarrantyEndDate
+                        $systemInData.WarrantyExpired = $warrantyInfo.WarrantyExpired
+                        $systemInData.WarrantySupportLevel = $warrantyInfo.WarrantySupportLevel
+                        
+                        Write-Host "Updated warranty information for $($system.Name)"
+                    }
+                } else {
+                    Write-Host "No warranty information found for $($system.Name)" -ForegroundColor Yellow
+                }
+            } catch {
+                Write-Host "Error retrieving warranty information for $($system.Name): $_" -ForegroundColor Red
+            }
+        }
+    } else {
+        Write-Host "No Dell or Alienware systems found in the data."
+    }
+
+    # Remove OriginalShipDate and WarrantySupportLevel from the column order
+    $newColumnOrder = $newColumnOrder | Where-Object { $_ -ne "OriginalShipDate" -and $_ -ne "WarrantySupportLevel" }
+    
+    # Select the data with the new column order including only the warranty columns we want to keep
+    $newColumnOrder += @("WarrantyStartDate", "WarrantyEndDate", "WarrantyExpired")
+
+    # Create the final dataset with the specified column order
+    $newData = $uniqueData | Select-Object -Property $newColumnOrder
+
+    # Clean up data
+    foreach ($item in $newData) {
+        # Clean up processor description
+        if ($item.Processor) {
+            $item.Processor = $item.Processor -replace '\(R\)', '' -replace ' Core\(TM\)', ''
+        }
+        
+        # Clean up OS name
+        if ($item.OS) {
+            $item.OS = $item.OS -replace 'Microsoft ', ''
+        }
+        
+        # Clean up manufacturer name
+        if ($item."Base Board Manufacturer") {
+            $item."Base Board Manufacturer" = $item."Base Board Manufacturer" -replace ' Corporations', ''
+        }
+    }
+
+    # Rename columns
+    $columnMappings = @{
+        'Number of Cores' = 'Cores'
+        'Disk Volume (GB)' = 'Disk Size'
+        'Device Serial Number' = 'Serial #'
+        'Base Board Manufacturer' = 'Manufacturer'
+    }
+
+    # Clean up and adjust column names in the column order list
+    $adjustedColumnOrder = $newColumnOrder | ForEach-Object {
+        if ($columnMappings.ContainsKey($_)) {
+            $columnMappings[$_]
+        } else {
+            $_
+        }
+    }
+
+    # Create a collection with renamed properties
+    $renamedData = $newData | ForEach-Object {
+        $obj = New-Object PSObject
+        foreach ($prop in $_.PSObject.Properties) {
+            $newName = if ($columnMappings.ContainsKey($prop.Name)) { $columnMappings[$prop.Name] } else { $prop.Name }
+            $obj | Add-Member -MemberType NoteProperty -Name $newName -Value $prop.Value
+        }
+        $obj
+    }
+
+    # Export to Excel with formatting
+    Write-Host "Creating Excel file with formatting..."
+
+    # Check if Excel module is available, if not, attempt to install it
+    if (-not (Get-Module -ListAvailable -Name ImportExcel)) {
+        Write-Host "ImportExcel module not found. Attempting to install..."
+        try {
+            Install-Module -Name ImportExcel -Force -Scope CurrentUser
+            Import-Module ImportExcel
+            Write-Host "ImportExcel module installed successfully."
+        } catch {
+            Write-Host "Unable to install ImportExcel module. Exiting." -ForegroundColor Red
+            exit
+        }
+    }
+
+    # Calculate the date one year from now for warranty comparisons
+    $oneYearFromNow = (Get-Date).AddYears(1)
+
+    # Export data to Excel with conditional formatting
+    $excelParams = @{
+        Path = $OutputFile
+        TableName = "SystemInformation"
+        TableStyle = "Medium15"
+        AutoSize = $true
+        FreezeTopRow = $true
+        WorksheetName = "System Information"
+    }
+
+    $renamedData | Export-Excel @excelParams -PassThru | ForEach-Object {
+        # Get the worksheet
+        $workSheet = $_.Workbook.Worksheets["System Information"]
+        
+        # Get the row count (excluding header)
+        $rowCount = $workSheet.Dimension.Rows
+        
+        # Find column indexes
+        $warrantyExpiredCol = $null
+        $warrantyEndDateCol = $null
+        $serialNumberCol = $null
+        
+        for ($col = 1; $col -le $workSheet.Dimension.Columns; $col++) {
+            $headerValue = $workSheet.Cells[1, $col].Value
+            
+            if ($headerValue -eq "WarrantyExpired") {
+                $warrantyExpiredCol = $col
+            }
+            elseif ($headerValue -eq "WarrantyEndDate") {
+                $warrantyEndDateCol = $col
+            }
+            elseif ($headerValue -eq "Serial #") {
+                $serialNumberCol = $col
+            }
+        }
+        
+        # Format the Device Serial Number column as text to preserve leading zeros
+        if ($serialNumberCol) {
+            for ($row = 2; $row -le $rowCount; $row++) {
+                $workSheet.Cells[$row, $serialNumberCol].Style.Numberformat.Format = "@"
+            }
+        }
+        
+        # Apply conditional formatting based on warranty status
+        if ($warrantyExpiredCol -and $warrantyEndDateCol) {
+            for ($row = 2; $row -le $rowCount; $row++) {
+                $expiredValue = $workSheet.Cells[$row, $warrantyExpiredCol].Value
+                $endDateValue = $workSheet.Cells[$row, $warrantyEndDateCol].Value
+                
+                # Convert end date from string if needed
+                if ($endDateValue -and $endDateValue -is [string]) {
+                    try {
+                        $endDateValue = [DateTime]::Parse($endDateValue)
+                    } catch {
+                        $endDateValue = $null
+                    }
+                }
+                
+                # Apply styles based on conditions
+                $entireRow = $workSheet.Cells[$row, 1, $row, $workSheet.Dimension.Columns]
+                
+                if ([string]::IsNullOrWhiteSpace($expiredValue)) {
+                    # Empty warranty - Note style (light blue)
+                    $entireRow.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
+                    $entireRow.Style.Fill.BackgroundColor.SetColor([System.Drawing.Color]::FromArgb(218, 238, 243))
+                } elseif ($expiredValue -eq "Expired") {
+                    # Expired warranty - Bad style (light red)
+                    $entireRow.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
+                    $entireRow.Style.Fill.BackgroundColor.SetColor([System.Drawing.Color]::FromArgb(255, 199, 206))
+                } elseif ($expiredValue -eq "Not Expired" -and $endDateValue) {
+                    if ($endDateValue -le $oneYearFromNow) {
+                        # Less than a year left - Neutral style (light yellow)
+                        $entireRow.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
+                        $entireRow.Style.Fill.BackgroundColor.SetColor([System.Drawing.Color]::FromArgb(255, 235, 156))
+                    } else {
+                        # More than a year left - Good style (light green)
+                        $entireRow.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
+                        $entireRow.Style.Fill.BackgroundColor.SetColor([System.Drawing.Color]::FromArgb(198, 239, 206))
+                    }
+                }
+            }
+        }
+        
+        # Save the workbook
+        $_.Save()
+        $_.Dispose()
+    }
+
+    Write-Host "Excel file has been created and saved to: $OutputFile"
+    Write-Host "Original row count: $($data.Count)"
+    Write-Host "Final row count after removing duplicates: $($newData.Count)"
+}
+
 Function Convert-ToSharedMailbox {
 	param
 	(
