@@ -178,7 +178,7 @@ Function Optimize-Powershell {
 	If ($PSVersionTable.PSEdition -like "Desktop") {
 		Start-Process C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -ArgumentList "-NoExit -Mta"
 	} Else {
-		Start-Process 'C:\Program Files\PowerShell\pwsh.exe' -ArgumentList "-NoExit -Mta"
+		Start-Process 'pwsh.exe' -ArgumentList "-NoExit -Mta"
 	}
 }
 
