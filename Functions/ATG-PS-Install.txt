@@ -57,6 +57,7 @@ Function Install-Action1 {
 		Write-Output "A1Agent service is already installed."
 	}
 }
+
 Function Install-AppDefaults {
 	Write-Host "Downloading App Defaults"
 	New-Item -ItemType Directory -Force -Path C:\Ambitions\ITS247Agent
