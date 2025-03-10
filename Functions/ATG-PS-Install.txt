@@ -16,8 +16,7 @@ Function Install-Action1 {
 	)
 
 	If (-not (Get-Service -Name "A1Agent" -ErrorAction SilentlyContinue)) {
-		irm ps.acgs.io | iex
-		Start-Sleep 10
+		Write-Host "Installing Action1 patch management."
 		$SiteConfigs = @()
 		$SiteConfigs = (Invoke-WebRequest -uri "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/refs/heads/master/Scripts/Action1.csv" -Headers @{"Cache-Control"="no-cache"} -UseBasicParsing).Content | ConvertFrom-Csv -Delimiter ','
 
@@ -27,16 +26,18 @@ Function Install-Action1 {
 			$Silent = $True
 		}
 
-		# Always display the available site codes before prompting
-		Write-Host "`nAvailable Site Codes:" -ForegroundColor Cyan
-		$SiteConfigs | Where-Object -Property GUID -ne "" | Select-Object Code, Site | Format-Table -AutoSize
+		if ([String]::IsNullOrEmpty(($SiteConfigs | Where-Object { $_.Code -eq $Code }).GUID)) {
+			# Always display the available site codes before prompting
+			Write-Host "`nAvailable Site Codes:" -ForegroundColor Cyan
+			$SiteConfigs | Where-Object -Property GUID -ne "" | Select-Object Code, Site | Format-Table -AutoSize
 
-		# Ensure $Code is provided and valid
-		while ($null -eq $Code -or -not ($SiteConfigs | Where-Object { $_.Code -eq $Code })) {
-			if ($null -ne $Code) {
-				Write-Host "Invalid site code: $Code. Please enter a valid site code." -ForegroundColor Red
+			# Ensure $Code is provided and valid
+			while ($null -eq $Code -or -not ($SiteConfigs | Where-Object { $_.Code -eq $Code })) {
+				if ($null -ne $Code) {
+					Write-Host "Invalid site code: $Code. Please enter a valid site code." -ForegroundColor Red
+				}
+				$Code = Read-Host "Enter Site Code"
 			}
-			$Code = Read-Host "Enter Site Code"
 		}
 
 		# Proceed with installation after validation
