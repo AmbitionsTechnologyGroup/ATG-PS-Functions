@@ -883,7 +883,6 @@ Function Get-NetExtenderStatus {
 	}
 	
 Function Get-PSWinGetUpdatablePackages {
-	Update-PowerShellModule -ModuleName 'Microsoft.WinGet.Client'
 	Start-PSWinGet -Command 'Get-WinGetPackage | Where {$_.IsUpdateAvailable -eq $True}'
 }
 

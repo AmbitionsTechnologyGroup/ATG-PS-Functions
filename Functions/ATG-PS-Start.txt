@@ -60,15 +60,14 @@ Function Start-PSWinGet {
 	)
 	
 	#Baseline install and run
-	$ScriptBlock = '
-		irm ps.acgs.io | iex
-		Update-PowerShellModule -ModuleName Microsoft.WinGet.Client
-		'
+	$ScriptBlock = 'irm ps.acgs.io | iex'
 	If ($Command) {	$ScriptBlock = $ScriptBlock + $Command }
 	
 	#Running as Powershell 5, need to switch to core
 	If ($PSEdition -eq "Desktop") {
-		If (-Not (Get-Command "pwsh.exe" -ErrorAction SilentlyContinue)) { Update-pwsh }
+		Install-Choco
+		Update-pwsh
+		Update-PowerShellModule -ModuleName Microsoft.WinGet.Client
 
 			
 		If ($PSSCriptRoot) { #If running as a script, exit after done.
@@ -84,6 +83,7 @@ Function Start-PSWinGet {
 		}
 		
 	} Else { #Already running as pwsh Core
+		Update-PowerShellModule -ModuleName Microsoft.WinGet.Client
 		Invoke-Expression $ScriptBlock
 		
 		#Give a human some friendly prompts if they haven't given an already composed command.
