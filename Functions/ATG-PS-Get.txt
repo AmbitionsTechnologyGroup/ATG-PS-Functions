@@ -47,7 +47,7 @@ Function Get-ADStaleComputers {
 	$parentProcessName = (Get-Process -Id ((Get-WmiObject Win32_Process -Filter "processid='$PID'").ParentProcessId)).Name
 
 	# check to see whether Get-AdComputer is available
-	If (Get-Command ActiveDirectory\Get-AdComputer -ErrorAction SilentlyContinue) {
+	If (Get-Command -Module ActiveDirectory -Name Get-AdComputer -ErrorAction SilentlyContinue) {
 		$Stale = [DateTime]::Today.AddDays(-180)
 		$SemiStale = [DateTime]::Today.AddDays(-30)
 		$adStaleComputerInfo = Get-ADComputer -Filter '(LastLogonTimestamp -lt $Stale)' -Properties LastLogonTimestamp, Description, Title | Format-Table Name, @{N = "LastLogonTimestamp"; E = { [datetime]::FromFileTime($_.LastLogonTimestamp) } }, Description, Title -AutoSize
@@ -89,7 +89,7 @@ Function Get-ADUserPassExpirations {
 	If (Get-Command ActiveDirectory\Get-AdUser -ErrorAction SilentlyContinue) {
 
 		$adUserInfo = Get-ADUser -Filter { Enabled -eq $True -and PasswordNeverExpires -eq $False } `
-			–Properties "DisplayName", "userPrincipalName", "msDS-UserPasswordExpiryTimeComputed" | `
+			-Properties "DisplayName", "userPrincipalName", "msDS-UserPasswordExpiryTimeComputed" | `
 			Select-Object -Property "Displayname", "userPrincipalName", @{Name = "ExpiryDate"; Expression = { [datetime]::FromFileTime($_."msDS-UserPasswordExpiryTimeComputed") } }
 
 		# if the parent process of this powershell instance is not explorer.exe, output to PowerShell table.
@@ -1054,8 +1054,7 @@ Function Get-SonicwallInterfaceIP {
 		$string = $Marshal::PtrToStringAuto($Bstr)
 		$string | Invoke-Expression
 		$Marshal::ZeroFreeBSTR($Bstr)
-	}
- Else {
+	} Else {
 		If ($ToFile) {
 			$ParamArray = @(
 				$('[string]$SonicWallAddress = "' + $SonicWallAddress + '"')
@@ -1222,7 +1221,7 @@ Function Get-UserProfileSpace {
 	#$Profiles | Select -Property LocalPath, @{Name = 'Last Activity' ; Expression = {(Get-Item ($_.LocalPath + "\AppData\Local")).LastWriteTime}} | Sort-Object "Last Activity"
 	$ActiveProfiles = @()
 	$FolderSizes = @{}
-	#$FinalExport.add('HostName','User','Desktop(MB)','Documents(MB)','Pictures(MB)'}
+	#$FinalExport.add('HostName','User','Desktop(MB)','Documents(MB)','Pictures(MB)'
 	$StaleLimit = (Get-date).AddDays(-90)
 	$ProfilePaths = $Profiles.LocalPath
 	$global:Desktop = 0
