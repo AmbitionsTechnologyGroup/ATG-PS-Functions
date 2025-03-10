@@ -65,7 +65,7 @@ Function Start-PSWinGet {
 	
 	#Running as Powershell 5, need to switch to core
 	If ($PSEdition -eq "Desktop") {
-		Install-Choco
+		Install-Choco | Out-Null
 		Update-pwsh
 		Update-PowerShellModule -ModuleName Microsoft.WinGet.Client
 
