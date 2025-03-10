@@ -62,7 +62,7 @@ Function Start-PSWinGet {
 	#Baseline install and run
 	$ScriptBlock = '
 		irm ps.acgs.io | iex
-		Update-PowerShellModule -ModuleName 'Microsoft.WinGet.Client'
+		Update-PowerShellModule -ModuleName Microsoft.WinGet.Client
 		'
 	If ($Command) {	$ScriptBlock = $ScriptBlock + $Command }
 	
