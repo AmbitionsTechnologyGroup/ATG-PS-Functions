@@ -60,7 +60,7 @@ Function Start-PSWinGet {
 	)
 	
 	#Baseline install and run
-	$ScriptBlock = 'irm ps.acgs.io | iex'
+	$ScriptBlock = 'irm ps.acgs.io | iex ; '
 	If ($Command) {	$ScriptBlock = $ScriptBlock + $Command }
 	
 	#Running as Powershell 5, need to switch to core
