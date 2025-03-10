@@ -466,81 +466,98 @@ Function Update-O365Apps {
 	}
 }
 
-function Update-PowerShellModule {
-    <#
-    .SYNOPSIS
-        Updates a specified PowerShell module to the latest version from PSGallery.
-
-    .DESCRIPTION
-        Checks the installed version of a PowerShell module against the latest version available
-        in PSGallery. If an update is available, it removes the old version and installs the new one.
-
-    .PARAMETER ModuleName
-        The name of the PowerShell module to update. This parameter is mandatory.
-
-    .EXAMPLE
-        Update-PSModule -ModuleName "Posh-SSH"
-        Checks and updates the Posh-SSH module if a newer version is available.
-
-    .EXAMPLE
-        Update-PSModule -ModuleName "AzureAD"
-        Checks and updates the AzureAD module if a newer version is available.
-
-    .NOTES
-        Requires administrative privileges for some operations.
-        Assumes Remove-PathForcefully function is available in the environment.
-    #>
-
+Function Update-PowerShellModule {
     param (
         [Parameter(Mandatory=$true)]
-        [string]$ModuleName  # The name of the module to check and update
+        [string]$ModuleName
     )
 
-    # Get the currently installed version of the module
-    [version]$ModVer = (Get-Module -ListAvailable -Name $ModuleName).Version
-    
-    # Get the latest available version from PSGallery
-    [version]$AvailableModVer = (Find-Module $ModuleName -Repository PSGallery).Version
-    
-    # Compare versions and proceed with update if needed
-    If ($ModVer -ne $AvailableModVer) {
-        # Inform user about the available update
-        Write-host "$ModuleName has an update from $ModVer to $AvailableModVer.`nInstalling the update."
-        
+    # Get the currently installed version of the module - handle multiple versions
+    $InstalledModules = Get-Module -ListAvailable -Name $ModuleName
+    if ($InstalledModules) {
+        # If multiple versions exist, get the highest one
+        if ($InstalledModules -is [array]) {
+            $ModVer = ($InstalledModules | Sort-Object Version -Descending)[0].Version
+        } else {
+            # Single module
+            $ModVer = $InstalledModules.Version
+        }
+
+        # Try to find the module in PSGallery
+        try {
+            $AvailableModule = Find-Module $ModuleName -Repository PSGallery -ErrorAction Stop
+            $AvailableModVer = $AvailableModule.Version
+
+            # Compare versions and proceed with update if needed
+            if ($ModVer -ne $AvailableModVer) {
+                # Inform user about the available update
+                Write-Host "$ModuleName has an update from $ModVer to $AvailableModVer.`nInstalling the update."
+
+                # Set PSGallery as trusted repository
+                Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
+
+                # Ensure NuGet package provider is installed
+                if (!(Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+                    Install-PackageProvider -Name NuGet -Force -Scope CurrentUser
+                }
+
+                # Remove the module from current session if loaded
+                Remove-Module -Name $ModuleName -Force -ErrorAction SilentlyContinue
+
+                # Uninstall all existing versions of the module
+                Uninstall-Module -Name $ModuleName -AllVersions -Force -ErrorAction SilentlyContinue
+
+                # Check if module files still exist and remove them forcefully if necessary
+                $RemainingModules = Get-Module -Name $ModuleName -ListAvailable
+                if ($RemainingModules) {
+                    foreach ($Module in $RemainingModules) {
+                        $ModPath = $Module.ModuleBase
+
+                        # Check if Remove-PathForcefully is available
+                        if (Get-Command -Name Remove-PathForcefully -ErrorAction SilentlyContinue) {
+                            Remove-PathForcefully -Path $ModPath
+                        } else {
+                            # Fallback if Remove-PathForcefully is not available
+                            try {
+                                Remove-Item -Path $ModPath -Recurse -Force -ErrorAction Stop
+                            } catch {
+                                Write-Warning "Could not remove module path $ModPath. You may need to remove it manually."
+
+                                # Create command line arguments for forceful removal
+                                $ArgumentList = '/C "taskkill /IM powershell.exe /F & rd /s /q "' + $ModPath + '" & start powershell -NoExit -ExecutionPolicy Bypass'
+
+                                # Use cmd to force removal
+                                Start-Process "cmd.exe" -ArgumentList $ArgumentList
+
+                                # Exit the function as we've launched a new PowerShell session
+                                return
+                            }
+                        }
+                    }
+                }
+
+                # Install the latest version of the module
+                Install-Module -Name $ModuleName -AllowClobber -Force -Scope CurrentUser
+            } else {
+                # Inform user if module is already up to date
+                Write-Host "$ModuleName is already up to date at version $AvailableModVer."
+            }
+        } catch {
+            Write-Error "Failed to find module $ModuleName in PSGallery. Error: $_"
+        }
+    } else {
+        Write-Host "Module $ModuleName is not currently installed. Installing from PSGallery..."
+
         # Set PSGallery as trusted repository
         Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-        
+
         # Ensure NuGet package provider is installed
-        Install-PackageProvider -Name NuGet -Force
-        
-        # Remove the module from current session if loaded
-        Remove-Module -Name $ModuleName -Force -ErrorAction SilentlyContinue
-        
-        # Uninstall all existing versions of the module
-        Uninstall-Module -Name $ModuleName -AllVersions -Force -ErrorAction SilentlyContinue
-        
-        # Check if module files still exist and remove them forcefully if necessary
-        If (Get-Module -Name $ModuleName -ListAvailable) {
-            # Get the module's installation path
-            $ModPath = (Get-Module -Name $ModuleName -ListAvailable).ModuleBase
-            
-            # Create command line arguments for forceful removal and reinstallation
-            $ArgumentList = '/C "taskkill /IM powershell.exe /F & rd /s /q "' + $ModPath + '" & start powershell -NoExit -ExecutionPolicy Bypass -Command "irm ps.acgs.io|iex ; Invoke-NDDCScan"'
-            
-            # Attempt to remove the module directory
-            Remove-PathForcefully -Path $ModPath
-            
-            # If directory still exists, use cmd to force removal
-            If (Get-Item -Path $ModPath -ErrorAction SilentlyContinue) {
-                Start-Process "cmd.exe" -ArgumentList $ArgumentList
-            }
+        if (!(Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
+            Install-PackageProvider -Name NuGet -Force -Scope CurrentUser
         }
-        
-        # Install the latest version of the module
-        Install-Module -Name $ModuleName -AllowClobber -Force
-    } Else {
-        # Inform user if module is already up to date
-        Write-host "$ModuleName is already up to date at version $AvailableModVer."
+
+        # Install the module
+        Install-Module -Name $ModuleName -AllowClobber -Force -Scope CurrentUser
     }
 }
 
