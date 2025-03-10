@@ -883,6 +883,7 @@ Function Get-NetExtenderStatus {
 	}
 	
 Function Get-PSWinGetUpdatablePackages {
+	Update-PowerShellModule -ModuleName 'Microsoft.WinGet.Client'
 	Start-PSWinGet -Command 'Get-WinGetPackage | Where {$_.IsUpdateAvailable -eq $True}'
 }
 
@@ -1072,10 +1073,8 @@ Function Get-SonicwallInterfaceIP {
 
 	If (-Not ($ToFile)) {
 		# Check if our module loaded properly
-		If (-not (Get-Module -ListAvailable -Name Posh-SSH)) {
-			# Install the module automatically
-			Install-Module -Name Posh-SSH
-		}
+		Update-PowerShellModule -ModuleName 'Posh-SSH'
+
 
 		# Includes
 		Import-Module Posh-SSH
@@ -1249,8 +1248,7 @@ Function Get-UserProfileSpace {
 	#$ActiveProfiles
 
 	If ($ActiveProfiles) {
-		Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
-		Install-Module -Name PSFolderSize -Repository PSGallery -Force
+		Update-PowerShellModule -ModuleName 'PSFolderSize'
 		ForEach ($ActiveProfile in $ActiveProfiles) {
 			[Decimal]$FolderSizeSum = 0.00
 			#Write-Host $($ActiveProfile | split-path -leaf)
