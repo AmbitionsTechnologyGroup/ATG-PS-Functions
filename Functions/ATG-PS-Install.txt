@@ -1,3 +1,62 @@
+Function Install-Action1 {
+	<#
+	.Synopsis
+		Installs the Action1 Patch Management Software
+	.Description
+		Installs Action1 Patch Management Software
+	.Notes
+		For a list of site codes, go to:
+		https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/blob/master/Scripts/Action1.csv
+	#>
+
+	###Require -RunAsAdministrator
+	[cmdletbinding()]
+	param(
+		[string]$Code
+	)
+
+	If (-not (Get-Service -Name "A1Agent" -ErrorAction SilentlyContinue)) {
+		irm ps.acgs.io | iex
+		Start-Sleep 10
+		$SiteConfigs = @()
+		$SiteConfigs = (Invoke-WebRequest -uri "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/refs/heads/master/Scripts/Action1.csv" -Headers @{"Cache-Control"="no-cache"} -UseBasicParsing).Content | ConvertFrom-Csv -Delimiter ','
+
+		# If a global variable 'SiteCode' exists, use it
+		If (Get-Variable -Name SiteCode -ErrorAction SilentlyContinue) {
+			$Code = $SiteCode
+			$Silent = $True
+		}
+
+		# Always display the available site codes before prompting
+		Write-Host "`nAvailable Site Codes:" -ForegroundColor Cyan
+		$SiteConfigs | Where-Object -Property GUID -ne "" | Select-Object Code, Site | Format-Table -AutoSize
+
+		# Ensure $Code is provided and valid
+		while ($null -eq $Code -or -not ($SiteConfigs | Where-Object { $_.Code -eq $Code })) {
+			if ($null -ne $Code) {
+				Write-Host "Invalid site code: $Code. Please enter a valid site code." -ForegroundColor Red
+			}
+			$Code = Read-Host "Enter Site Code"
+		}
+
+		# Proceed with installation after validation
+		$MSIUrl = 'https://app.action1.com/agent/'
+		$GUID = ($SiteConfigs | Where-Object { $_.Code -eq $Code }).GUID
+		$InstallURL = $MSIUrl + $GUID + "/Windows/Action1agent($Code).msi"
+		$Action1Installer = Get-FileDownload -URL $InstallURL -SaveToFolder $Env:SystemDrive\Ambitions\Action1Patches
+		$msiPath = $Action1Installer[1]
+		$arguments = "/i `"$msiPath`" /quiet /norestart"
+		$process = Start-Process -FilePath "msiexec.exe" -ArgumentList $arguments -Wait -PassThru
+
+		if ($process.ExitCode -eq 0) {
+			Write-Output "Installation of $msiPath completed successfully."
+		} else {
+			Write-Output "Installation failed with exit code: $($process.ExitCode)"
+		}
+	} Else {
+		Write-Output "A1Agent service is already installed."
+	}
+}
 Function Install-AppDefaults {
 	Write-Host "Downloading App Defaults"
 	New-Item -ItemType Directory -Force -Path C:\Ambitions\ITS247Agent
