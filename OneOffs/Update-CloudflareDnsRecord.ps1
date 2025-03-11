@@ -1,210 +1,181 @@
 function Update-CloudflareDnsRecord {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true, HelpMessage = "Which IP should be used for the record: internal/external")]
+        [ValidateSet("internal", "external")]
+        [string]$WhatIp,
+
+        [Parameter(Mandatory = $true, HelpMessage = "DNS A record to be updated")]
+        [string]$DnsRecord,
+
+        [Parameter(Mandatory = $true, HelpMessage = "Cloudflare's Zone ID")]
+        [string]$ZoneId,
+
+        [Parameter(Mandatory = $true, HelpMessage = "Cloudflare Zone API Token")]
+        [string]$CloudflareZoneApiToken,
+
+        [Parameter(HelpMessage = "Use Cloudflare proxy on dns record true/false")]
+        [bool]$Proxied = $false,
+
+        [Parameter(HelpMessage = "TTL in seconds (120-7200) or 1 for Auto")]
+        [ValidateScript({($_ -ge 120 -and $_ -le 7200) -or $_ -eq 1})]
+        [int]$Ttl = 120,
+
+        [Parameter(HelpMessage = "Telegram Notifications (yes/no)")]
+        [ValidateSet("yes", "no")]
+        [string]$NotifyMeTelegram = "no",
+
+        [Parameter(HelpMessage = "Telegram Chat ID")]
+        [string]$TelegramChatId = "",
+
+        [Parameter(HelpMessage = "Telegram Bot API Key")]
+        [string]$TelegramBotAPIToken = "",
+
+        [Parameter(HelpMessage = "Discord Server Notifications (yes/no)")]
+        [ValidateSet("yes", "no")]
+        [string]$NotifyMeDiscord = "no",
+
+        [Parameter(HelpMessage = "Discord Webhook URL")]
+        [string]$DiscordWebhookURL = ""
+    )
+
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
-### updateDNS.log file of the last run for debug
-$File_LOG = "$PSScriptRoot\update-cloudflare-dns.log"
-$FileName = "update-cloudflare-dns.log"
+    ### updateDNS.log file of the last run for debug
+    $File_LOG = "$PSScriptRoot\update-cloudflare-dns.log"
+    $FileName = "update-cloudflare-dns.log"
 
-if (!(Test-Path $File_LOG)) {
-  New-Item -ItemType File -Path $PSScriptRoot -Name ($FileName) | Out-Null
-}
-
-Clear-Content $File_LOG
-$DATE = Get-Date -UFormat "%Y/%m/%d %H:%M:%S"
-Write-Output "==> $DATE" | Tee-Object $File_LOG -Append
-
-### Load config file
-Try {
-  ﻿##### Config
-
-	## Which IP should be used for the record: internal/external
-	## Internal interface will be chosen automaticly as a primary default interface
-	$what_ip = "external"
-	## DNS A record to be updated
-	$dns_record = "officetest.tcnm.us"
-	## Cloudflare's Zone ID
-	$zoneid = "0c828c1543d918ba237880acdef86df5"
-	## Cloudflare Zone API Token
-	$cloudflare_zone_api_token = "1Y86TRTTTLRwe5kPpJKb_kVR_SIL7JL1WOA0HMaZ"
-	## Use Cloudflare proxy on dns record true/false
-	$proxied = $false
-	## 120-7200 in seconds or 1 for Auto
-	$ttl = 120
-
-	## Telegram Notifications yes/no (only sent if DNS is updated)
-	$notify_me_telegram = "no"
-	## Telegram Chat ID
-	$telegram_chat_id = "ChangeMe"
-	## Telegram Bot API Key
-	$telegram_bot_API_Token = "ChangeMe"
-
-	## Discord Server Notifications yes/no (only sent if DNS is updated)
-	$notify_me_discord = "no"
-	## Discord Webhook URL (create a webhook on your Discord server via Server Settings > Integrations)
-	$discord_webhook_URL = "ChangeMe"
-}
-Catch {
-  Write-Output "==> Error! Missing update-cloudflare-dns_conf.ps1 or invalid syntax" | Tee-Object $File_LOG -Append
-  #Exit
-}
-
-### Check validity of "ttl" parameter
-if (( $ttl -lt 120 ) -or ($ttl -gt 7200 ) -and ( $ttl -ne 1 )) {
-  Write-Output 'Error! ttl out of range (120-7200) or not set to 1' | Tee-Object $File_LOG -Append
-  #Exit
-}
-
-### Check validity of "proxied" parameter
-if (!([string]$proxied) -or ($proxied.GetType().Name.Trim() -ne "Boolean")) {
-  Write-Output 'Error! Incorrect "proxied" parameter choose "$true" or "$false" ' | Tee-Object $File_LOG -Append
-  #Exit
-}
-
-
-### Check validity of "what_ip" parameter
-if ( ($what_ip -ne "external") -and ($what_ip -ne "internal")) {
-  Write-Output 'Error! Incorrect "what_ip" parameter choose "external" or "internal"' | Tee-Object $File_LOG -Append
-  #Exit
-}
-
-### Check if set to internal ip and proxy
-if (($what_ip -eq "internal") -and ($proxied)) {
-  Write-Output 'Error! Internal IP cannot be Proxied' | Tee-Object $File_LOG -Append
-  #Exit
-}
-
-### Get External ip from https://checkip.amazonaws.com
-if ($what_ip -eq 'external') {
-  $ip = (Invoke-RestMethod -Uri "https://checkip.amazonaws.com" -TimeoutSec 10).Trim()
-  if (!([bool]$ip)) {
-    Write-Output "Error! Can't get external ip from https://checkip.amazonaws.com" | Tee-Object $File_LOG -Append
-    #Exit
-  }
-  Write-Output "==> External IP is: $ip" | Tee-Object $File_LOG -Append
-}
-
-### Get Internal ip from primary interface
-if ($what_ip -eq 'internal') {
-  $ip = $((Find-NetRoute -RemoteIPAddress 1.1.1.1).IPAddress|out-string).Trim()
-  if (!([bool]$ip) -or ($ip -eq "127.0.0.1")) {
-    Write-Output "==>Error! Can't get internal ip address" | Tee-Object $File_LOG -Append
-    #Exit
-  }
-  Write-Output "==> Internal IP is $ip" | Tee-Object $File_LOG -Append
-}
-
-### Get IP address of DNS record from 1.1.1.1 DNS server when proxied is "false"
-if ($proxied -eq $false) {
-  $dns_record_ip = (Resolve-DnsName -Name $dns_record -Server 1.1.1.1 -Type A | Select-Object -First 1).IPAddress.Trim()
-  if (![bool]$dns_record_ip) {
-    Write-Output "Error! Can't resolve the ${dns_record} via 1.1.1.1 DNS server" | Tee-Object $File_LOG -Append
-    #Exit
-  }
-  $is_proxed = $proxied
-}
-
-### Get the dns record id and current proxy status from cloudflare's api when proxied is "true"
-if ($proxied -eq $true) {
-  $dns_record_info = @{
-    Uri     = "https://api.cloudflare.com/client/v4/zones/$zoneid/dns_records?name=$dns_record"
-    Headers = @{"Authorization" = "Bearer $cloudflare_zone_api_token"; "Content-Type" = "application/json" }
-  }
-  
-  $response = Invoke-RestMethod @dns_record_info
-  if ($response.success -ne "True") {
-    Write-Output "Error! Can't get dns record info from cloudflare's api" | Tee-Object $File_LOG -Append
-  }
-  $is_proxed = $response.result.proxied
-  $dns_record_ip = $response.result.content.Trim()
-}
-
-
-### Check if ip or proxy have changed
-if (($dns_record_ip -eq $ip) -and ($is_proxed -eq $proxied)) {
-  Write-Output "==> DNS record IP of $dns_record is $dns_record_ip, no changes needed. #Exiting..." | Tee-Object $File_LOG -Append
-  #Exit
-}
-
-Write-Output "==> DNS record of $dns_record is: $dns_record_ip. Trying to update..." | Tee-Object $File_LOG -Append
-
-### Get the dns record information from cloudflare's api
-$cloudflare_record_info = @{
-  Uri     = "https://api.cloudflare.com/client/v4/zones/$zoneid/dns_records?name=$dns_record"
-  Headers = @{"Authorization" = "Bearer $cloudflare_zone_api_token"; "Content-Type" = "application/json" }
-}
-
-$cloudflare_record_info_resposne = Invoke-RestMethod @cloudflare_record_info
-if ($cloudflare_record_info_resposne.success -ne "True") {
-  Write-Output "Error! Can't get $dns_record record inforamiton from cloudflare API" | Tee-Object $File_LOG -Append
-  #Exit
-}
-
-### Get the dns record id from response
-$dns_record_id = $cloudflare_record_info_resposne.result.id.Trim()
-
-### Push new dns record information to cloudflare's api
-$update_dns_record = @{
-  Uri     = "https://api.cloudflare.com/client/v4/zones/$zoneid/dns_records/$dns_record_id"
-  Method  = 'PUT'
-  Headers = @{"Authorization" = "Bearer $cloudflare_zone_api_token"; "Content-Type" = "application/json" }
-  Body    = @{
-    "type"    = "A"
-    "name"    = $dns_record
-    "content" = $ip
-    "ttl"     = $ttl
-    "proxied" = $proxied
-  } | ConvertTo-Json
-}
-
-$update_dns_record_response = Invoke-RestMethod @update_dns_record
-if ($update_dns_record_response.success -ne "True") {
-  Write-Output "Error! Update Failed" | Tee-Object $File_LOG -Append
-  #Exit
-}
-
-Write-Output "==> Success!" | Tee-Object $File_LOG -Append
-Write-Output "==> $dns_record DNS Record Updated To: $ip, ttl: $ttl, proxied: $proxied" | Tee-Object $File_LOG -Append
-
-
-if ($notify_me_telegram -eq "no" -And $notify_me_discord -eq "no")   {
-  #Exit
-}
-
-if ($notify_me_telegram -eq "yes") {
-  $telegram_notification = @{
-    Uri    = "https://api.telegram.org/bot$telegram_bot_API_Token/sendMessage?chat_id=$telegram_chat_id&text=$dns_record DNS Record Updated To: $ip"
-    Method = 'GET'
-  }
-  $telegram_notification_response = Invoke-RestMethod @telegram_notification
-  if ($telegram_notification_response.ok -ne "True") {
-    Write-Output "Error! Telegram notification failed" | Tee-Object $File_LOG -Append
-    #Exit
-  }
-}
-
-if ($notify_me_discord -eq "yes") { 
-  $discord_message = "$dns_record DNS Record Updated To: $ip (was $dns_record_ip)" 
-  $discord_payload = [PSCustomObject]@{content = $discord_message} | ConvertTo-Json
-  $discord_notification = @{
-    Uri    = $discord_webhook_URL
-    Method = 'POST'
-    Body = $discord_payload
-    Headers = @{ "Content-Type" = "application/json" }
-  }
-    try {
-      Invoke-RestMethod @discord_notification
-    } catch {
-      Write-Host "==> Discord notification request failed. Here are the details for the exception:" | Tee-Object $File_LOG -Append
-      Write-Host "==> Request StatusCode:" $_.Exception.Response.StatusCode.value__  | Tee-Object $File_LOG -Append
-      Write-Host "==> Request StatusDescription:" $_.Exception.Response.StatusDescription | Tee-Object $File_LOG -Append
+    if (!(Test-Path $File_LOG)) {
+        New-Item -ItemType File -Path $PSScriptRoot -Name ($FileName) | Out-Null
     }
-    #Exit
-}
-}
 
-# Example usage:
-# Update-CloudflareDnsRecord -Email "your-email@example.com" -ApiKey "your-global-api-key" -ZoneIdentifier "tcnm.us" -RecordType "A" -RecordName "example.tcnm.us" -RecordContent "203.0.113.50" -RecordTtl 3600 -RecordProxied $true
-# Example usage:
+    Clear-Content $File_LOG
+    $DATE = Get-Date -UFormat "%Y/%m/%d %H:%M:%S"
+    Write-Output "==> $DATE" | Tee-Object $File_LOG -Append
 
-NSlookup officetest.tcnm.us
-Update-CloudflareDnsRecord
+    ### Check if set to internal ip and proxy
+    if (($WhatIp -eq "internal") -and ($Proxied)) {
+        Write-Output 'Error! Internal IP cannot be Proxied' | Tee-Object $File_LOG -Append
+        return
+    }
+
+    ### Get External ip from https://checkip.amazonaws.com
+    if ($WhatIp -eq 'external') {
+        $ip = (Invoke-RestMethod -Uri "https://checkip.amazonaws.com" -TimeoutSec 10).Trim()
+        if (!([bool]$ip)) {
+            Write-Output "Error! Can't get external ip from https://checkip.amazonaws.com" | Tee-Object $File_LOG -Append
+            return
+        }
+        Write-Output "==> External IP is: $ip" | Tee-Object $File_LOG -Append
+    }
+
+    ### Get Internal ip from primary interface
+    if ($WhatIp -eq 'internal') {
+        $ip = $((Find-NetRoute -RemoteIPAddress 1.1.1.1).IPAddress|out-string).Trim()
+        if (!([bool]$ip) -or ($ip -eq "127.0.0.1")) {
+            Write-Output "==>Error! Can't get internal ip address" | Tee-Object $File_LOG -Append
+            return
+        }
+        Write-Output "==> Internal IP is $ip" | Tee-Object $File_LOG -Append
+    }
+
+    ### Get IP address of DNS record from 1.1.1.1 DNS server when proxied is "false"
+    if ($Proxied -eq $false) {
+        $dns_record_ip = (Resolve-DnsName -Name $DnsRecord -Server 1.1.1.1 -Type A | Select-Object -First 1).IPAddress.Trim()
+        if (![bool]$dns_record_ip) {
+            Write-Output "Error! Can't resolve the ${DnsRecord} via 1.1.1.1 DNS server" | Tee-Object $File_LOG -Append
+            return
+        }
+        $is_proxed = $Proxied
+    }
+
+    ### Get the dns record id and current proxy status from cloudflare's api when proxied is "true"
+    if ($Proxied -eq $true) {
+        $dns_record_info = @{
+            Uri     = "https://api.cloudflare.com/client/v4/zones/$ZoneId/dns_records?name=$DnsRecord"
+            Headers = @{"Authorization" = "Bearer $CloudflareZoneApiToken"; "Content-Type" = "application/json" }
+        }
+        
+        $response = Invoke-RestMethod @dns_record_info
+        if ($response.success -ne "True") {
+            Write-Output "Error! Can't get dns record info from cloudflare's api" | Tee-Object $File_LOG -Append
+        }
+        $is_proxed = $response.result.proxied
+        $dns_record_ip = $response.result.content.Trim()
+    }
+
+    ### Check if ip or proxy have changed
+    if (($dns_record_ip -eq $ip) -and ($is_proxed -eq $Proxied)) {
+        Write-Output "==> DNS record IP of $DnsRecord is $dns_record_ip, no changes needed. #Exiting..." | Tee-Object $File_LOG -Append
+        return
+    }
+
+    Write-Output "==> DNS record of $DnsRecord is: $dns_record_ip. Trying to update..." | Tee-Object $File_LOG -Append
+
+    ### Get the dns record information from cloudflare's api
+    $cloudflare_record_info = @{
+        Uri     = "https://api.cloudflare.com/client/v4/zones/$ZoneId/dns_records?name=$DnsRecord"
+        Headers = @{"Authorization" = "Bearer $CloudflareZoneApiToken"; "Content-Type" = "application/json" }
+    }
+
+    $cloudflare_record_info_resposne = Invoke-RestMethod @cloudflare_record_info
+    if ($cloudflare_record_info_resposne.success -ne "True") {
+        Write-Output "Error! Can't get $DnsRecord record inforamiton from cloudflare API" | Tee-Object $File_LOG -Append
+        return
+    }
+
+    ### Get the dns record id from response
+    $dns_record_id = $cloudflare_record_info_resposne.result.id.Trim()
+
+    ### Push new dns record information to cloudflare's api
+    $update_dns_record = @{
+        Uri     = "https://api.cloudflare.com/client/v4/zones/$ZoneId/dns_records/$dns_record_id"
+        Method  = 'PUT'
+        Headers = @{"Authorization" = "Bearer $CloudflareZoneApiToken"; "Content-Type" = "application/json" }
+        Body    = @{
+            "type"    = "A"
+            "name"    = $DnsRecord
+            "content" = $ip
+            "ttl"     = $Ttl
+            "proxied" = $Proxied
+        } | ConvertTo-Json
+    }
+
+    $update_dns_record_response = Invoke-RestMethod @update_dns_record
+    if ($update_dns_record_response.success -ne "True") {
+        Write-Output "Error! Update Failed" | Tee-Object $File_LOG -Append
+        return
+    }
+
+    Write-Output "==> Success!" | Tee-Object $File_LOG -Append
+    Write-Output "==> $DnsRecord DNS Record Updated To: $ip, ttl: $Ttl, proxied: $Proxied" | Tee-Object $File_LOG -Append
+
+    if ($NotifyMeTelegram -eq "yes" -And $TelegramChatId -ne "" -And $TelegramBotAPIToken -ne "") {
+        $telegram_notification = @{
+            Uri    = "https://api.telegram.org/bot$TelegramBotAPIToken/sendMessage?chat_id=$TelegramChatId&text=$DnsRecord DNS Record Updated To: $ip"
+            Method = 'GET'
+        }
+        $telegram_notification_response = Invoke-RestMethod @telegram_notification
+        if ($telegram_notification_response.ok -ne "True") {
+            Write-Output "Error! Telegram notification failed" | Tee-Object $File_LOG -Append
+        }
+    }
+
+    if ($NotifyMeDiscord -eq "yes" -And $DiscordWebhookURL -ne "") { 
+        $discord_message = "$DnsRecord DNS Record Updated To: $ip (was $dns_record_ip)" 
+        $discord_payload = [PSCustomObject]@{content = $discord_message} | ConvertTo-Json
+        $discord_notification = @{
+            Uri    = $DiscordWebhookURL
+            Method = 'POST'
+            Body = $discord_payload
+            Headers = @{ "Content-Type" = "application/json" }
+        }
+        try {
+            Invoke-RestMethod @discord_notification
+        } catch {
+            Write-Host "==> Discord notification request failed. Here are the details for the exception:" | Tee-Object $File_LOG -Append
+            Write-Host "==> Request StatusCode:" $_.Exception.Response.StatusCode.value__ | Tee-Object $File_LOG -Append
+            Write-Host "==> Request StatusDescription:" $_.Exception.Response.StatusDescription | Tee-Object $File_LOG -Append
+        }
+    }
+}
