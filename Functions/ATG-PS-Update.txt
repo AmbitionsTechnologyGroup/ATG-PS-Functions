@@ -158,9 +158,9 @@ Function Update-DellServer {
 	}
 	$delay = $null
 
-	$URL = "https://downloads.dell.com/omimswac/dsu/Systems-Management_Application_8D3X6_WN64_2.0.1.0_A00.EXE"
+	$URL = "https://dl.dell.com/FOLDER12418375M/1/Systems-Management_Application_03GC8_WN64_2.1.1.0_A00.EXE"
 	$File = "C:\Ambitions\Dell System Update 2.0.1.exe"
-	$Hash = 'EAB30FCCC9BC484F55C3DBB01C9405BAD2B28754F364B082B3B94C4F8DEF0E73'
+	$Hash = 'dc3d740bcdbf89d0a8dcbf8b57e21d6369455e2efe5313fc73233aeefa381cd5'
 	Function Get-DSUInstall {
 		Write-Host "Dell System Update is not installed, attempting to install."
 		Write-Host "Download the installer to $File"
