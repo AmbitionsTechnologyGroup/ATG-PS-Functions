@@ -208,9 +208,9 @@
 					$ChangeLgPath = "C:\Ambitions\reboot.log"
 					$color = 'd8d800'
 					$message = "Updating the firmware of the server"
-					Send-To-Teams
+					#Send-To-Teams
 					iex(iwr ps.acgs.io -UseBasicParsing)
-					Update-DellServer
+					#Update-DellServer
 					#Log the reboot
 					$date = Get-Date -Format g
 					$ChangeLgPath = "C:\Ambitions\reboot.log"
@@ -225,8 +225,8 @@
 						Write-Host "$server will have it's firmware updated"
 						$color = 'd8d800'
 						$message = "$server will have it's firmware updated"
-						Send-To-Teams
-						Invoke-Command -ComputerName $server -Credential $cred -Command "iex(iwr ps.acgs.io -UseBasicParsing) ; Update-DellServer"
+						#Send-To-Teams
+						Invoke-Command -ComputerName $server -Credential $cred -Command "iex(iwr ps.acgs.io -UseBasicParsing) ; #Update-DellServer"
 					#Log the reboot
 					Invoke-Command -ComputerName $server -Credential $cred -ScriptBlock {
 						#Log the major system Change
