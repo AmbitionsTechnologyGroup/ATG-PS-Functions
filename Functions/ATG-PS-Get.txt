@@ -148,78 +148,152 @@ Function Get-ATGPS {
 	}
 }
 
-Function Get-BitLockerKey {
+function Get-BitLockerKey {
+	[CmdletBinding()]
 	param(
-		[Parameter(Mandatory = $false)]
+		[Parameter(Mandatory = $false, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+		[Alias('Name', 'DistinguishedName')]
 		[string]$Computer
 	)
-	#$Computer = "OPTIPLEX7040-20"
-	$Computers = Get-ADComputer -Filter 'ObjectClass -eq "computer"'
-	$AllComputers = @()
-	#$strToReport = new-object psobject
-	$Computers | Foreach-object {
-		#$Computer = $_.name
-		#Check if the Computer Object exists
-		$Computer_Object = Get-ADComputer -Filter { cn -eq $_.name } -Property msTPM-OwnerInformation, msTPM-TpmInformationForComputer
-		If ($Computer_Object -eq $null) {
-			Write-Host "Error..."
+	
+	begin {
+		# Check if BitLocker Drive Encryption Administration Utilities are installed
+		$featureName = "RSAT-Feature-Tools-BitLocker"
+		$feature = Get-WindowsFeature -Name $featureName
+		
+		# If not installed, install silently
+		if (-not $feature.Installed) {
+			Write-Verbose "BitLocker Drive Encryption Administration Utilities not installed. Installing now..."
+			try {
+				Install-WindowsFeature -Name $featureName -ErrorAction Stop | Out-Null
+				Write-Verbose "BitLocker Drive Encryption Administration Utilities installed successfully."
+			}
+			catch {
+				Write-Error "Failed to install BitLocker Drive Encryption Administration Utilities: $_"
+				return
+			}
 		}
-		#Check if the computer object has had a BitLocker Recovery Password
-		$Bitlocker_Object = Get-ADObject -Filter { objectclass -eq 'msFVE-RecoveryInformation' } -SearchBase $Computer_Object.DistinguishedName -Properties 'Name','msFVE-RecoveryPassword' | Sort-Object -Property Name | Select-Object -Last 1
-		If ($Bitlocker_Object.'msFVE-RecoveryPassword') {
-			$BitLocker_ID = $BitLocker_Object.'Name'
-			$BitLocker_Key = $BitLocker_Object.'msFVE-RecoveryPassword'
-
-			#$strToReport = $_.name,$BitLocker_Key
-			$strToReport = [PSCustomObject]@{
-				Computer     = $_.name
-				BitLockerID = $BitLocker_ID
-				BitLockerKey = $BitLocker_Key
+		
+		# Initialize array for results if processing multiple computers
+		$AllComputers = @()
+	}
+	
+	process {
+		try {
+			# If a specific computer is provided via pipeline or parameter
+			if ($Computer) {
+				# Determine if we received a distinguished name
+				if ($Computer -like "*DC=*") {
+					try {
+						$Computer_Object = Get-ADComputer -Identity $Computer -Property msTPM-OwnerInformation, msTPM-TpmInformationForComputer -ErrorAction Stop
+						$ComputerName = $Computer_Object.Name
+					}
+					catch {
+						Write-Error "Failed to retrieve computer from Distinguished Name: $_"
+						return
+					}
+				}
+				else {
+					# Assume it's a computer name
+					$ComputerName = $Computer
+					$Computer_Object = Get-ADComputer -Filter { Name -eq $ComputerName } -Property msTPM-OwnerInformation, msTPM-TpmInformationForComputer -ErrorAction Stop
+				}
+				
+				if ($null -eq $Computer_Object) {
+					Write-Error "Computer '$ComputerName' not found in Active Directory."
+					return
+				}
+				
+				# Get BitLocker information
+				$Bitlocker_Object = Get-ADObject -Filter { objectclass -eq 'msFVE-RecoveryInformation' } -SearchBase $Computer_Object.DistinguishedName -Properties 'Name','msFVE-RecoveryPassword' | Sort-Object -Property Name | Select-Object -Last 1
+				
+				if ($Bitlocker_Object.'msFVE-RecoveryPassword') {
+					$BitLocker_ID = $Bitlocker_Object.'Name'
+					$BitLocker_Key = $Bitlocker_Object.'msFVE-RecoveryPassword'
+					
+					$ComputerInfo = [PSCustomObject]@{
+						Computer     = $ComputerName
+						BitLockerID  = $BitLocker_ID
+						BitLockerKey = $BitLocker_Key
+					}
+					
+					# Display and copy to clipboard
+					$ComputerInfo | Format-List
+					Write-Host "The BitLocker key has been copied to the clipboard.`n"
+					$ComputerInfo.BitLockerKey | Clip
+				} else {
+					Write-Host "There is no BitLocker key for computer '$ComputerName'."
+				}
 			}
-			$AllComputers += $strToReport
-			#Display Output
-			#Write-Host $strToReport
-
-			#Save to Report
-			#$strToReport | Out-File C:\temp\Report.txt -append
-		} Else {
-			$BitLocker_Key = "None"
-			#$strToReport = $_.name,$BitLocker_Key
-			$strToReport = [PSCustomObject]@{
-				Computer     = $_.name
-				BitLockerID = "None"
-				BitLockerKey = $BitLocker_Key
+			# If no computer specified, get all computers
+			else {
+				$Computers = Get-ADComputer -Filter 'ObjectClass -eq "computer"' -ErrorAction Stop
+				
+				$Computers | ForEach-Object {
+					$CurrentComputer = $_.Name
+					
+					# Check if BitLocker recovery information exists
+					try {
+						$Bitlocker_Object = Get-ADObject -Filter { objectclass -eq 'msFVE-RecoveryInformation' } -SearchBase $_.DistinguishedName -Properties 'Name','msFVE-RecoveryPassword' | Sort-Object -Property Name | Select-Object -Last 1
+						
+						if ($Bitlocker_Object.'msFVE-RecoveryPassword') {
+							$BitLocker_ID = $Bitlocker_Object.'Name'
+							$BitLocker_Key = $Bitlocker_Object.'msFVE-RecoveryPassword'
+						} else {
+							$BitLocker_ID = "None"
+							$BitLocker_Key = "None"
+						}
+					}
+					catch {
+						$BitLocker_ID = "Error"
+						$BitLocker_Key = "Error: $_"
+					}
+					
+					$ComputerInfo = [PSCustomObject]@{
+						Computer     = $CurrentComputer
+						BitLockerID  = $BitLocker_ID
+						BitLockerKey = $BitLocker_Key
+					}
+					
+					$AllComputers += $ComputerInfo
+				}
+				
+				# Return all computers sorted
+				$AllComputers | Sort-Object -Property "Computer"
 			}
-			$AllComputers += $strToReport
-			#Write-Host $strToReport
+		}
+		catch {
+			Write-Error "An error occurred: $_"
 		}
 	}
-	If ($Computer) {
-		If ($AllComputers.Computer -NotContains $Computer) {
-			Write-Host "The computer specified was not found."
-		} Else {
-			$ComputerInfo = new-object psobject
-			$ComputerInfo = $AllComputers | Where-Object -Property Computer -eq -Value $Computer
-			$ComputerInfo | Format-List
-			If ($ComputerInfo.BitlockerKey -eq "None") {
-				Write-Host "There is no bitlocker key for this computer."
-			} Else {
-
-				Write-Host "The bitlocker key has been copied to the clipboard.`n"
-				$ComputerInfo.BitlockerKey | Clip
-			}
-		}
-	} Else {
-		$AllComputers | Sort-Object -Property "Computer"
-	}
-
+	
 	<#
 	.SYNOPSIS
 		Searches for and retrieves a BitLocker recovery key for the specified computer(s) in Active Directory.
+	.DESCRIPTION
+		This function retrieves BitLocker recovery keys from Active Directory. If the BitLocker Drive Encryption
+		Administration Utilities are not installed, it will install them automatically.
 	.PARAMETER Computer
-		[Optional] Specify the name of the computer to retrieve the BitLockerKey for. Will copy the key to the clipboard if specified.
+		[Optional] Specify the name of the computer or a computer object from Get-ADComputer to retrieve the BitLockerKey for. 
+		Will copy the key to the clipboard if specified. If omitted, returns all computer BitLocker keys.
 	.EXAMPLE
 		Get-BitLockerKey -Computer "ACG-Desktop23"
+		
+		Retrieves the BitLocker key for ACG-Desktop23 and copies it to the clipboard.
+	.EXAMPLE
+		Get-BitLockerKey
+		
+		Returns BitLocker keys for all computers in Active Directory.
+	.EXAMPLE
+		Get-ADComputer "ACG-Desktop23" | Get-BitLockerKey
+		
+		Retrieves the BitLocker key for ACG-Desktop23 using pipeline input from Get-ADComputer.
+	.EXAMPLE
+		Get-ADComputer -Filter {Name -like "ACG-*"} | Get-BitLockerKey
+		
+		Retrieves BitLocker keys for all computers with names starting with "ACG-".
+	.NOTES
+		Requires Active Directory PowerShell module and appropriate permissions.
 	#>
 }
 
@@ -263,57 +337,57 @@ function Get-ComputerEntraStatus {
 Function Global:Get-DellWarranty {
 <#
 .SYNOPSIS
-    Retrieves warranty information for Dell systems using the Dell API.
+	Retrieves warranty information for Dell systems using the Dell API.
 
 .DESCRIPTION
-    This function queries the Dell API to retrieve warranty information for one or more Dell systems
-    identified by their Service Tags. It can process the local system's Service Tag, a provided list
-    of Service Tags, or Service Tags pasted by the user.
+	This function queries the Dell API to retrieve warranty information for one or more Dell systems
+	identified by their Service Tags. It can process the local system's Service Tag, a provided list
+	of Service Tags, or Service Tags pasted by the user.
 
 .PARAMETER Brand
-    Currently not used, reserved for future functionality.
+	Currently not used, reserved for future functionality.
 
 .PARAMETER Local
-    Switch to use the local system's Service Tag. This is the default if no ServiceTags are provided.
+	Switch to use the local system's Service Tag. This is the default if no ServiceTags are provided.
 
 .PARAMETER ServiceTags
-    An array of Service Tags to query. Can be passed from the pipeline.
+	An array of Service Tags to query. Can be passed from the pipeline.
 
 .PARAMETER Paste
-    Prompts the user to paste a list of Service Tags, one per line.
+	Prompts the user to paste a list of Service Tags, one per line.
 
 .PARAMETER Show
-    Displays the results in a formatted table.
+	Displays the results in a formatted table.
 
 .PARAMETER CopyToClipBoard
-    Copies the results to the clipboard in a tab-delimited format.
+	Copies the results to the clipboard in a tab-delimited format.
 
 .PARAMETER ReturnObject
-    Returns the results as a PowerShell object that can be stored in a variable for further processing.
+	Returns the results as a PowerShell object that can be stored in a variable for further processing.
 
 .EXAMPLE
-    Get-DellWarranty -Local -Show
-    Queries the warranty information for the local system and displays the results.
+	Get-DellWarranty -Local -Show
+	Queries the warranty information for the local system and displays the results.
 
 .EXAMPLE
-    Get-DellWarranty -ServiceTags "1234ABC","5678DEF" -CopyToClipBoard
-    Queries warranty information for the specified Service Tags and copies the results to the clipboard.
+	Get-DellWarranty -ServiceTags "1234ABC","5678DEF" -CopyToClipBoard
+	Queries warranty information for the specified Service Tags and copies the results to the clipboard.
 
 .EXAMPLE
-    Get-DellWarranty -Paste -Show
-    Prompts the user to paste a list of Service Tags and displays the results.
+	Get-DellWarranty -Paste -Show
+	Prompts the user to paste a list of Service Tags and displays the results.
 
 .EXAMPLE
-    $warrantyInfo = Get-DellWarranty -ServiceTags "1234ABC" -ReturnObject
-    Queries warranty information for the specified Service Tag and stores the results in the $warrantyInfo variable.
+	$warrantyInfo = Get-DellWarranty -ServiceTags "1234ABC" -ReturnObject
+	Queries warranty information for the specified Service Tag and stores the results in the $warrantyInfo variable.
 
 .NOTES
-    Requires Dell API credentials to be stored in:
-    - $env:appdata\Microsoft\Windows\PowerShell\DellKey.txt
-    - $env:appdata\Microsoft\Windows\PowerShell\DellSec.txt
+	Requires Dell API credentials to be stored in:
+	- $env:appdata\Microsoft\Windows\PowerShell\DellKey.txt
+	- $env:appdata\Microsoft\Windows\PowerShell\DellSec.txt
 
-    For more information on setting up Dell API credentials, refer to:
-    https://ambitions.itglue.com/806129/docs/10204492
+	For more information on setting up Dell API credentials, refer to:
+	https://ambitions.itglue.com/806129/docs/10204492
 #>
 	Param(
 		# Currently not used, reserved for future functionality
