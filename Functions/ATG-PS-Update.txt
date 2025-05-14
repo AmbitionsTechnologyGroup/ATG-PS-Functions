@@ -611,7 +611,7 @@ Function Update-PWSH {
 		winget install --id Microsoft.PowerShell -e -h --accept-package-agreements --accept-source-agreements
 	} Else {
 		If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
-		Choco upgrade pwsh -y
+		Choco upgrade pwsh -y -force
 	}
 	# Update the system PATH env to correct previous install logic.
 	$folderToSearch = "C:\Program Files\PowerShell\"
