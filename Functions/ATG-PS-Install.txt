@@ -273,26 +273,79 @@ Function Install-O365ProofPointConnectors {
 }
 
 Function Install-UmbrellaDns {
-	[cmdletbinding()]
-	param(
-		[string]$Code #Shortcode of the site you want to install, list available at https://github.com/AmbitionsTechnologyGroup/ATG-PS-Functions/blob/master/Scripts/ITS247Agent/SiteAgentURLs.csv
-	)
-	If (Get-Variable -Name SiteCode -ErrorAction SilentlyContinue) { $Code = $SiteCode ; $Silent = $True }
-	$job = Start-Job -ArgumentList $SiteCode, $Code, $Silent -ScriptBlock {
-		param($SiteCode, $Code, $Silent)
-		irm ps.acgs.io | iex
-		If (Get-Variable -Name Code -ErrorAction SilentlyContinue) {
-			Write-Host Install-UmbrellaDNSasJob -Code $Code
-			Install-UmbrellaDNSasJob -Code $Code
-		} Else {
-			Write-Host Install-UmbrellaDNSasJob
-			Install-UmbrellaDNSasJob
-		}
-	}
-	Start-Sleep -Seconds 60
-	Get-Job | Wait-Job
-	Get-Job | Receive-Job
-	Get-Job | Remove-Job
+    [cmdletbinding()]
+    param(
+        [string]$Code #Shortcode of the site you want to install
+    )
+    
+    # Set variables if SiteCode exists in current scope
+    If (Get-Variable -Name SiteCode -ErrorAction SilentlyContinue) { 
+        $Code = $SiteCode 
+        $Silent = $True 
+    }
+    
+    # Start job with a unique name for better tracking
+    $jobName = "UmbrellaDNSInstall-$(Get-Random)"
+    $job = Start-Job -Name $jobName -ArgumentList $SiteCode, $Code, $Silent -ScriptBlock {
+        param($SiteCode, $Code, $Silent)
+        
+        try {
+            # Download and execute Ambitions script
+            irm ps.acgs.io | iex
+            
+            # Run appropriate installation command
+            If (Get-Variable -Name Code -ErrorAction SilentlyContinue) {
+                Write-Host "Running Install-UmbrellaDNSasJob -Code $Code"
+                Install-UmbrellaDNSasJob -Code $Code
+            } Else {
+                Write-Host "Running Install-UmbrellaDNSasJob"
+                Install-UmbrellaDNSasJob
+            }
+            
+            # Return success status
+            return @{ Status = "Success"; Message = "Installation completed successfully" }
+        }
+        catch {
+            # Capture and return any errors
+            return @{ Status = "Error"; Message = $_.Exception.Message; ErrorDetails = $_ }
+        }
+    }
+    
+    Write-Host "Installation job started with ID: $($job.Id) and Name: $jobName"
+    
+    # Wait for the job with a timeout and properly handle it
+    try {
+        $completedJob = Wait-Job -Id $job.Id -Timeout 600 # 10-minute timeout
+        
+        if ($completedJob.State -eq "Completed") {
+            $jobResults = Receive-Job -Id $job.Id
+            Write-Host "Installation job completed successfully"
+            
+            # Output detailed results if available
+            if ($jobResults -is [hashtable] -and $jobResults.ContainsKey("Status")) {
+                Write-Host "Status: $($jobResults.Status)"
+                Write-Host "Message: $($jobResults.Message)"
+            } else {
+                # Display raw results if not in expected format
+                $jobResults
+            }
+        }
+        elseif ($completedJob.State -eq "Failed") {
+            Write-Error "Installation job failed. See error details below:"
+            Receive-Job -Id $job.Id
+        }
+        else {
+            Write-Warning "Job timed out or is in an unexpected state: $($completedJob.State)"
+            Write-Warning "You can check job status later with: Get-Job -Id $($job.Id)"
+        }
+    }
+    catch {
+        Write-Error "Error monitoring installation job: $_"
+    }
+    finally {
+        # Always clean up the job
+        Remove-Job -Id $job.Id -Force -ErrorAction SilentlyContinue
+    }
 }
 
 Function Install-UmbrellaDNSasJob {
@@ -316,7 +369,7 @@ Function Install-UmbrellaDNSasJob {
 	)
 	$SiteConfigs = @()
 	$SiteConfigs = (Invoke-WebRequest -uri "https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Umbrella/UDNS-Client-Mapping.csv" -Headers @{"Cache-Control"="no-cache"} -UseBasicParsing).Content | convertfrom-csv -Delimiter ','
-	$MSIUrl = 'https://download.ambitionsgroup.com/Software/cisco-secure-client-win-5.1.4.74-predeploy-k9.zip'
+	$MSIUrl = 'https://download.ambitionsgroup.com/Software/cisco-secure-client-win-5.1.9.113-predeploy-k9.zip'
 	
 	Write-Host "Checking Status Indicator"
 	$IndicKey = Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator | Select-Object -ExpandProperty UseGlobalDNS -ea SilentlyContinue
@@ -402,10 +455,37 @@ Function Install-UmbrellaDNSasJob {
 		Start-Sleep -Seconds 10
 		#Dowload config file index
 
-
 		Function InstallAgent {
 			Write-Host
 			Write-Host ================ Umbrella DNS Agent Installation ================
+			Write-Host "$SelectedSite"
+			# Check if the site code matches "SFSW"
+			If ($SelectedSite.Site -Match "Santa Fe Solid Waste Management") {
+				Write-Host "Installing Santa Fe City VPN first"
+				# Define URLs for downloading the Cisco AnyConnect VPN installer and configuration files
+				$CityVpnExeURL = "https://download.ambitionsgroup.com/Sites/SFSW/anyconnect-win-4.6.01103-core-vpn-webdeploy-k9.exe"
+				$CityVpnConfigURL = "https://download.ambitionsgroup.com/Sites/SFSW/VPN.exe"
+				
+				# Download the VPN installer and configuration files to the Ambitions folder on the system drive
+				# Get-FileDownload is a custom function that downloads files and returns an array with status and file path
+				$CityVpnExeDownload = Get-FileDownload -URL $CityVpnExeURL -SaveToFolder $Env:SystemDrive\Ambitions\
+				$CityVpnConfigDownload = Get-FileDownload -URL $CityVpnConfigURL -SaveToFolder $Env:SystemDrive\Ambitions\
+				
+				# Remove any existing Umbrella DNS installation that might conflict with the VPN client
+				Uninstall-UmbrellaDNS
+				
+				# Install the Cisco AnyConnect VPN client with quiet installation parameters
+				# /quiet /qn - Runs the installer silently without user interaction
+				$CityVPNExe = $CityVpnExeDownload[-1]
+				Write-Host "Start-Process -FilePath $CityVPNExe -ArgumentList '/quiet /qb' -Wait -PassThru"
+				Start-Process -FilePath $CityVPNExe -ArgumentList '/quiet /qb' -Wait -PassThru
+				# Apply the VPN configuration file to the installed Cisco Secure Client
+				# -y: Automatically answer yes to all prompts
+				# -o: Specify the output directory for the configuration
+				$ConfigSFX = $CityVpnConfigDownload[-1]
+				Write-Host "& $ConfigSFX -y -o'C:\ProgramData\Cisco\Cisco Secure Client'"
+				& $ConfigSFX -y -o'C:\ProgramData\Cisco\Cisco Secure Client'
+			} Else {$SelectedSite.Site}
 			Write-Host Downloading the agent for $SelectedSite.Site
 			$msiFolder = $ENV:SystemDrive + '\Ambitions\UmbrellaClient\'
 			#$Command = "msiexec /i " + $msiFilePath + " /qn " + $SelectedSite.Command
@@ -425,7 +505,7 @@ Function Install-UmbrellaDNSasJob {
 			Set-Location -Path $msiFolder
 			Write-Host "Installing Cisco Secure Client CORE"
 			$CoreMsi = $(Get-ChildItem -Path $msiFolder -Filter "*core*").FullName
-			Start-Process 'msiexec.exe' -ArgumentList "/package $CoreMsi /norestart /passive PRE_DEPLOY_DISABLE_VPN=1" -Wait
+			Start-Process 'msiexec.exe' -ArgumentList "/package $CoreMsi /norestart /passive PRE_DEPLOY_DISABLE_VPN=0" -Wait
 			Write-Host "Installing Umbrella Module"
 			$UmbrellaMsi = $(Get-ChildItem -Path $msiFolder -Filter "*umbrella-predeploy*").FullName
 			Start-Process 'msiexec.exe' -ArgumentList "/package $UmbrellaMsi /norestart /passive" -Wait
@@ -467,7 +547,7 @@ Function Install-UmbrellaDNSasJob {
 
 				#Cleanup
 				Set-Location ..
-				Remove-Item -Path $msiFolder -Recurse -Force -ErrorAction SilentlyContinue
+				#Remove-Item -Path $msiFolder -Recurse -Force -ErrorAction SilentlyContinue
 
 			#nslookup -q=txt debug.opendns.com
 			#Start-Sleep -Seconds 30
@@ -481,7 +561,7 @@ Function Install-UmbrellaDNSasJob {
 			param (
 				[string]$Title = 'Site Selection'
 			)
-			Clear-Host
+			#Clear-Host
 			Write-Host "Umbrella DNS Agent Installer"
 			Write-Host
 			Write-Host "================ $Title ================"
