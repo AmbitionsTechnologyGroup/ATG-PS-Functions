@@ -107,7 +107,7 @@ Function Install-NetExtender {
 		Write-Host "Downloading & Installing NetExtender"
 		If (Get-Command winget -ErrorAction SilentlyContinue) {
 			winget source update
-			winget install --id SonicWALL.NetExtender -e -h --accept-package-agreements --accept-source-agreements
+			winget install --id SonicWall.NetExtender -e -h --accept-package-agreements --accept-source-agreements
 		} Else {
 			If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
 			Choco upgrade sonicwall-sslvpn-netextender -y
