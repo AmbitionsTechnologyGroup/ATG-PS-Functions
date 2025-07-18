@@ -673,7 +673,7 @@ Function Update-Windows {
 	Write-Host "Checking Chocolatey Installation"
 	If (-NOT (Test-Path "C:\ProgramData\chocolatey\bin\choco.exe")) {
 		Write-Host "Choco is not installed. Installing Choco."
-		Set-ExecutionPolicy Bypass -Scope Process -Force; iex ((New-Object System.Net.WebClient).DownloadString('http://download.ambitionsgroup.com/Scripts/installchoco.ps1'))
+		Install-Choco
 	}
 	
 	Write-Host "Choco is installed. Checking for powershell version."
