@@ -139,6 +139,10 @@ Function Convert-ComputerFleetReport {
         }
     }
 
+    # Calculate some dates used in warranty comparisons and sorting
+    $now = Get-Date
+    $oneYearFromNow = (Get-Date).AddYears(1)
+
     # Add the new warranty columns to each entry
     $uniqueData = $uniqueData | ForEach-Object {
         $_ | Add-Member -NotePropertyName "OriginalShipDate" -NotePropertyValue "" -PassThru |
@@ -159,7 +163,6 @@ Function Convert-ComputerFleetReport {
 
     if ($dellSystems.Count -gt 0) {
         Write-Host "Found $($dellSystems.Count) Dell/Alienware systems. Retrieving warranty information..."
-        $now = Get-Date
         foreach ($system in $dellSystems) {
             try {
                 Write-Host "Processing warranty for system: $($system.Name) with Serial: $($system."Device Serial Number")"
@@ -315,9 +318,6 @@ Function Convert-ComputerFleetReport {
             exit
         }
     }
-
-    # Calculate the date one year from now for warranty comparisons
-    $oneYearFromNow = (Get-Date).AddYears(1)
 
     # Export data to Excel with conditional formatting
     $excelParams = @{
