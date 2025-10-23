@@ -143,6 +143,9 @@ Function Convert-ComputerFleetReport {
     $now = Get-Date
     $oneYearFromNow = (Get-Date).AddYears(1)
 
+    ## Use this formula so data and conditional formatting will be the same no matter when the Excel file is viewed
+    $nowFormula = 'DATE(' + $now.Year + ',' + $now.Month + ',' + $now.Day + ')'
+
     $safeParseDate = {
         param(
             [string]$str
@@ -159,13 +162,24 @@ Function Convert-ComputerFleetReport {
         return $str
     }
 
+    ## Setup for sorting and conditional formatting (row colors)
+    $warrantyStatus = @{
+        Unknown = "?"
+        Expired = "Expired"
+        UnderOneYear = "Under 1 Year"
+        OverOneYear = "Over 1 Year"
+    }
+    $warrantyStatusFormula = '=IF(TRIM(@[Warranty End])="","' + $warrantyStatus.Unknown + '",IF(VALUE(@[Warranty End])<' + $nowFormula + ',"' + $warrantyStatus.Expired + '",IF(VALUE(@[Warranty End])<' + $nowFormula + '+365,"' + $warrantyStatus.UnderOneYear + '","' + $warrantyStatus.OverOneYear + '")))'
+    $ageUnknown = "?"
+    $ageFormula = '=IF(TRIM(@[Warranty Start])="","' + $ageUnknown + '",ROUND((' + $nowFormula + '-@[Warranty Start])/365.25,1))'
+
     # Add the new warranty columns to each entry
     $uniqueData = $uniqueData | ForEach-Object {
         $_ | Add-Member -NotePropertyName "OriginalShipDate" -NotePropertyValue "" -PassThru |
-              Add-Member -NotePropertyName "Age" -NotePropertyValue "" -PassThru |
+              Add-Member -NotePropertyName "Age" -NotePropertyValue $ageFormula -PassThru |
               Add-Member -NotePropertyName "WarrantyStartDate" -NotePropertyValue "" -PassThru |
               Add-Member -NotePropertyName "WarrantyEndDate" -NotePropertyValue "" -PassThru |
-              Add-Member -NotePropertyName "WarrantyExpired" -NotePropertyValue "" -PassThru |
+              Add-Member -NotePropertyName "WarrantyExpired" -NotePropertyValue $warrantyStatusFormula -PassThru |
               Add-Member -NotePropertyName "WarrantySupportLevel" -NotePropertyValue ""
         $_
     }
@@ -189,10 +203,8 @@ Function Convert-ComputerFleetReport {
                     $systemInData = $uniqueData | Where-Object { $_.Name -eq $system.Name }
                     if ($systemInData) {
                         $systemInData.OriginalShipDate = $warrantyInfo.OriginalShipDate
-                        $systemInData.Age = [Math]::Round(($now - [datetime]$warrantyInfo.WarrantyStartDate).TotalDays / 365.25, 1)
                         $systemInData.WarrantyStartDate = $warrantyInfo.WarrantyStartDate
                         $systemInData.WarrantyEndDate = $warrantyInfo.WarrantyEndDate
-                        $systemInData.WarrantyExpired = $warrantyInfo.WarrantyExpired
                         $systemInData.WarrantySupportLevel = $warrantyInfo.WarrantySupportLevel
                         
                         Write-Host "Updated warranty information for $($system.Name)"
@@ -319,6 +331,11 @@ Function Convert-ComputerFleetReport {
         $obj
     }
 
+    # Sort the collection
+    $renamedData = $renamedData | Sort-Object -Property `
+        @{Expression={$_."Warranty End" -as [datetime]}; Descending = $false}, `
+        @{Expression="Friendly Name"; Descending = $false}
+
     # Export to Excel with formatting
     Write-Host "Creating Excel file with formatting..."
 
@@ -397,35 +414,29 @@ Function Convert-ComputerFleetReport {
         
         # Apply conditional formatting based on warranty status
         if ($statusCol -and $warrantyEndCol) {
-            for ($row = 2; $row -le $rowCount; $row++) {
-                $statusValue = $workSheet.Cells[$row, $statusCol].Value
-                $endDateValue = $workSheet.Cells[$row, $warrantyEndCol].Value
-                
-                # Convert end date from string if needed
-                $endDateValue = $safeParseDate.invoke($endDateValue)
-                
-                # Apply styles based on conditions
-                $entireRow = $workSheet.Cells[$row, 1, $row, $workSheet.Dimension.Columns]
-                
-                if ([string]::IsNullOrWhiteSpace($statusValue)) {
-                    # Empty warranty - Note style (light blue)
-                    $entireRow.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
-                    $entireRow.Style.Fill.BackgroundColor.SetColor([System.Drawing.Color]::FromArgb(218, 238, 243))
-                } elseif ($statusValue -eq "Expired") {
-                    # Expired warranty - Bad style (light red)
-                    $entireRow.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
-                    $entireRow.Style.Fill.BackgroundColor.SetColor([System.Drawing.Color]::FromArgb(255, 199, 206))
-                } elseif ($statusValue -eq "Not Expired" -and $endDateValue) {
-                    if ($endDateValue -le $oneYearFromNow) {
-                        # Less than a year left - Neutral style (light yellow)
-                        $entireRow.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
-                        $entireRow.Style.Fill.BackgroundColor.SetColor([System.Drawing.Color]::FromArgb(255, 235, 156))
-                    } else {
-                        # More than a year left - Good style (light green)
-                        $entireRow.Style.Fill.PatternType = [OfficeOpenXml.Style.ExcelFillStyle]::Solid
-                        $entireRow.Style.Fill.BackgroundColor.SetColor([System.Drawing.Color]::FromArgb(198, 239, 206))
-                    }
+            $lastRow = $workSheet.Dimension.End.Row
+
+            $statuses = @{
+                Unknown = @{
+                    Condition = '=$O2="' + $warrantyStatus.Unknown + '"'
+                    Color = [System.Drawing.Color]::FromArgb(218, 238, 243)  ## light blue
                 }
+                Expired = @{
+                    Condition = '=$O2="' + $warrantyStatus.Expired + '"'
+                    Color = [System.Drawing.Color]::FromArgb(255, 199, 206)  ## light red
+                }
+                UnderOneYear = @{
+                    Condition = '=$O2="' + $warrantyStatus.UnderOneYear + '"'
+                    Color = [System.Drawing.Color]::FromArgb(255, 235, 156)  ## light yellow
+                }
+                OverOneYear = @{
+                    Condition = '=$O2="' + $warrantyStatus.OverOneYear + '"'
+                    Color = [System.Drawing.Color]::FromArgb(198, 239, 206)  ## light green
+                }
+            }
+
+            $statuses.Values | ForEach-Object {
+                Add-ConditionalFormatting -Worksheet $workSheet -Address "A2:O$lastRow" -RuleType Expression -ConditionValue $_.Condition -BackgroundColor $_.Color
             }
         }
         
