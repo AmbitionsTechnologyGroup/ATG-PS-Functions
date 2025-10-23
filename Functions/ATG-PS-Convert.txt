@@ -139,28 +139,11 @@ Function Convert-ComputerFleetReport {
         }
     }
 
-    # Calculate some dates used in warranty comparisons and sorting
+    # Today's date, for use in warranty comparisons and sorting
     $now = Get-Date
-    $oneYearFromNow = (Get-Date).AddYears(1)
 
     ## Use this formula so data and conditional formatting will be the same no matter when the Excel file is viewed
     $nowFormula = 'DATE(' + $now.Year + ',' + $now.Month + ',' + $now.Day + ')'
-
-    $safeParseDate = {
-        param(
-            [string]$str
-        )
-
-        if ($str -and $str -is [string]) {
-            try {
-                $str = [DateTime]::Parse($str)
-            } catch {
-                $str = $null
-            }
-        }
-
-        return $str
-    }
 
     ## Setup for sorting and conditional formatting (row colors)
     $warrantyStatus = @{
