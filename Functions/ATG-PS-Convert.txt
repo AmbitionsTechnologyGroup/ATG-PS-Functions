@@ -84,6 +84,12 @@ Function Convert-ComputerFleetReport {
     # Import the CSV
     $data = Import-Csv -Path $InputFile
 
+    # Exclude virtual machines
+    $data = $data | Where-Object -Property "System Model" -ne "Virtual Machine"
+
+    # Exclude USB devices
+    $data = $data | Where-Object -Property "Disk Interface Type" -ne "USB"
+
     # Identify all column names in the CSV
     $allColumns = $data[0].PSObject.Properties.Name
 
