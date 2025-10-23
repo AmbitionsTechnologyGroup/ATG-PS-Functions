@@ -142,6 +142,7 @@ Function Convert-ComputerFleetReport {
     # Add the new warranty columns to each entry
     $uniqueData = $uniqueData | ForEach-Object {
         $_ | Add-Member -NotePropertyName "OriginalShipDate" -NotePropertyValue "" -PassThru |
+              Add-Member -NotePropertyName "Age" -NotePropertyValue "" -PassThru |
               Add-Member -NotePropertyName "WarrantyStartDate" -NotePropertyValue "" -PassThru |
               Add-Member -NotePropertyName "WarrantyEndDate" -NotePropertyValue "" -PassThru |
               Add-Member -NotePropertyName "WarrantyExpired" -NotePropertyValue "" -PassThru |
@@ -168,6 +169,15 @@ Function Convert-ComputerFleetReport {
                     $systemInData = $uniqueData | Where-Object { $_.Name -eq $system.Name }
                     if ($systemInData) {
                         $systemInData.OriginalShipDate = $warrantyInfo.OriginalShipDate
+
+                        ##
+                        ## TODO: decide which of these to use
+                        ##
+                        # $systemInData.Age = '=ROUND((TODAY()-INDIRECT(ADDRESS(ROW(),COLUMN()+1)))/365.25,1)'  ## original approach
+                        $systemInData.Age = '=ROUND((TODAY()-@[Warranty Start])/365.25,1)'  ## cleaned up
+                        # $systemInData.Age = '=ROUND(YEARFRAC(TODAY(), @[Warranty Start], 1), 1)'  ## alternative approach #1
+                        # $systemInData.Age = '=DATEDIF(@[Warranty Start], TODAY(), "Y")'  ## alternative approach #2 (no decimal part)
+
                         $systemInData.WarrantyStartDate = $warrantyInfo.WarrantyStartDate
                         $systemInData.WarrantyEndDate = $warrantyInfo.WarrantyEndDate
                         $systemInData.WarrantyExpired = $warrantyInfo.WarrantyExpired
@@ -190,7 +200,7 @@ Function Convert-ComputerFleetReport {
     $newColumnOrder = $newColumnOrder | Where-Object { $_ -ne "OriginalShipDate" -and $_ -ne "WarrantySupportLevel" }
     
     # Select the data with the new column order including only the warranty columns we want to keep
-    $newColumnOrder += @("WarrantyStartDate", "WarrantyEndDate", "WarrantyExpired")
+    $newColumnOrder += @("Age", "WarrantyStartDate", "WarrantyEndDate", "WarrantyExpired")
 
     # Create the final dataset with the specified column order
     $newData = $uniqueData | Select-Object -Property $newColumnOrder
