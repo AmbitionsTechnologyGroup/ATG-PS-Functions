@@ -143,6 +143,22 @@ Function Convert-ComputerFleetReport {
     $now = Get-Date
     $oneYearFromNow = (Get-Date).AddYears(1)
 
+    $safeParseDate = {
+        param(
+            [string]$str
+        )
+
+        if ($str -and $str -is [string]) {
+            try {
+                $str = [DateTime]::Parse($str)
+            } catch {
+                $str = $null
+            }
+        }
+
+        return $str
+    }
+
     # Add the new warranty columns to each entry
     $uniqueData = $uniqueData | ForEach-Object {
         $_ | Add-Member -NotePropertyName "OriginalShipDate" -NotePropertyValue "" -PassThru |
@@ -386,13 +402,7 @@ Function Convert-ComputerFleetReport {
                 $endDateValue = $workSheet.Cells[$row, $warrantyEndCol].Value
                 
                 # Convert end date from string if needed
-                if ($endDateValue -and $endDateValue -is [string]) {
-                    try {
-                        $endDateValue = [DateTime]::Parse($endDateValue)
-                    } catch {
-                        $endDateValue = $null
-                    }
-                }
+                $endDateValue = $safeParseDate.invoke($endDateValue)
                 
                 # Apply styles based on conditions
                 $entireRow = $workSheet.Cells[$row, 1, $row, $workSheet.Dimension.Columns]
