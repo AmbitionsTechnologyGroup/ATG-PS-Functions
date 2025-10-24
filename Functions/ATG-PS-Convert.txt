@@ -22,6 +22,9 @@ Function Convert-ComputerFleetReport {
     Path where the output Excel file will be saved. If not specified, the output will use the
     same filename as the input but with a .xlsx extension.
 
+.PARAMETER Company
+    Name of the company to filter the data by (optional).
+
 .EXAMPLE
     Convert-ComputerFleetReport -InputFile "C:\Data\SystemInfo.csv"
     
@@ -53,7 +56,10 @@ Function Convert-ComputerFleetReport {
         [string]$InputFile,
         
         [Parameter(Mandatory = $false, Position = 1)]
-        [string]$OutputFile = [System.IO.Path]::ChangeExtension($InputFile, ".xlsx")
+        [string]$OutputFile = [System.IO.Path]::ChangeExtension($InputFile, ".xlsx"),
+
+        [Parameter(Mandatory = $false, Position = 2)]  ## placed at end for backwards compatibility
+        [string]$Company = ""
     )
 
     # Columns to remove
@@ -83,6 +89,16 @@ Function Convert-ComputerFleetReport {
 
     # Import the CSV
     $data = Import-Csv -Path $InputFile
+
+    # Filter by company
+    if ($Company -ne "") {
+        $data = $data | Where-Object -Property "Company Name" -eq $Company
+
+        # Append company name to default output file name
+        if ($OutputFile -eq [System.IO.Path]::ChangeExtension($InputFile, ".xlsx")) {
+            $OutputFile = $OutputFile.Replace(".xlsx", "-$Company.xlsx")
+        }
+    }
 
     # Exclude virtual machines
     $data = $data | Where-Object -Property "System Model" -ne "Virtual Machine"
