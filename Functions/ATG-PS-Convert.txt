@@ -415,7 +415,7 @@ Function Convert-ComputerFleetReport {
         if ($statusCol -and $warrantyEndCol) {
             $lastRow = $workSheet.Dimension.End.Row
 
-            $statuses = @{
+            $warrantyStatuses = @{
                 Unknown = @{
                     Condition = '=$O2="' + $warrantyStatus.Unknown + '"'
                     Color = [System.Drawing.Color]::FromArgb(218, 238, 243)  ## light blue
@@ -434,7 +434,7 @@ Function Convert-ComputerFleetReport {
                 }
             }
 
-            $statuses.Values | ForEach-Object {
+            $warrantyStatuses.Values | ForEach-Object {
                 Add-ConditionalFormatting -Worksheet $workSheet -Address "A2:O$lastRow" -RuleType Expression -ConditionValue $_.Condition -BackgroundColor $_.Color
             }
         }
