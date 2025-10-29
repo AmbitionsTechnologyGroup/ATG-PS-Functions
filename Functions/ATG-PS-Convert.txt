@@ -369,7 +369,7 @@ Function Convert-ComputerFleetReport {
         $rowCount = $workSheet.Dimension.Rows
         
         # Find column indexes
-        $statusCol = $null
+        $warrantyStatusCol = $null
         $warrantyEndCol = $null
         $serialNumberCol = $null
         $warrantyStartCol = $null
@@ -379,7 +379,7 @@ Function Convert-ComputerFleetReport {
             $headerValue = $workSheet.Cells[1, $col].Value
             
             if ($headerValue -eq "Status") {
-                $statusCol = $col
+                $warrantyStatusCol = $col
             }
             elseif ($headerValue -eq "Warranty End") {
                 $warrantyEndCol = $col
@@ -412,7 +412,7 @@ Function Convert-ComputerFleetReport {
         }
         
         # Apply conditional formatting based on warranty status
-        if ($statusCol -and $warrantyEndCol) {
+        if ($warrantyStatusCol -and $warrantyEndCol) {
             $lastRow = $workSheet.Dimension.End.Row
 
             $warrantyStatuses = @{
