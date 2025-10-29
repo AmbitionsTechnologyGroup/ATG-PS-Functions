@@ -415,6 +415,8 @@ Function Convert-ComputerFleetReport {
         if ($warrantyStatusCol -and $warrantyEndCol) {
             $lastRow = $workSheet.Dimension.End.Row
 
+            $range = "A2:O$lastRow"
+
             $warrantyFormatting = @{
                 Unknown = @{
                     Condition = '=$O2="' + $warrantyStatus.Unknown + '"'
@@ -435,7 +437,7 @@ Function Convert-ComputerFleetReport {
             }
 
             $warrantyFormatting.Values | ForEach-Object {
-                Add-ConditionalFormatting -Worksheet $workSheet -Address "A2:O$lastRow" -RuleType Expression -ConditionValue $_.Condition -BackgroundColor $_.Color
+                Add-ConditionalFormatting -Worksheet $workSheet -Address $range -RuleType Expression -ConditionValue $_.Condition -BackgroundColor $_.Color
             }
         }
         
