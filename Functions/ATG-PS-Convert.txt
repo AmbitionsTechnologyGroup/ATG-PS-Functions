@@ -162,6 +162,13 @@ Function Convert-ComputerFleetReport {
     $nowFormula = 'DATE(' + $now.Year + ',' + $now.Month + ',' + $now.Day + ')'
 
     # Setup for sorting and conditional formatting (row colors)
+    $lastCheckStatus = @{
+        Unknown = "?"
+        OverSixMonths = "Over 6 Months"
+        UnderSixMonths = "Under 6 Months"
+    }
+    $daysSinceLastCheckFormula = '=IF(TRIM(@[Last Check])="","' + $lastCheckStatus.Unknown + '",' + $nowFormula + '-VALUE(@[Last Check]))'
+    $lastCheckStatusFormula = '=IF(TRIM(@[Last Check])="","' + $lastCheckStatus.Unknown + '",IF(' + $nowFormula + '-VALUE(@[Last Check])>365/2,"' + $lastCheckStatus.OverSixMonths + '","' + $lastCheckStatus.UnderSixMonths + '"))'
     $warrantyStatus = @{
         Unknown = "?"
         Expired = "Expired"
@@ -174,7 +181,9 @@ Function Convert-ComputerFleetReport {
 
     # Add the new warranty columns to each entry
     $uniqueData = $uniqueData | ForEach-Object {
-        $_ | Add-Member -NotePropertyName "OriginalShipDate" -NotePropertyValue "" -PassThru |
+        $_ | Add-Member -NotePropertyName "DaysSinceLastCheck" -NotePropertyValue $daysSinceLastCheckFormula -PassThru |
+              Add-Member -NotePropertyName "LastCheckStatus" -NotePropertyValue $lastCheckStatusFormula -PassThru |
+              Add-Member -NotePropertyName "OriginalShipDate" -NotePropertyValue "" -PassThru |
               Add-Member -NotePropertyName "Age" -NotePropertyValue $ageFormula -PassThru |
               Add-Member -NotePropertyName "WarrantyStartDate" -NotePropertyValue "" -PassThru |
               Add-Member -NotePropertyName "WarrantyEndDate" -NotePropertyValue "" -PassThru |
@@ -223,7 +232,7 @@ Function Convert-ComputerFleetReport {
     $newColumnOrder = $newColumnOrder | Where-Object { $_ -ne "OriginalShipDate" -and $_ -ne "WarrantySupportLevel" }
     
     # Select the data with the new column order including only the warranty columns we want to keep
-    $newColumnOrder += @("Age", "WarrantyStartDate", "WarrantyEndDate", "WarrantyExpired")
+    $newColumnOrder += @("DaysSinceLastCheck", "LastCheckStatus", "Age", "WarrantyStartDate", "WarrantyEndDate", "WarrantyExpired")
 
     # Create the final dataset with the specified column order
     $newData = $uniqueData | Select-Object -Property $newColumnOrder
@@ -309,6 +318,8 @@ Function Convert-ComputerFleetReport {
         'WarrantyEndDate' = 'Warranty End'
         'WarrantyExpired' = 'Status'
         'Last Check Date' = 'Last Check'
+        'DaysSinceLastCheck' = 'Days Since Last Check'
+        'LastCheckStatus' = 'Last Check Status'
     }
 
     # Clean up and adjust column names in the column order list
@@ -411,27 +422,49 @@ Function Convert-ComputerFleetReport {
             }
         }
         
+        #
+        ## Note: conditional formatting rules' precedence is determined by the order in which they're added
+        #
+
+        # Apply conditional formatting based on last check date
+        if ($lastCheckCol) {
+            $lastRow = $workSheet.Dimension.End.Row
+
+            $range = "K2:M$lastRow"
+
+            $lastCheckFormatting = @{
+                OverSixMonths = @{
+                    Condition = '=$M2="' + $lastCheckStatus.OverSixMonths + '"'
+                    Color = [System.Drawing.Color]::FromArgb(255, 255, 0)  ## bright yellow
+                }
+            }
+
+            $lastCheckFormatting.Values | ForEach-Object {
+                Add-ConditionalFormatting -Worksheet $workSheet -Address $range -RuleType Expression -ConditionValue $_.Condition -BackgroundColor $_.Color
+            }
+        }
+
         # Apply conditional formatting based on warranty status
         if ($warrantyStatusCol -and $warrantyEndCol) {
             $lastRow = $workSheet.Dimension.End.Row
 
-            $range = "A2:O$lastRow"
+            $range = "A2:Q$lastRow"
 
             $warrantyFormatting = @{
                 Unknown = @{
-                    Condition = '=$O2="' + $warrantyStatus.Unknown + '"'
+                    Condition = '=$Q2="' + $warrantyStatus.Unknown + '"'
                     Color = [System.Drawing.Color]::FromArgb(218, 238, 243)  ## light blue
                 }
                 Expired = @{
-                    Condition = '=$O2="' + $warrantyStatus.Expired + '"'
+                    Condition = '=$Q2="' + $warrantyStatus.Expired + '"'
                     Color = [System.Drawing.Color]::FromArgb(255, 199, 206)  ## light red
                 }
                 UnderOneYear = @{
-                    Condition = '=$O2="' + $warrantyStatus.UnderOneYear + '"'
+                    Condition = '=$Q2="' + $warrantyStatus.UnderOneYear + '"'
                     Color = [System.Drawing.Color]::FromArgb(255, 235, 156)  ## light yellow
                 }
                 OverOneYear = @{
-                    Condition = '=$O2="' + $warrantyStatus.OverOneYear + '"'
+                    Condition = '=$Q2="' + $warrantyStatus.OverOneYear + '"'
                     Color = [System.Drawing.Color]::FromArgb(198, 239, 206)  ## light green
                 }
             }
