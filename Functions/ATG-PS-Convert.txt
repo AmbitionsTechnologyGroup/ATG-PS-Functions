@@ -58,7 +58,8 @@ Function Convert-ComputerFleetReport {
         [Parameter(Mandatory = $false, Position = 1)]
         [string]$OutputFile = [System.IO.Path]::ChangeExtension($InputFile, ".xlsx"),
 
-        [Parameter(Mandatory = $false, Position = 2)]  ## placed at end for backwards compatibility
+        # below parameters added at end for backwards compatibility
+        [Parameter(Mandatory = $false, Position = 2)]
         [string]$Company = ""
     )
 
