@@ -109,13 +109,13 @@ Function Convert-ComputerFleetReport {
     # Identify all column names in the CSV
     $allColumns = $data[0].PSObject.Properties.Name
 
-    # Create a list of columns to keep (excluding both the ones to remove and Device Serial Number)
+    # Create a list of columns to keep (excluding the ones to remove as well as Device Serial Number and Last Check Date)
     $columnsToKeep = $allColumns | Where-Object {
-        ($_ -notin $columnsToRemove) -and ($_ -ne "Device Serial Number")
+        ($_ -notin $columnsToRemove) -and ($_ -ne "Last Check Date") -and ($_ -ne "Device Serial Number")
     }
 
-    # Add Device Serial Number as the last column
-    $newColumnOrder = $columnsToKeep + @("Device Serial Number")
+    # Add Device Serial Number and Last Check Date as the last columns
+    $newColumnOrder = $columnsToKeep + @("Device Serial Number") + @("Last Check Date")
 
     # Process data to handle duplicates by "Name" property
     $groupedData = $data | Group-Object -Property "Name"
