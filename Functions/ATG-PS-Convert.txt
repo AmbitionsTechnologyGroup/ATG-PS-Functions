@@ -103,7 +103,7 @@ Function Convert-ComputerFleetReport {
     # Columns to remove
     $columnsToRemove = @(
         "Device Type",
-        "Company Name",
+        # "Company Name",
         "Company Friendly Name",
         "Site Name",
         "Site Friendly Name",
@@ -173,13 +173,16 @@ Function Convert-ComputerFleetReport {
     # Identify all column names in the CSV
     $allColumns = $data[0].PSObject.Properties.Name
 
-    # Create a list of columns to keep (excluding the ones to remove as well as Device Serial Number and Last Check Date)
+    # Create a list of columns to keep (excluding the ones to remove as well as Company Name, Device Serial Number and Last Check Date)
     $columnsToKeep = $allColumns | Where-Object {
-        ($_ -notin $columnsToRemove) -and ($_ -ne "Last Check Date") -and ($_ -ne "Device Serial Number")
+        ($_ -notin $columnsToRemove) -and ($_ -ne "Company Name") -and ($_ -ne "Last Check Date") -and ($_ -ne "Device Serial Number")
     }
 
     # Add Device Serial Number and Last Check Date as the last columns
     $newColumnOrder = $columnsToKeep + @("Device Serial Number") + @("Last Check Date")
+
+    # Add Company Name as the first column
+    $newColumnOrder = @("Company Name") + $newColumnOrder
 
     # Process data to handle duplicates by "Name" property
     $groupedData = $data | Group-Object -Property "Name"
@@ -495,11 +498,11 @@ Function Convert-ComputerFleetReport {
         if ($lastCheckCol) {
             $lastRow = $workSheet.Dimension.End.Row
 
-            $range = "K2:M$lastRow"
+            $range = "L2:N$lastRow"
 
             $lastCheckFormatting = @{
                 OverSixMonths = @{
-                    Condition = '=$M2="' + $lastCheckStatus.OverSixMonths + '"'
+                    Condition = '=$N2="' + $lastCheckStatus.OverSixMonths + '"'
                     Color = [System.Drawing.Color]::FromArgb(255, 255, 0)  ## bright yellow
                 }
             }
@@ -513,23 +516,23 @@ Function Convert-ComputerFleetReport {
         if ($warrantyStatusCol -and $warrantyEndCol) {
             $lastRow = $workSheet.Dimension.End.Row
 
-            $range = "A2:Q$lastRow"
+            $range = "A2:R$lastRow"
 
             $warrantyFormatting = @{
                 Unknown = @{
-                    Condition = '=$Q2="' + $warrantyStatus.Unknown + '"'
+                    Condition = '=$R2="' + $warrantyStatus.Unknown + '"'
                     Color = [System.Drawing.Color]::FromArgb(218, 238, 243)  ## light blue
                 }
                 Expired = @{
-                    Condition = '=$Q2="' + $warrantyStatus.Expired + '"'
+                    Condition = '=$R2="' + $warrantyStatus.Expired + '"'
                     Color = [System.Drawing.Color]::FromArgb(255, 199, 206)  ## light red
                 }
                 UnderOneYear = @{
-                    Condition = '=$Q2="' + $warrantyStatus.UnderOneYear + '"'
+                    Condition = '=$R2="' + $warrantyStatus.UnderOneYear + '"'
                     Color = [System.Drawing.Color]::FromArgb(255, 235, 156)  ## light yellow
                 }
                 OverOneYear = @{
-                    Condition = '=$Q2="' + $warrantyStatus.OverOneYear + '"'
+                    Condition = '=$R2="' + $warrantyStatus.OverOneYear + '"'
                     Color = [System.Drawing.Color]::FromArgb(198, 239, 206)  ## light green
                 }
             }
