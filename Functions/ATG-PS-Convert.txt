@@ -88,6 +88,13 @@ Function Convert-ComputerFleetReport {
         "Device Time Zone"
     )
 
+    # Current date/time, digits only
+    $nowStr = (Get-Date -Format "o").Substring(0,19) -replace "[^0-9]"
+
+    ## DEBUG
+    # Write-Host "NOWSTR: $nowStr"
+    # exit
+
     # Import the CSV
     $data = Import-Csv -Path $InputFile
 
@@ -97,7 +104,7 @@ Function Convert-ComputerFleetReport {
 
         # Append company name to default output file name
         if ($OutputFile -eq [System.IO.Path]::ChangeExtension($InputFile, ".xlsx")) {
-            $OutputFile = $OutputFile.Replace(".xlsx", "-$Company.xlsx")
+            $OutputFile = $OutputFile.Replace(".xlsx", "-$Company-${nowStr}.xlsx")
         }
     }
 
