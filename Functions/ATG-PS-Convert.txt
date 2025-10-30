@@ -22,8 +22,8 @@ Function Convert-ComputerFleetReport {
     Path where the output Excel file will be saved. If not specified, the output will use the
     same filename as the input but with a .xlsx extension.
 
-.PARAMETER Company
-    Name of the company to filter the data by (optional).
+.PARAMETER CompanyId
+    Company ID to filter the data by (optional). Ex: "VTSV"
 
 .EXAMPLE
     Convert-ComputerFleetReport -InputFile "C:\Data\SystemInfo.csv"
@@ -60,8 +60,40 @@ Function Convert-ComputerFleetReport {
 
         # below parameters added at end for backwards compatibility
         [Parameter(Mandatory = $false, Position = 2)]
-        [string]$Company = ""
+        [string]$CompanyId = ""
     )
+
+    # Map company names from input file (exported from Continuum) to easier-to-use company IDs
+    # Note the extra spaces at the end of some of these
+    $companyIds = @{
+            AAIHB = "Albuquerque Area Indian Health Board"
+            ACG = "Ambitions Consulting Group"
+            BH = "Beyond Health"
+            DLCC = "DLCC"
+            EES = "Enterprise Electrical Services"
+            JAL = "Jeff Albright Law"
+            LMGMC = "Lenann McGookey Gardner Management Consulting Inc "
+            LW = "Lifts West Condominium Resort Hotel"
+            MWT = "Mark W Taylor Associates PC"
+            MGR = "MgR Associates"
+            MBI = "Murphy Builders Inc"
+            NEST = "NEST"
+            NHFH = "New Heart Fitness and Health"
+            NMC = "New Mexico Counties"
+            PBWS = "Pregenzer Baysinger Wideman and Sale PC"
+            QCU = "Questa Credit Union"
+            QLHC = "Questa Lumber and Hardware"
+            RRA = "Robles Rael and Anaya    "
+            SSJ = "Salazar Sullivan and Jasionowski "
+            SFSW = "Santa Fe Solid Waste Management Agency"
+            TLF = "The Turner Law Firm LLC"
+            TINN = "Tinnin Law Firm"
+            TCNM = "Torrance County"
+            TRR = "Town of Red River"
+            VOFS = "Village of Fort Sumner"
+            VOQ = "Village of Questa"
+            VTSV = "Village of Taos Ski Valley"
+    }
 
     # Columns to remove
     $columnsToRemove = @(
@@ -99,12 +131,21 @@ Function Convert-ComputerFleetReport {
     $data = Import-Csv -Path $InputFile
 
     # Filter by company
-    if ($Company -ne "") {
-        $data = $data | Where-Object -Property "Company Name" -eq $Company
+    if ($CompanyId -ne "") {
+
+        if ($CompanyId -notin $companyIds.Keys) {
+            Write-Host "CompanyId not supported"
+            exit
+        }
+
+        $CompanyName = $companyIds.$CompanyId
+        Write-Host "Company name: $CompanyName"
+
+        $data = $data | Where-Object -Property "Company Name" -eq $CompanyName
 
         # Append company name to default output file name
         if ($OutputFile -eq [System.IO.Path]::ChangeExtension($InputFile, ".xlsx")) {
-            $OutputFile = $OutputFile.Replace(".xlsx", "-$Company-${nowStr}.xlsx")
+            $OutputFile = $OutputFile.Replace(".xlsx", "-$CompanyId-${nowStr}.xlsx")
         }
     }
 
