@@ -565,6 +565,7 @@ Function Convert-ComputerFleetReport {
     Write-Host "Excel file has been created and saved to: $OutputFile"
     Write-Host "Original row count: $($data.Count)"
     Write-Host "Final row count after removing duplicates: $($newData.Count)"
+    Write-Host "Dell warranty lookups: $($dellSystems.Count)"
 
     # Show script runtime
     $elapsedTime = [Math]::Floor(((Get-Date) - $startTime).TotalSeconds)
