@@ -60,6 +60,9 @@ Function Convert-ComputerFleetReport {
 
         # below parameters added at end for backwards compatibility
         [Parameter(Mandatory = $false, Position = 2)]
+        [string]$OutputCsvFile = "",
+
+        [Parameter(Mandatory = $false, Position = 3)]
         [string]$CompanyId = ""
     )
 
@@ -146,6 +149,16 @@ Function Convert-ComputerFleetReport {
         # Append company name to default output file name
         if ($OutputFile -eq [System.IO.Path]::ChangeExtension($InputFile, ".xlsx")) {
             $OutputFile = $OutputFile.Replace(".xlsx", "-$CompanyId-${nowStr}.xlsx")
+        }
+    }
+
+    # Set name of default output CSV file
+    if ($OutputCsvFile -eq "") {
+        $OutputCsvFile = $InputFile.Replace(".csv", "-processed-${nowStr}.csv")
+    
+        # Append company name to default output csv file name
+        if ($CompanyId -ne "") {
+            $OutputCsvFile = $OutputCsvFile.Replace("-processed", "-${CompanyId}-processed")
         }
     }
 
@@ -363,6 +376,7 @@ Function Convert-ComputerFleetReport {
         'Disk Volume (GB)' = 'Disk Size'
         'Device Serial Number' = 'Serial #'
         'Base Board Manufacturer' = 'Manufacturer'
+        'Age' = 'Age'
         'WarrantyStartDate' = 'Warranty Start'
         'WarrantyEndDate' = 'Warranty End'
         'WarrantyExpired' = 'Status'
@@ -527,6 +541,21 @@ Function Convert-ComputerFleetReport {
         $_.Save()
         $_.Dispose()
     }
+
+    $outputCsvColumnsToRemove = @(
+        "DaysSinceLastCheck",
+        "LastCheckStatus",
+        "Age",
+        "WarrantyExpired"
+    ) | Foreach-Object {
+        $columnMappings[$_]
+    }
+
+    $outputCsvData = $renamedData | Select-Object -ExcludeProperty $outputCsvColumnsToRemove
+
+    $outputCsvData | Export-Csv -Path $OutputCsvFile -NoTypeInformation
+
+    Write-Host "Output CSV file has been created and saved to: $OutputCsvFile"
 
     Write-Host "Excel file has been created and saved to: $OutputFile"
     Write-Host "Original row count: $($data.Count)"
