@@ -66,6 +66,8 @@ Function Convert-ComputerFleetReport {
         [string]$CompanyId = ""
     )
 
+    $startTime = (Get-Date)
+
     # Map company names from input file (exported from Continuum) to easier-to-use company IDs
     # Note the extra spaces at the end of some of these
     $companyIds = @{
@@ -560,6 +562,18 @@ Function Convert-ComputerFleetReport {
     Write-Host "Excel file has been created and saved to: $OutputFile"
     Write-Host "Original row count: $($data.Count)"
     Write-Host "Final row count after removing duplicates: $($newData.Count)"
+
+    # Show script runtime
+    $elapsedTime = [int](((Get-Date) - $startTime).TotalSeconds)
+    $elapsedMin = [int]($elapsedTime / 60)
+    $elapsedSec = $elapsedTime - ($elapsedMin * 60)
+    if ($elapsedMin -gt 0) {
+        $elapsedStr = "$elapsedMin min, $elapsedSec sec"
+    } else {
+        $elapsedStr = "$elapsedSec seconds"
+    }
+    $secondsPerRow = [Math]::Round($elapsedTime / $renamedData.Count, 2)
+    Write-Host "Took $elapsedStr ($secondsPerRow seconds per row)"
 }
 
 Function Convert-ToSharedMailbox {
