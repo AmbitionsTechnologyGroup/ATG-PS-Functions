@@ -567,8 +567,8 @@ Function Convert-ComputerFleetReport {
     Write-Host "Final row count after removing duplicates: $($newData.Count)"
 
     # Show script runtime
-    $elapsedTime = [int](((Get-Date) - $startTime).TotalSeconds)
-    $elapsedMin = [int]($elapsedTime / 60)
+    $elapsedTime = [Math]::Floor(((Get-Date) - $startTime).TotalSeconds)
+    $elapsedMin = [Math]::Floor($elapsedTime / 60)
     $elapsedSec = $elapsedTime - ($elapsedMin * 60)
     if ($elapsedMin -gt 0) {
         $elapsedStr = "$elapsedMin min, $elapsedSec sec"
