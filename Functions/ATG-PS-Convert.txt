@@ -256,6 +256,7 @@ Function Convert-ComputerFleetReport {
               Add-Member -NotePropertyName "LastCheckStatus" -NotePropertyValue $lastCheckStatusFormula -PassThru |
               Add-Member -NotePropertyName "OriginalShipDate" -NotePropertyValue "" -PassThru |
               Add-Member -NotePropertyName "Age" -NotePropertyValue $ageFormula -PassThru |
+              Add-Member -NotePropertyName "CompanyId" -NotePropertyValue "" -PassThru |
               Add-Member -NotePropertyName "WarrantyLookupDateTime" -NotePropertyValue "" -PassThru |
               Add-Member -NotePropertyName "WarrantyStartDate" -NotePropertyValue "" -PassThru |
               Add-Member -NotePropertyName "WarrantyEndDate" -NotePropertyValue "" -PassThru |
