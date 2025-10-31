@@ -410,7 +410,7 @@ Function Convert-ComputerFleetReport {
     }
 
     # Sort the collection
-    $renamedData = $renamedData | Sort-Object -Property `
+    $excelData = $renamedData | Sort-Object -Property `
         @{Expression={$_."Warranty End" -as [datetime]}; Descending = $false}, `
         @{Expression="Friendly Name"; Descending = $false}
 
@@ -440,7 +440,7 @@ Function Convert-ComputerFleetReport {
         WorksheetName = "System Information"
     }
 
-    $renamedData | Export-Excel @excelParams -PassThru | ForEach-Object {
+    $excelData | Export-Excel @excelParams -PassThru | ForEach-Object {
         # Get the worksheet
         $workSheet = $_.Workbook.Worksheets["System Information"]
         
