@@ -100,6 +100,11 @@ Function Convert-ComputerFleetReport {
             VTSV = "Village of Taos Ski Valley"
     }
 
+    $companyNames = @{}
+    foreach ($entry in $companyIds.GetEnumerator()) {
+        $companyNames[$entry.Value] = $entry.Key
+    }
+
     # Columns to remove
     $columnsToRemove = @(
         "Device Type",
@@ -180,8 +185,8 @@ Function Convert-ComputerFleetReport {
     # Add Device Serial Number and Last Check Date as the last columns
     $newColumnOrder = $columnsToKeep + @("Device Serial Number") + @("Last Check Date")
 
-    # Add Company Name as the first column
-    $newColumnOrder = @("Company Name") + $newColumnOrder
+    # Add Company ID and Company Name as the first columns
+    $newColumnOrder = @("Company ID") + @("Company Name") + $newColumnOrder
 
     # Process data to handle duplicates by "Name" property
     $groupedData = $data | Group-Object -Property "Name"
@@ -307,6 +312,13 @@ Function Convert-ComputerFleetReport {
 
     # Clean up data
     foreach ($item in $newData) {
+        # Set company ID
+        if ($item."Company Name" -in $companyNames.Keys) {
+            $item."Company ID" = $companyNames[$item."Company Name"]
+        } else {
+            $item."Company ID" = "?"
+        }
+
         # Clean up processor description
         if ($item.Processor) {
             # Remove (R) and Core(TM)
@@ -378,6 +390,7 @@ Function Convert-ComputerFleetReport {
 
     # Rename columns
     $columnMappings = @{
+        'Company ID' = 'Company ID'
         'Number of Cores' = 'Cores'
         'Disk Volume (GB)' = 'Disk Size'
         'Device Serial Number' = 'Serial #'
@@ -503,11 +516,11 @@ Function Convert-ComputerFleetReport {
         if ($lastCheckCol) {
             $lastRow = $workSheet.Dimension.End.Row
 
-            $range = "L2:N$lastRow"
+            $range = "M2:O$lastRow"
 
             $lastCheckFormatting = @{
                 OverSixMonths = @{
-                    Condition = '=$N2="' + $lastCheckStatus.OverSixMonths + '"'
+                    Condition = '=$O2="' + $lastCheckStatus.OverSixMonths + '"'
                     Color = [System.Drawing.Color]::FromArgb(255, 255, 0)  ## bright yellow
                 }
             }
@@ -521,23 +534,23 @@ Function Convert-ComputerFleetReport {
         if ($warrantyStatusCol -and $warrantyEndCol) {
             $lastRow = $workSheet.Dimension.End.Row
 
-            $range = "A2:R$lastRow"
+            $range = "A2:S$lastRow"
 
             $warrantyFormatting = @{
                 Unknown = @{
-                    Condition = '=$R2="' + $warrantyStatus.Unknown + '"'
+                    Condition = '=$S2="' + $warrantyStatus.Unknown + '"'
                     Color = [System.Drawing.Color]::FromArgb(218, 238, 243)  ## light blue
                 }
                 Expired = @{
-                    Condition = '=$R2="' + $warrantyStatus.Expired + '"'
+                    Condition = '=$S2="' + $warrantyStatus.Expired + '"'
                     Color = [System.Drawing.Color]::FromArgb(255, 199, 206)  ## light red
                 }
                 UnderOneYear = @{
-                    Condition = '=$R2="' + $warrantyStatus.UnderOneYear + '"'
+                    Condition = '=$S2="' + $warrantyStatus.UnderOneYear + '"'
                     Color = [System.Drawing.Color]::FromArgb(255, 235, 156)  ## light yellow
                 }
                 OverOneYear = @{
-                    Condition = '=$R2="' + $warrantyStatus.OverOneYear + '"'
+                    Condition = '=$S2="' + $warrantyStatus.OverOneYear + '"'
                     Color = [System.Drawing.Color]::FromArgb(198, 239, 206)  ## light green
                 }
             }
