@@ -417,7 +417,7 @@ Function Convert-ComputerFleetReport {
         @{Expression="Friendly Name"; Descending = $false}
 
     # Remove WarrantyLookupDateTime from the Excel data
-    $excelData = $excelData | Select-Object * -ExcludeProperty "Warranty Lookup"
+    $excelData = $excelData | Select-Object -Property * -ExcludeProperty "Warranty Lookup"
 
     # Export to Excel with formatting
     Write-Host "Creating Excel file with formatting..."
@@ -561,7 +561,7 @@ Function Convert-ComputerFleetReport {
         $columnMappings[$_]
     }
 
-    $outputCsvData = $renamedData | Select-Object * -ExcludeProperty $outputCsvColumnsToRemove
+    $outputCsvData = $renamedData | Select-Object -Property * -ExcludeProperty $outputCsvColumnsToRemove
 
     $outputCsvData | Export-Csv -Path $OutputCsvFile -NoTypeInformation
 
