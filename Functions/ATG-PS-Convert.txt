@@ -131,10 +131,6 @@ Function Convert-ComputerFleetReport {
     # Current date/time, digits only
     $nowStr = (Get-Date -Format "o").Substring(0,19) -replace "[^0-9]"
 
-    ## DEBUG
-    # Write-Host "NOWSTR: $nowStr"
-    # exit
-
     # Import the CSV
     $data = Import-Csv -Path $InputFile
 
