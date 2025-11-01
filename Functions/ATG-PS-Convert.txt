@@ -63,6 +63,9 @@ Function Convert-ComputerFleetReport {
         [string]$OutputCsvFile = "",
 
         [Parameter(Mandatory = $false, Position = 3)]
+        [string]$CacheFile = "",
+
+        [Parameter(Mandatory = $false, Position = 4)]
         [string]$CompanyId = ""
     )
 
@@ -138,6 +141,16 @@ Function Convert-ComputerFleetReport {
 
     # Import the CSV
     $data = Import-Csv -Path $InputFile
+
+    # Import the cache
+    $cache = $null
+    if ($CacheFile) {
+        if (-not (Test-Path -Path $CacheFile)) {
+            Write-Host "Cache file not found: $CacheFile" -ForegroundColor Red
+            exit
+        }
+        $cache = Import-Csv -Path $CacheFile
+    }
 
     # Filter by company
     if ($CompanyId -ne "") {
@@ -272,24 +285,57 @@ Function Convert-ComputerFleetReport {
         -not [string]::IsNullOrWhiteSpace($_."Device Serial Number")
     }
 
+    $cacheHits = 0
+
     if ($dellSystems.Count -gt 0) {
         Write-Host "Found $($dellSystems.Count) Dell/Alienware systems. Retrieving warranty information..."
         foreach ($system in $dellSystems) {
             try {
                 Write-Host "Processing warranty for system: $($system.Name) with Serial: $($system."Device Serial Number")"
-                $warrantyInfo = Get-DellWarranty -ServiceTags $system."Device Serial Number" -ReturnObject
+
+                $warrantyInfo = @{
+                        WarrantyLookupDateTime = $null
+                        OriginalShipDate = $null
+                        WarrantyStartDate = $null
+                        WarrantyEndDate = $null
+                        WarrantySupportLevel = $null
+                }
+
+                $systemInCache = $null
+
+                if ($cache) {
+                    Write-Host ("Checking cache for " + $system."Device Serial Number")
+                    $systemInCache = $cache | Where-Object { $_."Serial #" -eq $system."Device Serial Number" }
+
+                    # Cache hit
+                    if ($systemInCache -and $systemInCache."Warranty Lookup" -and $systemInCache."Warranty Start" -and $systemInCache."Warranty End") {
+                        $warrantyInfo.WarrantyLookupDateTime = $systemInCache."Warranty Lookup"
+                        $warrantyInfo.WarrantyStartDate = $systemInCache."Warranty Start"
+                        $warrantyInfo.WarrantyEndDate = $systemInCache."Warranty End"
+                        $cacheHits++
+                    }
+                }
+
+                # No cache or cache miss
+                if (-not ($warrantyInfo.WarrantyLookupDateTime -and $warrantyInfo.WarrantyStartDate -and $warrantyInfo.WarrantyEndDate)) {
+                    $warrantyInfo = Get-DellWarranty -ServiceTags $system."Device Serial Number" -ReturnObject
+                    if ($warrantyInfo) {
+                        $warrantyInfo | Add-Member -NotePropertyName "WarrantyLookupDateTime" -NotePropertyValue ""
+                        $warrantyInfo.WarrantyLookupDateTime = $nowDateTime
+                    }
+                }
                 
-                if ($warrantyInfo) {
+                if ($warrantyInfo -and $warrantyInfo.WarrantyLookupDateTime) {
                     # Update the warranty fields in the original data
                     $systemInData = $uniqueData | Where-Object { $_.Name -eq $system.Name }
                     if ($systemInData) {
-                        $systemInData.WarrantyLookupDateTime = $nowDateTime
+                        $systemInData.WarrantyLookupDateTime = $warrantyInfo.WarrantyLookupDateTime
                         $systemInData.OriginalShipDate = $warrantyInfo.OriginalShipDate
                         $systemInData.WarrantyStartDate = $warrantyInfo.WarrantyStartDate
                         $systemInData.WarrantyEndDate = $warrantyInfo.WarrantyEndDate
                         $systemInData.WarrantySupportLevel = $warrantyInfo.WarrantySupportLevel
                         
-                        Write-Host "Updated warranty information for $($system.Name)"
+                        Write-Host ("Updated warranty information for $($system.Name)" + $(if ($systemInCache) { " (from cache)" } else { "" }))
                     }
                 } else {
                     Write-Host "No warranty information found for $($system.Name)" -ForegroundColor Yellow
@@ -584,7 +630,7 @@ Function Convert-ComputerFleetReport {
     Write-Host "Excel file has been created and saved to: $OutputFile"
     Write-Host "Original row count: $($data.Count)"
     Write-Host "Final row count after removing duplicates: $($newData.Count)"
-    Write-Host "Dell warranty lookups: $($dellSystems.Count)"
+    Write-Host "Dell warranty lookups: $($dellSystems.Count) ($cacheHits found in cache)"
 
     # Show script runtime
     $elapsedTime = [Math]::Floor(((Get-Date) - $startTime).TotalSeconds)
