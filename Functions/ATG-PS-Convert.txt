@@ -52,7 +52,7 @@ Function Convert-ComputerFleetReport {
 #>
     [CmdletBinding()]
     Param(
-        [Parameter(Mandatory = $true, Position = 0)]
+        [Parameter(Mandatory = $false, Position = 0)]
         [string]$InputFile,
         
         [Parameter(Mandatory = $false, Position = 1)]
@@ -68,6 +68,11 @@ Function Convert-ComputerFleetReport {
         [Parameter(Mandatory = $false, Position = 4)]
         [string]$CompanyId = ""
     )
+
+    if ($InputFile -eq "") {
+        Write-Host "Missing input file" -ForegroundColor Red
+        exit
+    }
 
     $startTime = (Get-Date)
 
