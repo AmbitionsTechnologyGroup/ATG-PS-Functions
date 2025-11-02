@@ -56,7 +56,7 @@ Function Convert-ComputerFleetReport {
         [string]$InputFile,
         
         [Parameter(Mandatory = $false, Position = 1)]
-        [string]$OutputFile = [System.IO.Path]::ChangeExtension($InputFile, ".xlsx"),
+        [string]$OutputFile = "",
 
         # below parameters added at end for backwards compatibility
         [Parameter(Mandatory = $false, Position = 2)]
@@ -139,6 +139,14 @@ Function Convert-ComputerFleetReport {
     # Current date/time, digits only
     $nowStr = (Get-Date -Format "o").Substring(0,19) -replace "[^0-9]"
 
+    $usingDefaultOutputFile = ($OutputFile -eq "")
+
+    # Append current date/time to default output file name
+    if ($usingDefaultOutputFile) {
+        $OutputFile = [System.IO.Path]::ChangeExtension($InputFile, ".xlsx")
+        $OutputFile = $OutputFile.Replace(".xlsx", "-${nowStr}.xlsx")
+    }
+
     # Import the CSV
     $data = Import-Csv -Path $InputFile
 
@@ -166,8 +174,8 @@ Function Convert-ComputerFleetReport {
         $data = $data | Where-Object -Property "Company Name" -eq $CompanyName
 
         # Append company name to default output file name
-        if ($OutputFile -eq [System.IO.Path]::ChangeExtension($InputFile, ".xlsx")) {
-            $OutputFile = $OutputFile.Replace(".xlsx", "-$CompanyId-${nowStr}.xlsx")
+        if ($usingDefaultOutputFile) {
+            $OutputFile = $OutputFile.Replace("-${nowStr}.xlsx", "-$CompanyId-${nowStr}.xlsx")
         }
     }
 
