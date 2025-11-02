@@ -66,8 +66,17 @@ Function Convert-ComputerFleetReport {
         [string]$CacheFile = "",
 
         [Parameter(Mandatory = $false, Position = 4)]
-        [string]$CompanyId = ""
+        [string]$CompanyId = "",
+
+        [switch]$Version
     )
+
+    $currentVersion = "2025-11-02 15:47"
+
+    if ($Version) {
+        Write-Host "Version: $currentVersion"
+        exit
+    }
 
     if ($InputFile -eq "") {
         Write-Host "Missing input file" -ForegroundColor Red
