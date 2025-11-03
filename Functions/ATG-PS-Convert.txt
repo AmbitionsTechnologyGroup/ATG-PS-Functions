@@ -71,7 +71,7 @@ Function Convert-ComputerFleetReport {
         [switch]$Version
     )
 
-    $currentVersion = "2025-11-02 15:47"
+    $currentVersion = "2025-11-03 11:10"
 
     if ($Version) {
         Write-Host "Version: $currentVersion"
@@ -291,13 +291,22 @@ Function Convert-ComputerFleetReport {
               Add-Member -NotePropertyName "LastCheckStatus" -NotePropertyValue $lastCheckStatusFormula -PassThru |
               Add-Member -NotePropertyName "OriginalShipDate" -NotePropertyValue "" -PassThru |
               Add-Member -NotePropertyName "Age" -NotePropertyValue $ageFormula -PassThru |
-              Add-Member -NotePropertyName "CompanyId" -NotePropertyValue "" -PassThru |
+              Add-Member -NotePropertyName "Company ID" -NotePropertyValue "" -PassThru |
               Add-Member -NotePropertyName "WarrantyLookupDateTime" -NotePropertyValue "" -PassThru |
               Add-Member -NotePropertyName "WarrantyStartDate" -NotePropertyValue "" -PassThru |
               Add-Member -NotePropertyName "WarrantyEndDate" -NotePropertyValue "" -PassThru |
               Add-Member -NotePropertyName "WarrantyExpired" -NotePropertyValue $warrantyStatusFormula -PassThru |
               Add-Member -NotePropertyName "WarrantySupportLevel" -NotePropertyValue ""
         $_
+    }
+
+    # Set Company ID
+    foreach ($item in $uniqueData) {
+        if ($item."Company Name" -in $companyNames.Keys) {
+            $item."Company ID" = $companyNames[$item."Company Name"]
+        } else {
+            $item."Company ID" = "?"
+        }
     }
 
     # Get warranty information for Dell and Alienware systems
@@ -381,13 +390,6 @@ Function Convert-ComputerFleetReport {
 
     # Clean up data
     foreach ($item in $newData) {
-        # Set company ID
-        if ($item."Company Name" -in $companyNames.Keys) {
-            $item."Company ID" = $companyNames[$item."Company Name"]
-        } else {
-            $item."Company ID" = "?"
-        }
-
         # Clean up processor description
         if ($item.Processor) {
             # Remove (R) and Core(TM)
