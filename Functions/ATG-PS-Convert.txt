@@ -71,7 +71,7 @@ Function Convert-ComputerFleetReport {
         [switch]$Version
     )
 
-    $currentVersion = "2025-11-03 11:10"
+    $currentVersion = "2025-11-03 11:16"
 
     if ($Version) {
         Write-Host "Version: $currentVersion"
@@ -322,7 +322,7 @@ Function Convert-ComputerFleetReport {
         Write-Host "Found $($dellSystems.Count) Dell/Alienware systems. Retrieving warranty information..."
         foreach ($system in $dellSystems) {
             try {
-                Write-Host "Processing warranty for system: $($system.Name) with Serial: $($system."Device Serial Number")"
+                Write-Host "Processing warranty for system: $($system.Name) with Serial: $($system."Device Serial Number") (Company ID: $($system."Company ID"))"
 
                 $warrantyInfo = @{
                         WarrantyLookupDateTime = $null
