@@ -71,7 +71,7 @@ Function Convert-ComputerFleetReport {
         [switch]$Version
     )
 
-    $currentVersion = "2025-11-03 11:35"
+    $currentVersion = "2025-11-03 11:54"
 
     if ($Version) {
         Write-Host "Version: $currentVersion"
@@ -319,6 +319,13 @@ Function Convert-ComputerFleetReport {
     $cacheHits = 0
 
     if ($dellSystems.Count -gt 0) {
+        $warrantyStats = @{
+            warrantyRetrieved = 0
+            systemLookupError = 0
+            warrantyNotFound = 0
+            warrantyLookupError = 0
+        }
+
         Write-Host "Found $($dellSystems.Count) Dell/Alienware systems. Retrieving warranty information..."
         foreach ($system in $dellSystems) {
             try {
@@ -366,14 +373,18 @@ Function Convert-ComputerFleetReport {
                         $systemInData.WarrantyEndDate = $warrantyInfo.WarrantyEndDate
                         $systemInData.WarrantySupportLevel = $warrantyInfo.WarrantySupportLevel
                         
+                        $warrantyStats.warrantyRetrieved++
                         Write-Host ("Updated warranty information for $($system.Name)" + $(if ($systemInCache) { " (from cache)" } else { "" }))
                     } else {
+                        $warrantyStats.systemLookupError++
                         Write-Host "Error retrieving system information for $($system.Name): $_" -ForegroundColor Red
                     }
                 } else {
+                    $warrantyStats.warrantyNotFound++
                     Write-Host "No warranty information found for $($system.Name)" -ForegroundColor Yellow
                 }
             } catch {
+                $warrantyStats.warrantyLookupError++
                 Write-Host "Error retrieving warranty information for $($system.Name): $_" -ForegroundColor Red
             }
         }
@@ -657,6 +668,11 @@ Function Convert-ComputerFleetReport {
     Write-Host "Original row count: $($data.Count)"
     Write-Host "Final row count after removing duplicates: $($newData.Count)"
     Write-Host "Dell warranty lookups: $($dellSystems.Count) ($cacheHits found in cache)"
+    Write-Host "Warranty lookup stats:"
+    Write-Host "  Warranties retrieved: $($warrantyStats.warrantyRetrieved)"
+    Write-Host "  System lookup errors: $($warrantyStats.systemLookupError)"
+    Write-Host "  Warranty lookup errors: $($warrantyStats.warrantyLookupError)"
+    Write-Host "  Warranties not found: $($warrantyStats.warrantyNotFound)"
 
     # Show script runtime
     $elapsedTime = [Math]::Floor(((Get-Date) - $startTime).TotalSeconds)
