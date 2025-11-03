@@ -71,7 +71,7 @@ Function Convert-ComputerFleetReport {
         [switch]$Version
     )
 
-    $currentVersion = "2025-11-03 11:16"
+    $currentVersion = "2025-11-03 11:35"
 
     if ($Version) {
         Write-Host "Version: $currentVersion"
@@ -367,6 +367,8 @@ Function Convert-ComputerFleetReport {
                         $systemInData.WarrantySupportLevel = $warrantyInfo.WarrantySupportLevel
                         
                         Write-Host ("Updated warranty information for $($system.Name)" + $(if ($systemInCache) { " (from cache)" } else { "" }))
+                    } else {
+                        Write-Host "Error retrieving system information for $($system.Name): $_" -ForegroundColor Red
                     }
                 } else {
                     Write-Host "No warranty information found for $($system.Name)" -ForegroundColor Yellow
