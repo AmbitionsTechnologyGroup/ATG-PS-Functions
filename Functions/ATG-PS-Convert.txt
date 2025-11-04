@@ -71,10 +71,11 @@ Function Convert-ComputerFleetReport {
         [switch]$Version
     )
 
-    $currentVersion = "2025-11-03 11:54"
+    $currentVersion = "2025-11-04 15:50"
+
+    Write-Host "Script version: $currentVersion"
 
     if ($Version) {
-        Write-Host "Version: $currentVersion"
         exit
     }
 
