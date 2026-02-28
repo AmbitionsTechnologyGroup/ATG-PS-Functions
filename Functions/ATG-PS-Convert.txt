@@ -32,7 +32,7 @@ Function Convert-UsersReport {
         [switch]$Version
     )
 
-    $currentVersion = "2026-02-28 12:39"
+    $currentVersion = "2026-02-28 13:02"
 
     Write-Host "Script version: $currentVersion"
 
@@ -70,7 +70,7 @@ Function Convert-UsersReport {
         TableStyle = "None"
         AutoSize = $true
         AutoFilter = $true
-        FreezeTopRow = $true
+        # FreezeTopRow = $true
         WorksheetName = "Users"
     }
 
