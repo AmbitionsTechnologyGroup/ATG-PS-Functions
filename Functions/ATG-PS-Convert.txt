@@ -32,7 +32,7 @@ Function Convert-UsersReport {
         [switch]$Version
     )
 
-    $currentVersion = "2026-02-28 11:48"
+    $currentVersion = "2026-02-28 12:01"
 
     Write-Host "Script version: $currentVersion"
 
