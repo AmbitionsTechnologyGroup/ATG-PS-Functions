@@ -81,7 +81,11 @@ Function Convert-UsersReport {
     # Write-Output $outputData
     # return
 
-    $outputData | Export-Excel @excelParams -Path $OutputFile -TableName $excelParams.TableName -WorksheetName $excelParams.WorksheetName -AutoSize -AutoFilter
+    $unlicensed = @("Unlicensed", "Power Automate Free")
+
+    $columnsToKeep = @("Display name", "User principal name", "First name", "Last name", "When created", "Licenses")
+
+    $outputData = Import-Csv -Path $InputFile | Where-Object -Property "Licenses" -notin $unlicensed | Select-Object -Property $columnsToKeep
 
     Write-Host "Excel file has been created and saved to: $OutputFile"
 }
