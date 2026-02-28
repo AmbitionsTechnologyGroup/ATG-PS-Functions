@@ -32,7 +32,7 @@ Function Convert-UsersReport {
         [switch]$Version
     )
 
-    $currentVersion = "2026-02-28 12:01"
+    $currentVersion = "2026-02-28 12:09"
 
     Write-Host "Script version: $currentVersion"
 
@@ -73,19 +73,17 @@ Function Convert-UsersReport {
         WorksheetName = "Users"
     }
 
-    $outputData = Import-Csv -Path $InputFile
-        | Where-Object -Property "Licenses" -notin @("Unlicensed", "Power Automate Free")
-        | Select-Object -Property @("Display name", "User principal name", "First name", "Last name", "When created", "Licenses")
-
-    ## DEBUG
-    # Write-Output $outputData
-    # return
-
     $unlicensed = @("Unlicensed", "Power Automate Free")
 
     $columnsToKeep = @("Display name", "User principal name", "First name", "Last name", "When created", "Licenses")
 
     $outputData = Import-Csv -Path $InputFile | Where-Object -Property "Licenses" -notin $unlicensed | Select-Object -Property $columnsToKeep
+
+    ## DEBUG
+    # Write-Output $outputData
+    # return
+
+    $outputData | Export-Excel @excelParams -Path $OutputFile -TableName $excelParams.TableName -WorksheetName $excelParams.WorksheetName -AutoSize -AutoFilter
 
     Write-Host "Excel file has been created and saved to: $OutputFile"
 }
