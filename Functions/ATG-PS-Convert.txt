@@ -1,3 +1,91 @@
+Function Convert-UsersReport {
+<#
+.SYNOPSIS
+    Creates a formatted Excel report from a CSV files containing Microsoft users.
+
+.DESCRIPTION
+    This function processes a CSV file containing a Microsoft user list, and creates the corresponding Excel report.
+
+.PARAMETER InputFile
+    Path to the input CSV file containing a Microsoft user list.
+
+.PARAMETER OutputFile
+    Path where the output Excel file will be saved.
+
+.EXAMPLE
+    Convert-UsersReport -InputFile "C:\Data\Users.csv" -OutputFile "C:\Data\Users.xlsx"
+
+    Processes the given CSV file and creates the corresponding Excel report.
+
+.NOTES
+    Requires:
+    - The ImportExcel PowerShell module (will attempt to install if not present)
+#>
+    [CmdletBinding()]
+    Param(
+        [Parameter(Mandatory = $false, Position = 0)]
+        [string]$InputFile,
+        
+        [Parameter(Mandatory = $false, Position = 1)]
+        [string]$OutputFile = "",
+
+        [switch]$Version
+    )
+
+    $currentVersion = "2026-02-28 11:48"
+
+    Write-Host "Script version: $currentVersion"
+
+    if ($Version) {
+        return
+    }
+
+    if ($InputFile -eq "") {
+        Write-Host "Missing input file" -ForegroundColor Red
+        return
+    }
+
+    if ($OutputFile -eq "") {
+        Write-Host "Missing output file" -ForegroundColor Red
+        return
+    }
+
+    # Check if Excel module is available, if not, attempt to install it
+    if (-not (Get-Module -ListAvailable -Name ImportExcel)) {
+        Write-Host "ImportExcel module not found. Attempting to install..."
+        try {
+            Install-Module -Name ImportExcel -Force -Scope CurrentUser
+            Import-Module ImportExcel
+            Write-Host "ImportExcel module installed successfully."
+        } catch {
+            Write-Host "Unable to install ImportExcel module. Exiting." -ForegroundColor Red
+            exit
+        }
+    }
+
+    # Export data to Excel with conditional formatting
+    $excelParams = @{
+        Path = $OutputFile
+        TableName = "Users"
+        TableStyle = "None"
+        AutoSize = $true
+        FreezeTopRow = $true
+        WorksheetName = "Users"
+    }
+
+    $outputData = Import-Csv -Path $InputFile
+        | Where-Object -Property "Licenses" -notin @("Unlicensed", "Power Automate Free")
+        | Select-Object -Property @("Display name", "User principal name", "First name", "Last name", "When created", "Licenses")
+
+    ## DEBUG
+    # Write-Output $outputData
+    # return
+
+    $outputData | Export-Excel @excelParams -Path $OutputFile -TableName $excelParams.TableName -WorksheetName $excelParams.WorksheetName -AutoSize -AutoFilter
+
+    Write-Host "Excel file has been created and saved to: $OutputFile"
+}
+
 Function Convert-ComputerFleetReport {
 <#
 .SYNOPSIS
