@@ -76,7 +76,7 @@ Function Convert-ComputerFleetReport {
     Write-Host "Script version: $currentVersion"
 
     if ($Version) {
-        exit
+        return
     }
 
     if ($InputFile -eq "") {
