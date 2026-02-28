@@ -32,7 +32,7 @@ Function Convert-UsersReport {
         [switch]$Version
     )
 
-    $currentVersion = "2026-02-28 12:19"
+    $currentVersion = "2026-02-28 12:39"
 
     Write-Host "Script version: $currentVersion"
 
@@ -74,7 +74,7 @@ Function Convert-UsersReport {
         WorksheetName = "Users"
     }
 
-    $unlicensed = @("Unlicensed", "Power Automate Free")
+    $unlicensed = @("Unlicensed", "Microsoft Power Automate Free")
 
     $columnsToKeep = @("Display name", "User principal name", "First name", "Last name", "When created", "Licenses")
 
