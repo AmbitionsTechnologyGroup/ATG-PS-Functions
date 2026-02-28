@@ -81,7 +81,7 @@ Function Convert-ComputerFleetReport {
 
     if ($InputFile -eq "") {
         Write-Host "Missing input file" -ForegroundColor Red
-        exit
+        return
     }
 
     $startTime = (Get-Date)
@@ -170,7 +170,7 @@ Function Convert-ComputerFleetReport {
     if ($CacheFile) {
         if (-not (Test-Path -Path $CacheFile)) {
             Write-Host "Cache file not found: $CacheFile" -ForegroundColor Red
-            exit
+            return
         }
         $cache = Import-Csv -Path $CacheFile
     }
@@ -180,7 +180,7 @@ Function Convert-ComputerFleetReport {
 
         if ($CompanyId -notin $companyIds.Keys) {
             Write-Host "CompanyId not supported: $CompanyId" -ForegroundColor Red
-            exit
+            return
         }
 
         $CompanyName = $companyIds.$CompanyId
