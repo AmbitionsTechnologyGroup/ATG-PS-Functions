@@ -1,7 +1,7 @@
 # ATG-PS-Functions
 Frequently used Powershell functions for Ambitions Techs
 
-We are using a **function-based system**. There are 2 ways to load the functions for a session:
+We are using a **function-based system**. There are a few ways to load the functions for a session:
 
 ### 1) Powershell method ###
 
@@ -17,6 +17,19 @@ IEX(new-object net.webclient).downloadstring('https://raw.githubusercontent.com/
 
 # note that this may not work if SSL is not enabled in PowerShell.
 ```
+
+### 2) Git-based method (installs git if needed, keeps a local clone in sync) ###
+
+```powershell
+irm raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/LoadFunctions.txt | iex
+```
+
+This clones the repo into `$ITFolder\GitHub\ATG-PS-Functions` (`$ITFolder` defaults to
+`C:\Ambitions`), installing MinGit automatically if no git is available, then imports every
+`Functions\ATG-PS-*.txt` file. Once loaded, run `Update-ITFunctions` to pull the latest
+changes and reload. If offline and a clone already exists locally, run
+`Scripts\Load-FunctionsFromCache.ps1` instead to reload from the existing local copy without
+touching the network.
 
 ### List of functions (can be entered as powershell commands): ###
 ```powershell
