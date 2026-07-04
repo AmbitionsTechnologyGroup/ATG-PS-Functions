@@ -15,34 +15,117 @@ Function Update-DnsServerRootHints{
 	#>
 	If (Get-Service -DisplayName "DNS Server" -ErrorAction SilentlyContinue) {
 		$url = "https://www.internic.net/domain/named.root"
-		$hashtable = @{}
+		$latestRootHints = @{}
 
 		# Download the contents of the URL
+		Write-Host "Fetching latest root hints from www.internic.net..." -ForegroundColor Cyan
 		$content = Invoke-WebRequest -Uri $url
 
 		# Split the content into lines
-		$lines = $content.Content.Split("`r`n") | Where-Object {$_ -notmatch ";|NS|AAAA"}  # Use `"`r`n" for Windows-style newlines
+		$lines = $content.Content.Split("`r`n") | Where-Object {$_ -notmatch ";|NS|AAAA"}
 
-		# Process each line, ignoring lines starting with ;
+		# Process each line to extract root hints
 		foreach ($line in $lines) {
-			if (!($line -like ";*")) {
-				$values = $line.Split(" ")
-				$hashtable[$values[0]] = $values[-1]  # Store only the last string
+			if (!($line -like ";*") -and $line.Trim() -ne "") {
+				$values = $line.Split(" ", [System.StringSplitOptions]::RemoveEmptyEntries)
+				if ($values.Count -ge 2) {
+					$latestRootHints[$values[0]] = $values[-1]
+				}
 			}
 		}
-		#$hashtable = $($hashtable.GetEnumerator() | Sort Name | Select Name,Value | Format-Table)
-		Write-Host "Currently set DNS Root Hints:";$(Get-DNSServerRootHint)
-		# Display the hashtable (optional)
-		Write-Host "Latest root hints from www.internic.net :";$($hashtable.GetEnumerator() | Sort Name | Select Name,Value | Format-Table)
 
-		# Remove the old entries and add the updated entries. Does not check if old is still up to date.
-		Write-Host "Replacing current set with updates"
-		foreach ($entry in $($hashtable.GetEnumerator()| Sort Name)) {
-			Remove-DnsServerRootHint -Force -NameServer ($entry.Name).ToLower() -ErrorAction SilentlyContinue
-			Add-DnsServerRootHint -NameServer $entry.Name -IPAddress $entry.Value -Verbose
+		# Get current root hints
+		Write-Host "Retrieving current DNS root hints..." -ForegroundColor Cyan
+		$currentRootHints = @{}
+		$currentHints = Get-DNSServerRootHint
+		foreach ($hint in $currentHints) {
+			$nameServer = $hint.NameServer.RecordData.NameServer
+			# Look through IP addresses for IPv4 addresses
+			foreach ($ipRecord in $hint.IPAddress) {
+				if ($ipRecord.RecordData.IPv4Address) {
+					$ipAddress = $ipRecord.RecordData.IPv4Address.IPAddressToString
+					if ($ipAddress) {
+						$currentRootHints[$nameServer] = $ipAddress
+						break  # Use the first IPv4 address
+					}
+				}
+			}
 		}
-		Write-Host "DNS Root Hints are now set to:";$(Get-DNSServerRootHint)
-		
+
+		# Create comparison table
+		Write-Host "`nDNS Root Hints Comparison:" -ForegroundColor Yellow
+
+		$comparisonTable = @()
+		$changesNeeded = $false
+		$upToDate = @()
+		$needsUpdate = @()
+		$missing = @()
+
+		# Compare all root hints
+		foreach ($server in ($latestRootHints.Keys | Sort-Object)) {
+			$latestIP = $latestRootHints[$server]
+			$currentIP = $currentRootHints[$server]
+
+			$status = if ($currentIP -eq $latestIP) {
+				$upToDate += $server
+				"Up to date"
+			} elseif ($null -eq $currentIP) {
+				$changesNeeded = $true
+				$missing += $server
+				"Missing"
+			} else {
+				$changesNeeded = $true
+				$needsUpdate += $server
+				"Needs update"
+			}
+
+			$comparisonTable += [PSCustomObject]@{
+				NameServer = $server
+				CurrentIP = if ($currentIP) { $currentIP } else { "N/A" }
+				LatestIP = $latestIP
+				Status = $status
+			}
+		}
+
+		# Display the comparison table using Format-Table
+		$comparisonTable | Format-Table -AutoSize
+
+		# Display summary with color coding
+		Write-Host "Summary:" -ForegroundColor Yellow
+		if ($upToDate.Count -gt 0) {
+			Write-Host "  Up to date: $($upToDate.Count) root hint(s)" -ForegroundColor Green
+		}
+		if ($needsUpdate.Count -gt 0) {
+			Write-Host "  Needs update: $($needsUpdate.Count) root hint(s) - $($needsUpdate -join ', ')" -ForegroundColor Yellow
+		}
+		if ($missing.Count -gt 0) {
+			Write-Host "  Missing: $($missing.Count) root hint(s) - $($missing -join ', ')" -ForegroundColor Red
+		}
+
+		# Only make changes if needed
+		if ($changesNeeded) {
+			Write-Host "`nChanges detected. Updating DNS root hints..." -ForegroundColor Yellow
+			$updatedCount = 0
+
+			foreach ($entry in ($latestRootHints.GetEnumerator() | Sort-Object Name)) {
+				$currentIP = $currentRootHints[$entry.Name]
+
+				# Only update if different or missing
+				if ($currentIP -ne $entry.Value) {
+					# Remove old entry if it exists
+					Remove-DnsServerRootHint -Force -NameServer ($entry.Name).ToLower() -ErrorAction SilentlyContinue
+
+					# Add new entry
+					Add-DnsServerRootHint -NameServer $entry.Name -IPAddress $entry.Value -Verbose
+					$updatedCount++
+				}
+			}
+
+			Write-Host "`nSuccessfully updated $updatedCount root hint(s)." -ForegroundColor Green
+		} else {
+			Write-Host "`nAll DNS root hints are already up to date. No changes needed." -ForegroundColor Green
+		}
+
 	} Else {
 		Write-Warning "You can only run this command on a DNS server."
 	}
@@ -67,21 +150,41 @@ Function Update-DellPackages {
 				choco upgrade chocolatey -y
 			} Else { Install-Choco }
 
-						Stop-Process -Name DellCommandUpdate -Force -ErrorAction SilentlyContinue
+			Stop-Process -Name DellCommandUpdate -Force -ErrorAction SilentlyContinue
 			$DCUx86 = Join-Path -Path ${env:ProgramFiles(x86)} -ChildPath "Dell\CommandUpdate\dcu-cli.exe"
 			$DCUx64 = Join-Path -Path $Env:ProgramFiles -ChildPath "Dell\CommandUpdate\dcu-cli.exe"
+
+			# Decide the install source ONCE and reuse for both the available-version check
+			# and the actual install. Mixing sources (e.g. check via choco, install via winget)
+			# causes upgrade loops when the two catalogs disagree on the latest version.
+			$IsSystem      = $(whoami) -eq "nt authority\system"
+			$InstallSource = If (Get-Command winget -ErrorAction SilentlyContinue) { 'winget' } Else { 'choco' }
+			Write-Host "DCU package source for this run: $InstallSource" -ForegroundColor Cyan
 
 			Function Install-DCU {
 				#Starts the IPMI Service if needed
 				$IPMIService = (Get-Service -Name IPMIDRV -ErrorAction SilentlyContinue).Status
 				If ($IPMIService -and $IPMIService -ne "Running") {Start-Service -Name IPMIDRV}
-				#Install the latest
 				Stop-Process -Name DellCommandUpdate -Force -ErrorAction SilentlyContinue
-				If (Get-Command winget -ErrorAction SilentlyContinue) {
-					winget source update
-					winget install --id Dell.CommandUpdate -e -h --accept-package-agreements --accept-source-agreements
+
+				If ($InstallSource -eq 'winget') {
+					If (-not $IsSystem) {
+						Write-Host "Using winget to install Dell Command Update and dependencies." -ForegroundColor Cyan
+						winget source update
+						Invoke-WinGetInstall -Id Microsoft.DotNet.DesktopRuntime.8
+						Invoke-WinGetInstall -Id Dell.CommandUpdate
+					} Else {
+						Write-Host "Running as SYSTEM; invoking winget via Start-PSWinGet." -ForegroundColor Yellow
+						Try {
+							Start-PSWinGet -Command 'Update-PowerShellModule -ModuleName Microsoft.WinGet.Client ; Install-WinGetPackage "Microsoft.DotNet.DesktopRuntime.8" ; Install-WinGetPackage "Dell.CommandUpdate"'
+						} Catch {
+							Write-Warning "Start-PSWinGet failed: $_"
+						}
+					}
 				} Else {
-					Choco upgrade DellCommandUpdate --exact -y --force -i --ignorechecksums
+					Write-Host "Using Chocolatey to install Dell Command Update and dependencies." -ForegroundColor Cyan
+					choco upgrade dotnet-8.0-desktopruntime --exact -y --force --forcedependencies -i
+					choco upgrade DellCommandUpdate --exact -y --force --forcedependencies -i --ignorechecksums
 				}
 			}
 
@@ -89,9 +192,25 @@ Function Update-DellPackages {
 				Write-Host "Checking if 'Dell Command | Update' is current."
 				#Remove any Windows 10 "Apps"
 				Get-ProvisionedAppPackage -Online -ErrorAction SilentlyContinue | Where-Object {$_.DisplayName -like "*Dell*Update*"} | Remove-ProvisionedAppPackage -Online
-				Uninstall-Application -AppToUninstall "Dell*Update"
+
+				# Scan once to gate the uninstall calls below. Uninstall-Application's
+				# internal WMI scan is the expensive part; skipping it when no match
+				# exists is the whole point.
+				Write-Host "Scanning installed applications for conflicts..." -ForegroundColor Cyan
+				$InstalledApps = Get-InstalledApplication
+
+				$Conflicts = @(
+					@{ Pattern = 'Dell.*Update';                           App = 'Dell*Update' },
+					@{ Pattern = 'Alienware Update for Windows Universal'; App = 'Alienware Update for Windows Universal' }
+				)
+				ForEach ($c in $Conflicts) {
+					If ($InstalledApps.Name -match $c.Pattern) {
+						Uninstall-Application -AppToUninstall $c.App
+					} Else {
+						Write-Host -ForegroundColor Green "No '$($c.App)' found; skipping."
+					}
+				}
 				Get-Package "Dell*Windows 10" -ErrorAction SilentlyContinue | Uninstall-Package -AllVersions -Force
-				Uninstall-Application -AppToUninstall "Alienware Update for Windows Universal" -ErrorAction SilentlyContinue
 				If (Get-AppxPackage *Dell*Update*){
 					$apps = Get-ChildItem -Path HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall,HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall | Get-ItemProperty | Where-Object {$_.DisplayName -like "Dell*Update*" } | Select-Object -Property DisplayName, UninstallString
 					ForEach ($ver in $apps) {
@@ -103,40 +222,58 @@ Function Update-DellPackages {
 					}
 				}
 			}
-					#Compare version numbers of any remaining installed version.
-					$DCUInstalledVersion = (Get-Package -Provider Programs -IncludeWindowsInstaller -Name "Dell Command | Update" -ErrorAction SilentlyContinue).Version
-					If (-not $DCUInstalledVersion -and (Test-Path $DCUx86 -ErrorAction SilentlyContinue)) {$DCUInstalledVersion = (Get-Item $DCUx86).VersionInfo.ProductVersion}
-					If (-not $DCUInstalledVersion -and (Test-Path $DCUx64 -ErrorAction SilentlyContinue)) {$DCUInstalledVersion = (Get-Item $DCUx64).VersionInfo.ProductVersion}
-					If (Get-Command winget -ErrorAction SilentlyContinue) {
-						$DCUAvailableVersion = $(winget show --id Dell.CommandUpdate --accept-source-agreements | Select-String -SimpleMatch "Version:").Line.Replace("Version: ","")
+			#Compare version numbers of any remaining installed version.
+			$DCUInstalledVersion = (Get-Package -Provider Programs -IncludeWindowsInstaller -Name "Dell Command | Update" -ErrorAction SilentlyContinue).Version
+			If (-not $DCUInstalledVersion -and (Test-Path $DCUx86 -ErrorAction SilentlyContinue)) {$DCUInstalledVersion = (Get-Item $DCUx86).VersionInfo.ProductVersion}
+			If (-not $DCUInstalledVersion -and (Test-Path $DCUx64 -ErrorAction SilentlyContinue)) {$DCUInstalledVersion = (Get-Item $DCUx64).VersionInfo.ProductVersion}
+			# Query available version from the SAME source that will install it. If the
+			# query source and install source can disagree, the installed version will
+			# never match what the check reports and every run will trigger a needless
+			# uninstall + reinstall.
+			$DCUAvailableVersion = $null
+			Switch ($InstallSource) {
+				'winget' {
+					$wingetVersionLine = winget show --id Dell.CommandUpdate --accept-source-agreements | Select-String -SimpleMatch "Version:" | Select-Object -First 1
+					If ($wingetVersionLine) {
+						$DCUAvailableVersion = $wingetVersionLine.Line.Replace("Version: ","").Trim()
 					} Else {
-						$DCUAvailableVersion = choco search DellCommandUpdate --exact #Gets all results
-						$DCUAvailableVersion = ($DCUAvailableVersion | Select-String -Pattern "DellCommandUpdate " -SimpleMatch).Line #Isolates the desired result
-						$DCUAvailableVersion = $DCUAvailableVersion.split(" ",[System.StringSplitOptions]::RemoveEmptyEntries)[1] #Isolates the version number
+						Write-Host "winget could not determine available DCU version; will rely on installed version check only." -ForegroundColor Yellow
 					}
-
-				If (-not $DCUInstalledVersion) {
-					Write-Host "'Dell Command | Update' is not installed, installing now."
-					Install-DCU
-
-				}  ElseIf ($DCUAvailableVersion -notmatch $DCUInstalledVersion) {
-					Write-Host "'Dell Command | Update' is not current. Updating from version $DCUInstalledVersion to $DCUAvailableVersion."
-
-					#Remove any programs listed through "Add and remove programs"
-					Uninstall-Application -AppToUninstall "Dell Command | Update" -ErrorAction SilentlyContinue
-					Install-DCU
-
-				} ElseIf ($DCUInstalledVersion -eq $DCUAvailableVersion) {
-					Write-Host -ForegroundColor Green "'Dell Command | Update' is current."
 				}
+				'choco' {
+					$chocoVersionLine = choco search DellCommandUpdate --exact | Select-String -Pattern "DellCommandUpdate " -SimpleMatch | Select-Object -First 1
+					If ($chocoVersionLine) {
+						$DCUAvailableVersion = $chocoVersionLine.Line.split(" ",[System.StringSplitOptions]::RemoveEmptyEntries)[1]
+					} Else {
+						Write-Host "choco could not determine available DCU version; will rely on installed version check only." -ForegroundColor Yellow
+					}
+				}
+			}
+
+			If (-not $DCUInstalledVersion) {
+				Write-Host "'Dell Command | Update' is not installed, installing now."
+				Install-DCU
+
+			} ElseIf ($DCUAvailableVersion -and ([System.Version]$DCUInstalledVersion -lt [System.Version]$DCUAvailableVersion)) {
+				Write-Host "'Dell Command | Update' is not current. Updating from version $DCUInstalledVersion to $DCUAvailableVersion."
+
+				#Remove any programs listed through "Add and remove programs"
+				Uninstall-Application -AppToUninstall "Dell Command | Update" -ErrorAction SilentlyContinue
+				Install-DCU
+
+			} Else {
+				Write-Host -ForegroundColor Green "'Dell Command | Update' is current (version $DCUInstalledVersion)."
+			}
 
 			#Configure and run Dell Command Update
 			If (Test-Path $DCUx86) {
-				& $DCUx86 /configure -autoSuspendBitLocker=enable
-				& $DCUx86 /applyUpdates -reboot=disable
+				& $DCUx86 /configure -autoSuspendBitLocker=enable -advancedDriverRestore=enable -maxretry=3 -delayDays=14 -scheduleAuto -updatesNotification=disable -scheduleAction=DownloadInstallAndNotify -installationDeferral=disable
+
+				& $DCUx86 /applyUpdates -reboot=disable -forceupdate=enable
 			} ElseIf (Test-Path $DCUx64) {
-				& $DCUx64 /configure -autoSuspendBitLocker=enable
-				& $DCUx64 /applyUpdates -reboot=disable
+				& $DCUx64 /configure -autoSuspendBitLocker=enable -advancedDriverRestore=enable -maxretry=3 -delayDays=14 -scheduleAuto -updatesNotification=disable -scheduleAction=DownloadInstallAndNotify -installationDeferral=disable
+
+				& $DCUx64 /applyUpdates -reboot=disable -forceupdate=enable
 			} Else { Write-Error "Dell Command Update CLI not found."}
 
 		} Else { Write-Host "This is not a Dell Computer" }
@@ -156,20 +293,17 @@ Function Update-DellServer {
 	}
 	$delay = $null
 
-	$URL = "https://dl.dell.com/FOLDER12418375M/1/Systems-Management_Application_03GC8_WN64_2.1.1.0_A00.EXE"
-	$File = "C:\Ambitions\Dell System Update 2.0.1.exe"
-	$Hash = 'dc3d740bcdbf89d0a8dcbf8b57e21d6369455e2efe5313fc73233aeefa381cd5'
+	$URL = "https://dl.dell.com/FOLDER14217017M/1/Systems-Management_Application_RXKJ5_WN64_2.2.0.1_A00.EXE"
+	$File = "C:\Ambitions\Dell System Update 2.2.0.1_A00.exe"
 	Function Get-DSUInstall {
 		Write-Host "Dell System Update is not installed, attempting to install."
 		Write-Host "Download the installer to $File"
 		(New-Object System.Net.WebClient).DownloadFile($URL,$File) #Download the URL to the File.
-				Write-Host "Download is complete, checking the integrity."
-	}
-
-	Function Test-DSUInstall {IF ((Get-FileHash -Path $File -Algorithm SHA256).Hash -eq $Hash) {
-			Write-Host "It's a match!"
+		Write-Host "Download is complete, checking basic sanity."
+		If ((Test-Path $File -ErrorAction SilentlyContinue) -and (Get-Item $File).Length -gt 0) {
+			Write-Host "File exists and is not empty."
 		} Else {
-			Write-Host "Uh oh, there were issues downloading a non-corrupt file. Please attempt manually."
+			Write-Host "Download may have failed or corrupted file. Please verify manually."
 			Write-Host "Download is available at https://downloads.dell.com/omimswac/dsu/"
 			Pause
 			Exit
@@ -196,10 +330,9 @@ Function Update-DellServer {
 			Exit
 		} Else {
 			Write-Host "Checkin if DSU is installed"
-			If ((Get-WmiObject win32_product | Where-Object -Property Name -Like "*Dell System Update*").Version -NotLike "2.0.1.0*") {
-				Write-Host "Dell System Update is either not installed or not version 2.0.1.0"
+			If ((Get-WmiObject win32_product | Where-Object -Property Name -Like "*Dell System Update*").Version -NotLike "2.2.0.1*") {
+				Write-Host "Dell System Update is either not installed or not version 2.2.0.1"
 				Get-DSUInstall
-				Test-DSUInstall
 				Install-DSU
 			} Else {
 				Write-Host "DSU is already installed."
@@ -258,7 +391,7 @@ Function Update-ITS247Agent {
 		 $SaveFolder = 'C:\Ambitions'
 		 New-Item -ItemType Directory -Force -Path $SaveFolder
 		 $PatchPath = $SaveFolder + '\DPMAPatch' + $AvailableVersion + '.exe'
-		 (New-Object System.Net.WebClient).DownloadFile('http://update.itsupport247.net/agtupdt/DPMAPatch.exe', $PatchPath)
+		 (New-Object System.Net.WebClient).DownloadFile('https://update.itsupport247.net/agtupdt/DPMAPatch.exe', $PatchPath)
 		 & $PatchPath | Wait-Process
 		 $DisplayVersion = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).DisplayVersion
 	 WRITE-HOST "Agent is now version $DisplayVersion"
@@ -496,7 +629,7 @@ Function Update-PowerShellModule {
 
                 # Ensure NuGet package provider is installed
                 if (!(Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
-                    Install-PackageProvider -Name NuGet -Force -Scope CurrentUser
+                    Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser
                 }
 
                 # Remove the module from current session if loaded
@@ -551,7 +684,7 @@ Function Update-PowerShellModule {
 
         # Ensure NuGet package provider is installed
         if (!(Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
-            Install-PackageProvider -Name NuGet -Force -Scope CurrentUser
+            Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser
         }
 
         # Install the module
@@ -647,7 +780,11 @@ Function Update-PWSH {
 }
 
 Function Update-PSWinGetPackages {
-	Start-PSWinGet -Command 'Get-WinGetPackage | Where {$_.IsUpdateAvailable -eq $True} | Update-WinGetPackage -Mode Silent -Verbose'
+	If (Get-Command -Name "winget.exe" -ErrorAction SilentlyContinue) {
+		& winget.exe update --all --silent --accept-package-agreements --accept-source-agreements --source winget --include-unknown --force --disable-interactivity
+	} Else {
+		Start-PSWinGet -Command 'Get-WinGetPackage | Where {$_.IsUpdateAvailable -eq $True} | Update-WinGetPackage -Mode Silent -Verbose'
+	}
 }
 
 Function Update-Windows {
@@ -669,16 +806,13 @@ Function Update-Windows {
 			Add-WUServiceManager -ServiceID 7971f918-a847-4430-9279-4a52d1efe18d -Confirm:$false
 		}
 	}
-	
-	Write-Host "Checking Chocolatey Installation"
-	If (-NOT (Test-Path "C:\ProgramData\chocolatey\bin\choco.exe")) {
-		Write-Host "Choco is not installed. Installing Choco."
-		Install-Choco
-	}
-	
-	Write-Host "Choco is installed. Checking for powershell version."
+	Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.208 -Force -ErrorAction SilentlyContinue
+	Install-PackageProvider -Name NuGet -MinimumVersion 3.0.0.1 -Force -ErrorAction SilentlyContinue
+
+
 	If ($PSVersionTable.PSVersion.Major -lt "5") {
 		Write-Host "Powershell needs an update, installing now"
+		If (!(Test-Path "C:\ProgramData\chocolatey\bin\choco.exe" -ErrorAction SilentlyContinue) ){Install-Choco}
 		& "C:\ProgramData\chocolatey\bin\choco.exe" install dotnet4.5.2 -y
 		& "C:\ProgramData\chocolatey\bin\choco.exe" install powershell -y
 		Write-Host "Reboot computer and run script again"
@@ -690,32 +824,51 @@ Function Update-Windows {
 			Remove-Module $Module.Name
 			Remove-Item $Module.ModuleBase -Recurse -Force
 		}
-	
+
 		If (-Not (((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Major -ge "2") -and ((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Minor -ge "1"))) {
-			Write-Host "Attempting automatic installation of PSWUI 2.2.0.3"
+			Write-Host "Attempting automatic installation of PSWUI 2.2.1.5"
+			Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.208 -Force -ErrorAction SilentlyContinue
 			Install-PackageProvider -Name NuGet -MinimumVersion 3.0.0.1 -Force -ErrorAction SilentlyContinue
-			Install-Module -Name PSWindowsUpdate -MinimumVersion 2.2.0.3 -Force -ErrorAction SilentlyContinue
+			Install-Module -Name PSWindowsUpdate -MinimumVersion 2.2.1.5 -Force -ErrorAction SilentlyContinue
+			Import-Module PSWindowsUpdate
 			RegMU
 			If (-Not (((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Major -ge "2") -and ((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Minor -ge "1"))) {
-				Write-Host "Auto install Failed, Attempting Manual installation of PSWUI 2.2.0.3"
+				Write-Host "Attempting Manual installation of PSWUI 2.2.1.5"
 				New-Item -ItemType Directory -Force -Path 'C:\Ambitions' -ErrorAction Stop
-				(New-Object System.Net.WebClient).DownloadFile('https://psg-prod-eastus.azureedge.net/packages/pswindowsupdate.2.2.0.3.nupkg', 'C:\Ambitions\pswindowsupdate.2.2.0.3.zip')
-				New-Item -ItemType Directory -Force -Path 'C:\Windows\System32\WindowsPowerShell\v1.0\Modules\PSWindowsUpdate\2.2.0.3' -ErrorAction Stop
-				Expand-Archive -LiteralPath 'C:\Ambitions\pswindowsupdate.2.2.0.3.zip' -DestinationPath 'C:\Windows\System32\WindowsPowerShell\v1.0\Modules\PSWindowsUpdate\2.2.0.3' -ErrorAction Stop
+				(New-Object System.Net.WebClient).DownloadFile('https://cdn.powershellgallery.com/packages/pswindowsupdate.2.2.1.5.nupkg', 'C:\Ambitions\pswindowsupdate.2.2.1.5.zip')
+				New-Item -ItemType Directory -Force -Path 'C:\Windows\System32\WindowsPowerShell\v1.0\Modules\PSWindowsUpdate\2.2.1.5' -ErrorAction Stop
+				Expand-Archive -LiteralPath 'C:\Ambitions\pswindowsupdate.2.2.1.5.zip' -DestinationPath 'C:\Windows\System32\WindowsPowerShell\v1.0\Modules\PSWindowsUpdate\2.2.1.5' -ErrorAction Stop
 				Import-Module PSWindowsUpdate -ErrorAction Stop
 				RegMU
 			}
 		}
-	
+
 		If (((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Major -ge "2") -and ((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Minor -ge "1")) {
 			Write-Host "PSWindowsUpdate is installed! Attempting Updates"
 			If ($NoDrivers -ne $True) {
 				Write-Host "Checking for DRIVER Updates..."
-				Get-WUInstall -MicrosoftUpdate -AcceptAll -Install -UpdateType Driver -IgnoreReboot -ErrorAction SilentlyContinue -Verbose
+				try {
+					Get-WUInstall -MicrosoftUpdate -AcceptAll -Install -UpdateType Driver -IgnoreReboot -ErrorAction Stop -Verbose
+				}
+				catch {
+					Write-Warning "Driver update check failed. Running Reset-WUComponents..."
+					Reset-WUComponents
+					Write-Host "Retrying DRIVER Updates..."
+					Get-WUInstall -MicrosoftUpdate -AcceptAll -Install -UpdateType Driver -IgnoreReboot -ErrorAction Stop -Verbose
+				}
 			}
+
 			If ($NoSoftware -ne $True) {
 				Write-Host "Checking for SOFTWARE Updates..."
-				Get-WUInstall -MicrosoftUpdate -AcceptAll -Install -UpdateType Software -IgnoreReboot -ErrorAction SilentlyContinue -Verbose
+				try {
+					Get-WUInstall -MicrosoftUpdate -AcceptAll -Install -UpdateType Software -IgnoreReboot -ErrorAction Stop -Verbose
+				}
+				catch {
+					Write-Warning "Software update check failed. Running Reset-WUComponents..."
+					Reset-WUComponents
+					Write-Host "Retrying SOFTWARE Updates..."
+					Get-WUInstall -MicrosoftUpdate -AcceptAll -Install -UpdateType Software -IgnoreReboot -ErrorAction Stop -Verbose
+				}
 			}
 		} Else {
 			Write-Host "PSWindowsUpdate is failing to install, please investigate"
