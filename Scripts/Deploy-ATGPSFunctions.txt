@@ -4,7 +4,9 @@ Function Get-ATGPS {
 	$progressPreference = 'silentlyContinue'
 	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
 	$Destination = $Env:temp + "\ATGPS.psm1"
-	(Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/ATG-PS-Functions.txt -UseBasicParsing).Content | Out-File -FilePath $Destination
+	$UrlList = (Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/URL-List.csv -UseBasicParsing).Content | ConvertFrom-Csv
+	$Combined = ForEach ($Entry in $UrlList) { (Invoke-WebRequest $Entry.URL -UseBasicParsing).Content }
+	$Combined -join "`n`n" | Out-File -FilePath $Destination -Encoding utf8
 	Import-Module $Destination -Verbose -Global -PassThru -Force
 }
 '@

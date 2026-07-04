@@ -338,6 +338,30 @@ Do NOT pull `Restart-ComputerSafely` (large fork-only function). Instead, before
 existing `Restart-Computer -Force`, insert:
 `If ((Get-BitLockerVolume -MountPoint $env:SystemDrive -ErrorAction SilentlyContinue).ProtectionStatus -eq 'On') { Suspend-BitLocker -MountPoint $env:SystemDrive -RebootCount 1 }`
 
+## Decisions resolved by the maintainer (do NOT redo or reconsider)
+
+- **Set-AutoLogon: kept as-is, no code change.** The `$SiteCode + 'T3mpP@ss'` autologon
+  password is intentionally temporary — it is overwritten by policy the moment the machine
+  first touches the network, so the plaintext-registry/predictable-password weakness is not
+  a real-world exposure window. Do not parameterize or otherwise change this function.
+- **Update-PWSH choco-dependency retry: backported, including the helper.** Chocolatey v2
+  sometimes reports a package as "failed to resolve dependency" when its dependency graph
+  is inconsistent (a known choco v2 issue), and a plain `choco upgrade pwsh` fails outright
+  in that state. Per maintainer decision, brought over both the fork's retry loop (up to 3
+  attempts) and the `Repair-ChocoDependency` helper it depends on (`ATG-PS-Repair.txt`),
+  which inspects choco's package cache/config, clears conflicting version pins, and
+  re-registers affected sources between attempts.
+- **Legacy root `ATG-PS-Functions.txt`: removed.** This file was a single-file, ~73-function
+  concatenated snapshot that predates the per-verb file layout. It mattered because
+  `Scripts/Get-ATGPS.txt` and `Scripts/Deploy-ATGPSFunctions.txt` both downloaded and
+  `Import-Module`-ed this exact file — and per `Scripts/misc/urls.txt`, `ps.acgs.io` (the
+  primary documented loader in `README.md`) resolves to `Get-ATGPS.txt`, so this was *not*
+  a dead legacy path, it was load-bearing for production bootstrapping. Removing the file
+  outright would have 404'd that path, so `Get-ATGPS.txt` and `Deploy-ATGPSFunctions.txt`
+  were rewritten to fetch and concatenate the current per-verb files via
+  `Functions/URL-List.csv` (previously unused dead weight in the repo) instead of the stale
+  bundle — same `Import-Module -Name ATGPS` behavior, but now always current.
+
 ## Decision-needed items (do NOT implement without maintainer approval)
 
 - **Invoke-NDDCScan webhook (P2, security):** original embeds a base64-obfuscated Ambitions
@@ -350,51 +374,6 @@ existing `Restart-Computer -Force`, insert:
   either blocks scheduled/RMM runs outright or silently downgrades to "no validation." That
   upkeep requires an assigned maintainer, which this repo does not have guaranteed. Skip it
   entirely rather than land infrastructure with an unmet maintenance requirement.
-- **Set-AutoLogon:** original signature is `Set-AutoLogon([String] $SiteCode)` — it always
-  logs in as the fixed username `ATGLocal`, and derives the autologon password as
-  `$SiteCode + 'T3mpP@ss'` (e.g. site code `DEN01` → password `DEN01T3mpP@ss`), written in
-  plaintext to `HKLM:\...\Winlogon\DefaultPassword`. That's a real weakness (predictable,
-  guessable from the site code alone, plaintext at rest) but it is also a *convention*:
-  every deploy script that calls `Set-AutoLogon $SiteCode` and everyone who has ever needed
-  to log into one of these machines assumes that exact formula. The fork's fix replaces it
-  with `-Username`/`-Password` parameters and no default derivation — dropping the formula
-  without a coordinated rollout would silently autologon as a machine-specific *different*
-  password than what techs are trained to expect, or fail to autologon at all if callers
-  aren't updated. This needs the maintainer to choose: keep the current formula (accept the
-  known weakness), add optional `-Username`/`-Password` parameters *alongside* a
-  `SiteCode`-derived default so existing callers keep working, or do a coordinated migration
-  where old and new logic run in parallel until every deploy script is confirmed updated.
-- **Update-PWSH choco-dependency retry:** Chocolatey v2 sometimes reports a package as
-  "failed to resolve dependency" when a dependency's own dependency graph is inconsistent
-  (a known choco v2 issue), and a plain `choco upgrade pwsh` just fails outright in that
-  state. The fork's fix retries up to 3 times, and between attempts calls
-  `Repair-ChocoDependency` — a ~2000-line function (in `PS-Repair.psm1`) that inspects
-  choco's package cache and config, clears conflicting version pins, and re-registers the
-  affected package sources. It is a large, single-purpose repair tool that exists *only* to
-  support this retry loop; nothing else in either repo calls it. Backporting the retry
-  without it would mean the retry loop spins 3 times against the same unresolved state and
-  still fails — no benefit. Bringing over ~2000 lines of unfamiliar repair logic that no
-  Ambitions engineer has read line-by-line, to fix an intermittent choco quirk on one
-  function, is a maintainability trade a maintainer should make deliberately, not one that
-  should happen as a side effect of a PWSH-update fix.
-- **Legacy root `ATG-PS-Functions.txt`:** a single file at the repo root containing roughly
-  73 functions concatenated together — an older, pre-per-verb-file snapshot of this
-  codebase. None of the fixes in this PR (or any fix going forward, unless someone
-  remembers to update it separately) touch it, because nothing in the backport work read
-  from or wrote to it. It matters because `Scripts/Get-ATGPS.txt` and
-  `Scripts/Deploy-ATGPSFunctions.txt` (an alternate/older bootstrap path, documented as
-  the second loading method in `README.md`) both download and `Import-Module` that exact
-  file — so any machine bootstrapped that way is running Connect-Wifi, Get-FileDownload,
-  Uninstall-Application, and everything else from *before* all the fixes in this PR, not
-  after. The primary, documented loading path (`irm ps.acgs.io | iex`) does not use this
-  file at all — it loads the individual `Functions/ATG-PS-*.txt` files per `URL-List.csv`
-  and already has every fix. This is a decision because there are two legitimate fixes with
-  different costs: (a) regenerate `ATG-PS-Functions.txt` by concatenating the current
-  `Functions/ATG-PS-*.txt` files, likely as a one-time script or a CI step that keeps it in
-  sync going forward, or (b) retire `Get-ATGPS`/`Deploy-ATGPSFunctions.txt` entirely and
-  point anyone still using that path at `irm ps.acgs.io | iex`. Both require a maintainer
-  to confirm which machines, if any, currently depend on the `Get-ATGPS` bootstrap path
-  before acting, since (b) would break them outright if they exist.
 
 ## New fork functions worth cherry-picking later (P3, optional)
 
