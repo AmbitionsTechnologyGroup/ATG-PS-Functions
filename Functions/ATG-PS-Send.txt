@@ -73,3 +73,122 @@ Function Send-WakeOnLan {
 	}
 
 }
+
+Function Send-Item {
+	<#
+	.SYNOPSIS
+		Sends a file, folder, or text to another computer via croc and outputs the receive command.
+	.DESCRIPTION
+		Wraps 'croc send' to transfer files/folders/text. Generates a code upfront, copies the
+		full receive command (including the function loader) to clipboard, then starts the transfer.
+	.PARAMETER Path
+		Path to the file or folder to send.
+	.PARAMETER Text
+		Text string to send instead of a file.
+	.PARAMETER Clipboard
+		Sends the current text contents of the clipboard. The clipboard is read first, so
+		the text is captured before the receive command replaces it on the clipboard.
+	.PARAMETER Code
+		Optional custom code phrase. If omitted, one is generated automatically.
+	.EXAMPLE
+		Send-Item -Path .\MyFile.zip
+	.EXAMPLE
+		Send-Item -Path C:\Projects\MyFolder -Code "secret-phrase"
+	.EXAMPLE
+		Send-Item -Text "Hello from the other side"
+	.EXAMPLE
+		Send-Item -Clipboard
+		Sends whatever text is currently on the clipboard.
+	#>
+	[CmdletBinding(DefaultParameterSetName = 'File')]
+	param(
+		[Parameter(Mandatory, Position = 0, ParameterSetName = 'File')]
+		[string]$Path,
+
+		[Parameter(Mandatory, ParameterSetName = 'Text')]
+		[string]$Text,
+
+		[Parameter(Mandatory, ParameterSetName = 'Clipboard')]
+		[switch]$Clipboard,
+
+		[Parameter()]
+		[string]$Code
+	)
+
+	# Capture clipboard text before the receive command overwrites the clipboard below
+	if ($PSCmdlet.ParameterSetName -eq 'Clipboard') {
+		$Text = Get-Clipboard -Raw
+		if ([string]::IsNullOrWhiteSpace($Text)) {
+			Write-Host "Text not detected in the clipboard. Nothing to send." -ForegroundColor Red
+			Write-Host "To send a file or folder instead, use: Send-Item -Path <path>" -ForegroundColor Yellow
+			return
+		}
+	}
+
+	$crocExe = Get-CrocPath
+
+	# Pre-generate code so the receive command is ready before the blocking croc process starts
+	if (-not $Code) {
+		$Code = New-CrocCode
+	}
+
+	$receiveLines = @(
+		'[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13 #Enables SSL Temporarily',
+		'irm ps.acgs.io | iex',
+		"Receive-Item -Code `"$Code`""
+	)
+	Set-Clipboard -Value ($receiveLines -join "`r`n")
+
+	if ($PSCmdlet.ParameterSetName -eq 'File') {
+		$resolvedPath = Resolve-Path -Path $Path -ErrorAction Stop
+		$displayLabel = $resolvedPath.ProviderPath
+		# Send by leaf name from within the parent directory so croc transmits a
+		# relative path. Passing an absolute path (e.g. D:\Folder) makes the receiver
+		# try to recreate D:\Folder, which fails when the receiver has no writable
+		# D: drive. See croc issue #809.
+		# Use .NET path helpers rather than Split-Path: in Windows PowerShell 5.1,
+		# 'Split-Path -LiteralPath' cannot be combined with -Parent or -Leaf (they are
+		# in mutually exclusive parameter sets) and throws AmbiguousParameterSet.
+		$sendParent = [System.IO.Path]::GetDirectoryName($resolvedPath.ProviderPath)
+		$sendLeaf   = [System.IO.Path]::GetFileName($resolvedPath.ProviderPath)
+	} elseif ($PSCmdlet.ParameterSetName -eq 'Clipboard') {
+		$lineCount = ($Text -split "`r`n|`r|`n").Count
+		$displayLabel = "CLIPBOARD TEXT ($($Text.Length) chars, $lineCount lines)"
+	} else {
+		$displayLabel = "TEXT: $Text"
+	}
+
+	Write-Host ""
+	Write-Host "============================================" -ForegroundColor Cyan
+	Write-Host " SENDING: $displayLabel" -ForegroundColor Cyan
+	Write-Host "============================================" -ForegroundColor Cyan
+	Write-Host ""
+	Write-Host "Paste this on the receiving computer (copied to clipboard):" -ForegroundColor Yellow
+	Write-Host ""
+	$receiveLines | ForEach-Object { Write-Host $_ -ForegroundColor Green }
+	Write-Host ""
+	Write-Host "(Copied to clipboard)" -ForegroundColor DarkGray
+	Write-Host "--------------------------------------------" -ForegroundColor Cyan
+
+	# --disable-clipboard prevents croc from overwriting the receive command we put on the clipboard
+	if ($PSCmdlet.ParameterSetName -eq 'File') {
+		# Run croc from the parent directory and pass only the leaf so the transmitted
+		# path is relative (no drive letter). Fall back to the full path for a drive
+		# root, which has no leaf to send under.
+		if ([string]::IsNullOrEmpty($sendLeaf) -or [string]::IsNullOrEmpty($sendParent)) {
+			$crocArgs = @('--disable-clipboard', 'send', '--code', $Code, $resolvedPath.ProviderPath)
+			& $crocExe @crocArgs
+		} else {
+			Push-Location -LiteralPath $sendParent
+			try {
+				$crocArgs = @('--disable-clipboard', 'send', '--code', $Code, $sendLeaf)
+				& $crocExe @crocArgs
+			} finally {
+				Pop-Location
+			}
+		}
+	} else {
+		$crocArgs = @('--disable-clipboard', 'send', '--code', $Code, '--text', $Text)
+		& $crocExe @crocArgs
+	}
+}

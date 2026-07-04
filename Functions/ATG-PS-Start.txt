@@ -187,6 +187,267 @@ Function Start-ImperialMarch {
 
 
 
+function Start-ClaudeCode {
+	<#
+	.SYNOPSIS
+		Launches Claude Code, installing or updating if needed.
+	.DESCRIPTION
+		Smart launcher for Claude Code:
+		- Installs if not present (requires admin)
+		- Checks for updates and prompts to update
+		- Launches Claude Code
+
+		Browser will open for authentication if not logged in.
+	.PARAMETER SkipUpdateCheck
+		Skip the update check and launch immediately.
+	.PARAMETER NoLaunch
+		Install/update only, don't launch Claude Code.
+	.EXAMPLE
+		Start-ClaudeCode
+	.EXAMPLE
+		Start-ClaudeCode -SkipUpdateCheck
+	.NOTES
+		When done, run Remove-ClaudeCode to logout from this machine.
+	#>
+	[CmdletBinding()]
+	param(
+		[switch]$SkipUpdateCheck,
+		[switch]$NoLaunch
+	)
+
+	# Paths
+	$ClaudeFolder = "C:\Ambitions\ClaudeCode"
+	$ClaudeExe = "$ClaudeFolder\claude.exe"
+
+	# Check if installed
+	if (-not (Test-Path $ClaudeExe)) {
+		Write-Host "`nClaude Code is not installed." -ForegroundColor Yellow
+
+		# Check admin
+		$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+		$principal = New-Object Security.Principal.WindowsPrincipal($identity)
+		if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+			Write-Host "[!] Administrator privileges required to install." -ForegroundColor Red
+			Write-Host "    Run PowerShell as Administrator and try again." -ForegroundColor Yellow
+			return
+		}
+
+		$install = Read-Host "Install Claude Code now? (Y/N)"
+		if ($install -eq "Y" -or $install -eq "y") {
+			$result = Install-ClaudeCode
+			if (-not $result) {
+				Write-Host "[!] Installation failed." -ForegroundColor Red
+				return
+			}
+		} else {
+			return
+		}
+	}
+
+	# Ensure in PATH
+	if ($env:Path -notlike "*$ClaudeFolder*") { $env:Path = "$env:Path;$ClaudeFolder" }
+
+	# Check for updates (unless skipped)
+	if (-not $SkipUpdateCheck) {
+		Write-Host "Checking for updates..." -ForegroundColor Gray
+
+		$CurrentVersion = $null
+		$LatestVersion = $null
+
+		try {
+			$CurrentVersion = (& $ClaudeExe --version 2>$null).Trim()
+		} catch { }
+
+		try {
+			[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+			$npmInfo = Invoke-RestMethod -Uri "https://registry.npmjs.org/@anthropic-ai/claude-code/latest" -UseBasicParsing -ErrorAction SilentlyContinue -TimeoutSec 5
+			if ($npmInfo.version) { $LatestVersion = $npmInfo.version }
+		} catch { }
+
+		if ($CurrentVersion -and $LatestVersion -and $CurrentVersion -ne $LatestVersion) {
+			Write-Host "Update available: $CurrentVersion -> $LatestVersion" -ForegroundColor Yellow
+
+			# Check admin for update
+			$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+			$principal = New-Object Security.Principal.WindowsPrincipal($identity)
+			if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+				$update = Read-Host "Update now? (Y/N)"
+				if ($update -eq "Y" -or $update -eq "y") {
+					Update-ClaudeCode -Force
+				}
+			} else {
+				Write-Host "Run as Administrator to update." -ForegroundColor Gray
+			}
+		} elseif ($CurrentVersion) {
+			Write-Host "Claude Code is up to date ($CurrentVersion)" -ForegroundColor Green
+		}
+	}
+
+	# Launch
+	if (-not $NoLaunch) {
+		Write-Host "`nLaunching Claude Code..." -ForegroundColor Cyan
+		Write-Host "Browser will open for authentication if not logged in." -ForegroundColor Gray
+		Write-Host "When done, run: Remove-ClaudeCode" -ForegroundColor Yellow
+		Write-Host ""
+
+		& $ClaudeExe
+	}
+}
+
+Function Start-PSTaskManager {
+<#
+	.SYNOPSIS
+		Installs and launches pstop, a terminal-based task manager for Windows.
+	.DESCRIPTION
+		Checks if pstop is already installed and runs it. If not installed, attempts
+		installation via winget, Start-PSWinGet (for SYSTEM context), Chocolatey, or
+		direct download from GitHub releases as a fallback.
+
+		WARNING: This function downloads and runs third-party software (pstop by psmux).
+		Only run this if you trust the source. Use -Force to skip the disclaimer prompt.
+	.PARAMETER Force
+		Bypasses the disclaimer prompt and proceeds with install/run automatically.
+	.LINK
+		https://github.com/psmux/pstop
+	.EXAMPLE
+		Start-PSTaskManager
+		Prompts for confirmation, then installs (if needed) and launches pstop.
+	.EXAMPLE
+		Start-PSTaskManager -Force
+		Skips the disclaimer and installs/runs pstop immediately.
+#>
+	param (
+		[Switch] $Force
+	)
+
+	# --- Disclaimer ---
+	If (-not $Force) {
+		Write-Host ""
+		Write-Host "  DISCLAIMER: pstop is third-party software and is not maintained as part of this toolkit." -ForegroundColor Yellow
+		Write-Host "  Source: https://github.com/psmux/pstop" -ForegroundColor Yellow
+		Write-Host "  Only proceed if you trust this software and its source." -ForegroundColor Yellow
+		Write-Host ""
+		$Confirm = Read-Host "  Type 'yes' to continue, or press Enter to cancel"
+		If ($Confirm -ne 'yes') {
+			Write-Host "Cancelled." -ForegroundColor Gray
+			Return
+		}
+	}
+
+	# --- Check if already installed ---
+	$PstopCmd = Get-Command pstop -ErrorAction SilentlyContinue
+	If ($PstopCmd) {
+		Write-Host "[OK] pstop found at $($PstopCmd.Source). Launching..." -ForegroundColor Green
+		& pstop
+		Return
+	}
+
+	# Check for pstop in C:\Ambitions\Downloads (manual/zip installs)
+	If (Test-Path "C:\Ambitions\Downloads\pstop\pstop.exe") {
+		Write-Host "[OK] pstop found in C:\Ambitions\Downloads. Launching..." -ForegroundColor Green
+		& "C:\Ambitions\Downloads\pstop\pstop.exe"
+		Return
+	}
+
+	Write-Host "pstop not found. Attempting installation..." -ForegroundColor Cyan
+
+	# Reused launch logic - avoids duplicating the PATH-vs-install-folder decision
+	$LaunchPstop = {
+		$Cmd = Get-Command pstop -ErrorAction SilentlyContinue
+		If ($Cmd) {
+			Write-Host "[OK] Launching pstop..." -ForegroundColor Green
+			& pstop
+		} ElseIf (Test-Path "C:\Ambitions\Downloads\pstop\pstop.exe") {
+			Write-Host "[OK] Launching pstop from C:\Ambitions\Downloads..." -ForegroundColor Green
+			& "C:\Ambitions\Downloads\pstop\pstop.exe"
+		} Else {
+			Write-Warning "Installation reported success but pstop.exe could not be located. Check your PATH or C:\Ambitions\Downloads\pstop."
+		}
+	}
+
+	$Installed    = $false
+	$IsSystem     = $(whoami) -eq "nt authority\system"
+	$WingetAvail  = [bool](Get-Command winget -ErrorAction SilentlyContinue)
+
+	If (-not $IsSystem -and $WingetAvail) {
+		Write-Host "[1/4] Trying winget..." -ForegroundColor Cyan
+		Try {
+			Invoke-WinGetInstall -Id marlocarlo.pstop
+			# winget modifies PATH but the current session doesn't see it yet - refresh before checking
+			$env:PATH = [System.Environment]::GetEnvironmentVariable("PATH", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("PATH", "User")
+			If (Get-Command pstop -ErrorAction SilentlyContinue) { $Installed = $true }
+		} Catch {
+			Write-Warning "winget install failed: $_"
+		}
+	}
+
+	If (-not $Installed -and ($IsSystem -or -not $WingetAvail)) {
+		Write-Host "[2/4] Running as SYSTEM or winget unavailable. Trying Start-PSWinGet..." -ForegroundColor Cyan
+		Try {
+			Start-PSWinGet -Command 'Install-WinGetPackage "marlocarlo.pstop"'
+			If (Get-Command pstop -ErrorAction SilentlyContinue) { $Installed = $true }
+			If (Test-Path "C:\Ambitions\Downloads\pstop\pstop.exe") { $Installed = $true }
+		} Catch {
+			Write-Warning "Start-PSWinGet failed: $_"
+		}
+	}
+
+	If (-not $Installed) {
+		Write-Host "[3/4] Trying Chocolatey..." -ForegroundColor Cyan
+		Try {
+			If (-not (Get-Command choco -ErrorAction SilentlyContinue)) { Install-Choco }
+			choco install pstop -y
+			If (Get-Command pstop -ErrorAction SilentlyContinue) { $Installed = $true }
+		} Catch {
+			Write-Warning "Chocolatey install failed: $_"
+		}
+	}
+
+	If (-not $Installed) {
+		Write-Host "[4/4] Falling back to direct GitHub download..." -ForegroundColor Cyan
+		Try {
+			$Release  = Invoke-RestMethod -Uri "https://api.github.com/repos/psmux/pstop/releases/latest" -UseBasicParsing
+			$ZipAsset = $Release.assets | Where-Object { $_.name -like "*windows*x86_64*.zip" -or $_.name -like "*win*.zip" } | Select-Object -First 1
+			If (-not $ZipAsset) {
+				$ZipAsset = $Release.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1
+			}
+
+			If (-not $ZipAsset) {
+				Write-Error "Could not find a zip asset in the latest pstop release. Please install manually: https://github.com/psmux/pstop/releases"
+				Return
+			}
+
+			$DestFolder = "C:\Ambitions\Downloads\pstop"
+			$ZipPath    = "$DestFolder\pstop.zip"
+
+			New-Item -ItemType Directory -Force -Path $DestFolder | Out-Null
+
+			Write-Host "  Downloading $($ZipAsset.name) from GitHub..." -ForegroundColor Gray
+			Invoke-WebRequest -Uri $ZipAsset.browser_download_url -OutFile $ZipPath -UseBasicParsing
+
+			Expand-Archive -Path $ZipPath -DestinationPath $DestFolder -Force
+			Remove-Item $ZipPath -Force -ErrorAction SilentlyContinue
+
+			$PstopExe = Get-ChildItem -Path $DestFolder -Recurse -Filter "pstop.exe" | Select-Object -First 1
+			If ($PstopExe) {
+				If ($PstopExe.DirectoryName -ne $DestFolder) {
+					Move-Item -Path $PstopExe.FullName -Destination "$DestFolder\pstop.exe" -Force
+				}
+				$Installed = $true
+			} Else {
+				Write-Error "pstop.exe not found after extraction. Check $DestFolder manually."
+				Return
+			}
+		} Catch {
+			Write-Error "Direct download failed: $_"
+			Return
+		}
+	}
+
+	If ($Installed) { & $LaunchPstop }
+}
+
+
 # SIG # Begin signature block
 # MIIF0AYJKoZIhvcNAQcCoIIFwTCCBb0CAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
