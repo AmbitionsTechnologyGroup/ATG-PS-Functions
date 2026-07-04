@@ -11,11 +11,58 @@ other context. Delete this file before merging to master, or keep it as a tracki
   plain-text function collections in `Functions/ATG-PS-<Verb>.txt`, loaded at runtime via
   `irm ps.acgs.io | iex`, which fetches each file from
   `https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/...`
-  (see `Functions/URL-List.csv`).
+  (see `Functions/URL-List.csv`, now load-bearing — kept in sync with the actual file list).
+  A second, git-based bootstrap also exists now: `Scripts/LoadFunctions.txt` /
+  `Scripts/Load-FunctionsFromCache.ps1` (see "Bootloader" section below).
 - The fork (MauleTech) generalized the same code for other MSPs. It deploys to **`C:\IT`**
   via a `$ITFolder` variable, uses `.psm1` modules in `Functions/PS-<Verb>.psm1`, and loads
   via `raw.githubusercontent.com/MauleTech/PWSH/refs/heads/main/LoadFunctions.txt`.
-- The fork is ahead on bug fixes. We are pulling FIXES back, NOT the rebranding.
+- The fork is ahead on bug fixes AND has ~48 functions with no Ambitions equivalent at all
+  (new features, not fixes). Both have now been pulled into this repo — see "Bootloader"
+  and "New functionality backported" below — with MauleTech branding/infrastructure
+  stripped throughout, per standing instruction: nothing in this repo may point at
+  MauleTech's GitHub org, MauleTech's BinCache repo, or mauletech.com (the one exception,
+  made deliberately, is the Chocolatey package cache at cache.mauletech.com — see the
+  Install-Choco section of git history for that decision).
+
+## Bootloader (done)
+
+`Scripts/LoadFunctions.txt` and `Scripts/Load-FunctionsFromCache.ps1` port the fork's
+git-based bootstrap: install MinGit if needed, clone the functions repo locally into
+`$ITFolder\GitHub\ATG-PS-Functions` (`$ITFolder` defaults to `C:\Ambitions` — the variable
+itself is kept, only its default value changed), and import every `Functions/ATG-PS-*.txt`
+file via a `.psm1cache` copy-then-import step (Import-Module doesn't recognize a bare
+`.txt`). This is additive — the existing `ps.acgs.io` / `Get-ATGPS.txt` path is untouched
+and still works. See README.md for the user-facing loading instructions.
+
+## New functionality backported (done)
+
+All ~48 non-Sophos functions that exist in the fork but had no Ambitions equivalent have
+been backported: Claude Code management, RDP shortcut/certificate-signing chain,
+croc-based file transfer, an AES-256-CBC config-encryption subsystem (Protect/Unprotect/
+Get-DecryptedConfig), AD/identity diagnostics, domain/DHCP/DNS/SMB/BPA remediation tools,
+profile/installer/agent cleanup, Windows 11 migration and multi-vendor driver updates,
+and misc diagnostics. Five brand-new verb files were created (`ATG-PS-Stop.txt`,
+`ATG-PS-Receive.txt`, `ATG-PS-Protect.txt`, `ATG-PS-Unprotect.txt`, `ATG-PS-New.txt`) and
+added to `Functions/URL-List.csv`. Sophos-integration functions (Install/Connect/
+Disconnect-SophosConnect, etc.) were deliberately excluded per maintainer instruction.
+
+Two functions (`Add-RDPShortcut`'s client-code CSV lookup, `Set-RDPSignature`'s default
+Key Vault config URL) fetched from a private MauleTech-owned repo
+(`github.com/MauleTech/BinCache`) with no Ambitions equivalent. Both were replaced with
+obvious `<YOUR_ORG>/<YOUR_BINCACHE_REPO>` placeholder URLs rather than pointed at
+MauleTech's infrastructure — both features degrade gracefully (try/catch) and are simply
+unconfigured until a real config location is supplied. See git history (commit
+"Backport RDP shortcut/signing chain and cleanup functions") for exact locations.
+
+**Known follow-up, not done:** `README.md`'s function list (`Get-Command -Module ATG-PS-*
+| Select Name`) is now significantly stale — it predates this round's ~48 additions and a
+few earlier ones (Set-ChocolateySources, Invoke-WinGetInstall, Repair-ChocoDependency).
+Regenerating it accurately requires distinguishing real top-level functions from nested
+helpers (e.g. Write-Log, Show-Menu, Get-SpecificProcess appear nested inside several
+functions and are not directly callable), which needs an actual PowerShell session running
+`Get-Command -Module ATG-PS-* | Select Name` against the loaded repo — not something safe
+to fake via static text analysis. Refresh it that way when convenient.
 
 ## Setup
 
@@ -377,13 +424,17 @@ existing `Restart-Computer -Force`, insert:
 
 ## New fork functions worth cherry-picking later (P3, optional)
 
-Enable-RDP, Enable-RemoteManagement, Enable-DellTPM, Disable-EdgeOOBE,
+**All done.** Enable-RDP, Enable-RemoteManagement, Enable-DellTPM, Disable-EdgeOOBE,
 Expand-SystemPartition, Restart-ComputerSafely (+ ConvertTo-EncodedCommand),
 Remove-StaleProfiles, Remove-OrphanedInstallerFiles, Repair-DomainTrust, Repair-RemoteWMI,
 Repair-NTPConfiguration, Repair-ChocoDependency, Get-PowerShellHealth,
 Get-DotNetFrameworkVersion, Get-ADLockedAccount, Get-ADUsersPasswordExpiring,
 Update-OEMDrivers, Update-WindowsTo11, Export-ExchangeDistributionList,
-Add-RDPShortcut (+ Add-RDPCertificate), Send-Item/Receive-Item (+ croc helpers).
+Add-RDPShortcut (+ Add-RDPCertificate), Send-Item/Receive-Item (+ croc helpers) were all
+backported (see "New functionality backported" above). Enable-DellTPM was initially
+dropped from the inventory by mistake and added in a follow-up fix once caught — if a
+future audit turns up other functions missed by this list, treat this list as a
+starting point, not a guarantee of completeness.
 
 ## Explicitly NOT to backport
 
