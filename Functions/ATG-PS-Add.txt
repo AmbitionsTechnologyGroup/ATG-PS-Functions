@@ -120,6 +120,796 @@ Function Add-WebShortcut{
 	$Favorite.Save()
 }
 
+Function Add-RDPShortcut {
+	<#
+	.SYNOPSIS
+		This script will create an rdp desktop shortcut with your specified options. It can create a shortcut for all users (including new ones) or existing ones only.
+	.DESCRIPTION
+		This script will create an rdp desktop shortcut with your specified options.
+		It can create a shortcut for all users (including new ones) or existing ones only.
+		Supports importing client configurations from a CSV file using the -Code parameter.
+		Automatically detects and handles OneDrive folder redirection for Desktop locations.
+		When an RD Gateway is specified, it will be explicitly used for all connections.
+		If no name is specified, auto-generates name based on gateway/target and user.
+	.EXAMPLE
+		To Create a windowed RDP Shortcut simply specify the size, the name of the shortcut and which users the shortcut is for. You can also specify "MultiMon" for multi-monitor support. Or a gateway to use.
+
+		PS C:> New-RDPShortcut -Name "Test" -RDPTarget "SRV19-TEST" -RDPUser "TEST\jsmith" -Width "1920" -Height "1080" -AllExistingUsers
+
+		Creating Shortcut at C:\Users\JohnSmith\Desktop\Test.rdp
+
+	.EXAMPLE
+		To create an RDP shortcut using a client code from the CSV configuration:
+
+		PS C:> New-RDPShortcut -Code "RHCO" -AllUsers
+
+		Creates: rhcocpa.firmdesktop.com - AllUsers.rdp
+
+	.EXAMPLE
+		To create an RDP shortcut for a specific user with auto-naming:
+
+		PS C:> New-RDPShortcut -Code "OSOL" -User "ryans"
+
+		Creates: osol.firmdesktop.com - ryans.rdp
+
+	.PARAMETER Code
+		Client code to import settings from the CSV configuration file.
+
+	.PARAMETER NAME
+		Name of the shortcut ex. "Login Portal". If not specified, auto-generates based on gateway/target and user.
+
+	.PARAMETER RDPtarget
+		IP Address or DNS Name and port to the RDS Host ex. "TEST-RDSH:28665".
+
+	.PARAMETER RDPuser
+		Username to autofill in username field.
+
+	.PARAMETER AlwaysPrompt
+		Always Prompt for credentials.
+
+	.PARAMETER Gateway
+		IP Address or DNS Name and port of the RD Gateway ex. "TEST\rdp.example.com:4433".
+
+	.PARAMETER SeperateGateWayCreds
+		If the RDS Gateway uses different creds than the Session Host use this parameter.
+
+	.PARAMETER LoadBalanceInfo
+		Load balance info string for RDS collections ex. "tsv://MS Terminal Services Plugin.1.RDN".
+
+	.PARAMETER FullScreen
+		RDP Shortcut should open window in 'FullScreen' mode.
+
+	.PARAMETER MultiMon
+		RDP Shortcut should open window with Multi-Monitor Support enabled.
+
+	.PARAMETER Width
+		Width of RDP Window should open ex. "1920".
+
+	.PARAMETER Height
+		Height of RDP Window shortcut should open ex. "1080".
+
+	.PARAMETER EnableDrives
+		Enable drive redirection. Default is all drives except C:.
+
+	.PARAMETER EnableLocation
+		Enable location redirection. Default is true.
+
+	.PARAMETER EnableVideoCapture
+		Enable video capture devices. Default is true.
+
+	.PARAMETER EnablePnPDevices
+		Enable other PnP devices. Default is true.
+
+	.PARAMETER AllExistingUsers
+		Create the Shortcut for all existing users but not new users ex. C:\Users\*\Desktop\shortcut.lnk.
+
+	.PARAMETER ExcludeUsers
+		Comma seperated list of users to exclude from shortcut placement.
+
+	.PARAMETER AllUsers
+		Create the Shortcut in C:\Users\Public\Desktop.
+
+	.PARAMETER PassThru
+		Return the paths of created RDP files.
+
+	.PARAMETER SigningPassword
+		Password to decrypt the Azure Key Vault signing config from the config repo. When provided,
+		each created RDP file will be digitally signed to suppress the Unknown Publisher
+		security warning.
+
+	.OUTPUTS
+		System.String[]
+		When using -PassThru, returns an array of created RDP file paths.
+
+	.NOTES
+		This function requires administrative privileges to create shortcuts in Public or other user directories.
+		The function automatically detects OneDrive folder redirection and creates shortcuts in the correct location.
+		If a user's Desktop is redirected to OneDrive, the shortcut will be created in the OneDrive Desktop folder.
+
+		Auto-naming behavior when -Name is not specified:
+		- Uses Gateway address if specified, otherwise uses RDPTarget
+		- Appends user designation: username, "AllUsers", or "AllExistingUsers"
+		- Example: "gateway.domain.com:443 - username.rdp"
+	#>
+
+	[CmdletBinding()]
+	param (
+		# Code + a destination switch are by far the most common invocation,
+		# so they come first to make tab cycling through parameters land
+		# on the placement options right after -Code.
+		[Parameter()]
+		[String]$Code,
+		[Parameter()]
+		[String]$User,
+		[Parameter()]
+		[Switch]$AllExistingUsers,
+		[Parameter()]
+		[Switch]$AllUsers,
+		[Parameter()]
+		[String]$Name,
+		[Parameter()]
+		[String]$RDPtarget,
+		[Parameter()]
+		[String]$RDPuser,
+		[Parameter()]
+		[Switch]$AlwaysPrompt = [System.Convert]::ToBoolean($env:alwaysPromptForRdpCredentials),
+		[Parameter()]
+		[String]$Gateway,
+		[Parameter()]
+		[Switch]$SeparateGateWayCreds = [System.Convert]::ToBoolean($env:separateRdpGatewayCredentials),
+		[Parameter()]
+		[String]$LoadBalanceInfo,
+		[Parameter()]
+		[Switch]$FullScreen,
+		[Parameter()]
+		[Switch]$MultiMon = $true,
+		[Parameter()]
+		[Int]$Width,
+		[Parameter()]
+		[Int]$Height,
+		[Parameter()]
+		[String]$EnableDrives = "AllButC",
+		[Parameter()]
+		[Switch]$EnableLocation = $true,
+		[Parameter()]
+		[Switch]$EnableVideoCapture = $true,
+		[Parameter()]
+		[Switch]$EnablePnPDevices = $true,
+		[Parameter()]
+		[Switch]$PassThru,
+		[Parameter()]
+		[String]$SigningPassword
+	)
+
+	begin {
+		# Import configuration from CSV if Code parameter is provided
+		if ($Code) {
+			try {
+				Write-Verbose "Fetching client configuration for code: $Code"
+				$csvUrl = "https://raw.githubusercontent.com/<YOUR_ORG>/<YOUR_BINCACHE_REPO>/refs/heads/main/RDP_Codes.csv"
+				$csvData = Invoke-RestMethod -Uri $csvUrl -Method Get
+				$clients = $csvData | ConvertFrom-Csv
+
+				$clientConfig = $clients | Where-Object { $_.Code -eq $Code }
+
+				if ($clientConfig) {
+					Write-Host "Found configuration for client code: $Code" -ForegroundColor Green
+
+					# Apply CSV values only if the parameter wasn't explicitly provided
+					if (!$PSBoundParameters.ContainsKey('Name') -and $clientConfig.Name) {
+						$Name = $clientConfig.Name
+					}
+					if (!$PSBoundParameters.ContainsKey('RDPtarget') -and $clientConfig.RDPTarget) {
+						$RDPtarget = $clientConfig.RDPTarget
+					}
+					if (!$PSBoundParameters.ContainsKey('RDPuser') -and $clientConfig.RDPUser) {
+						$RDPuser = $clientConfig.RDPUser
+					}
+					if (!$PSBoundParameters.ContainsKey('Gateway') -and $clientConfig.Gateway) {
+						$Gateway = $clientConfig.Gateway
+					}
+					if (!$PSBoundParameters.ContainsKey('LoadBalanceInfo') -and $clientConfig.LoadBalanceInfo) {
+						$LoadBalanceInfo = $clientConfig.LoadBalanceInfo
+					}
+					if (!$PSBoundParameters.ContainsKey('AlwaysPrompt') -and $clientConfig.AlwaysPrompt) {
+						$AlwaysPrompt = [System.Convert]::ToBoolean($clientConfig.AlwaysPrompt)
+					}
+					if (!$PSBoundParameters.ContainsKey('SeparateGateWayCreds') -and $clientConfig.SeparateGateWayCreds) {
+						$SeparateGateWayCreds = [System.Convert]::ToBoolean($clientConfig.SeparateGateWayCreds)
+					}
+					if (!$PSBoundParameters.ContainsKey('FullScreen') -and $clientConfig.FullScreen) {
+						$FullScreen = [System.Convert]::ToBoolean($clientConfig.FullScreen)
+					}
+					if (!$PSBoundParameters.ContainsKey('MultiMon') -and $clientConfig.MultiMon) {
+						$MultiMon = [System.Convert]::ToBoolean($clientConfig.MultiMon)
+					}
+					if (!$PSBoundParameters.ContainsKey('Width') -and $clientConfig.Width) {
+						$Width = [int]$clientConfig.Width
+					}
+					if (!$PSBoundParameters.ContainsKey('Height') -and $clientConfig.Height) {
+						$Height = [int]$clientConfig.Height
+					}
+					if (!$PSBoundParameters.ContainsKey('EnableDrives') -and $clientConfig.EnableDrives) {
+						$EnableDrives = $clientConfig.EnableDrives
+					}
+				}
+				else {
+					Write-Warning "No configuration found for client code: $Code"
+				}
+			}
+			catch {
+				Write-Error "Failed to fetch or parse CSV configuration: $_"
+			}
+		}
+
+		# Replace existing params with form variables if they're used
+		if ($env:shortcutName -and $env:shortcutName -notlike "null") { $Name = $env:shortcutName }
+		if ($env:createTheShortcutFor -and $env:createTheShortcutFor -notlike "null") {
+			if ($env:createTheShortcutFor -eq "All Users") { $AllUsers = $True }
+			if ($env:createTheShortcutFor -eq "All Existing Users") { $AllExistingUsers = $True }
+		}
+		if ($env:rdpServerAddress -and $env:rdpServerAddress -notlike "null") { $RDPtarget = $env:rdpServerAddress }
+		if ($env:rdpUsername -and $env:rdpUsername -notlike "null") { $RDPuser = $env:rdpUsername }
+		if ($env:rdpGatewayServerAddress -and $env:rdpGatewayServerAddress -notlike "null") { $Gateway = $env:rdpGatewayServerAddress }
+		if ($env:rdpWindowSize -and $env:rdpWindowSize -notlike "null") {
+			if ($env:rdpWindowSize -eq "Fullscreen Multiple Monitor Mode") { $MultiMon = $True }
+			if ($env:rdpWindowSize -eq "Fullscreen") { $FullScreen = $True }
+		}
+		if ($env:customRdpWindowWidth -and $env:customRdpWindowWidth -notlike "null") { $Width = $env:customRdpWindowWidth }
+		if ($env:customRdpWindowHeight -and $env:customRdpWindowHeight -notlike "null") { $Height = $env:customRdpWindowHeight }
+
+		# Output warnings for conflicting options
+		if (($Width -and -not $Height ) -or ($Height -and -not $Width)) {
+			Write-Warning "You forgot to include both the width and height. RDP Window will be in fullscreen mode."
+		}
+
+		if (($Width -or $Height) -and ($FullScreen -or $MultiMon)) {
+			if ($MultiMon) {
+				Write-Warning "Conflicting Display Option selected. Using Fullscreen Multi-monitor."
+			}
+			else {
+				Write-Warning "Conflicting Display Option selected. Using Fullscreen."
+			}
+		}
+
+		# Double-check that a user is specified for shortcut creation
+		if (-not $AllUsers -and -not $AllExistingUsers -and -not $User) {
+			Write-Error "You must specify which desktop to create the shortcut on!"
+			return
+		}
+
+		# Double-check that a shortcut name was provided or can be generated
+		if (-not $Name) {
+			# Auto-generate name based on Gateway or RDPTarget
+			if ($Gateway) {
+				# Use gateway as base name (keep port for uniqueness)
+				$Name = $Gateway
+			} elseif ($RDPTarget) {
+				# Use RDP target as base name (keep port for uniqueness)
+				$Name = $RDPTarget
+			} else {
+				Write-Error "You must specify a name or have a target/gateway for auto-naming!"
+				return
+			}
+
+			# Append user designation
+			if ($AllUsers) {
+				$Name = "$Name - AllUsers"
+			} elseif ($AllExistingUsers) {
+				$Name = "$Name - AllExistingUsers"
+			} elseif ($User) {
+				$Name = "$Name - $User"
+			} else {
+				$Name = "$Name - $env:USERNAME"
+			}
+
+			Write-Verbose "Auto-generated shortcut name: $Name"
+		}
+
+		if (-not $RDPtarget) {
+			Write-Error "You must specify an RDP target!"
+			return
+		}
+
+		# Creating a shortcut at C:\Users\Public\Desktop requires admin rights
+		function Test-IsElevated {
+			$id = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+			$p = New-Object System.Security.Principal.WindowsPrincipal($id)
+			$p.IsInRole([System.Security.Principal.WindowsBuiltInRole]::Administrator)
+		}
+
+		if (!(Test-IsElevated)) {
+			Write-Error -Message "Access Denied. Please run with Administrator privileges."
+			return
+		}
+
+		# Revert to the previous RDP redirection warning dialog. Setting
+		# RedirectionWarningDialogVersion=1 suppresses the new (post-April-2024)
+		# security dialog. Documented at learn.microsoft.com under
+		# "Understanding security warnings when opening Remote Desktop (RDP) files".
+		try {
+			$rdpClientRegPath = "HKLM:\Software\Policies\Microsoft\Windows NT\Terminal Services\Client"
+			if (-not (Test-Path -LiteralPath $rdpClientRegPath)) {
+				New-Item -Path $rdpClientRegPath -Force | Out-Null
+			}
+			Set-ItemProperty -LiteralPath $rdpClientRegPath -Name "RedirectionWarningDialogVersion" -Value 1 -Type DWord -Force
+		}
+		catch {
+			Write-Warning "Failed to set RedirectionWarningDialogVersion: $_"
+		}
+
+		# Get the actual Desktop folder path for a user (handles OneDrive redirection)
+		function Get-UserDesktopPath {
+			param (
+				[Parameter(Mandatory=$true)]
+				[String]$UserSID,
+				[Parameter()]
+				[String]$DefaultPath
+			)
+
+			try {
+				# Try to get the actual Desktop path from the user registry
+				$regPath = "Registry::HKEY_USERS\$UserSID\SOFTWARE\Microsoft\Windows\CurrentVersion\Explorer\User Shell Folders"
+				if (Test-Path $regPath) {
+					$desktopPath = (Get-ItemProperty -Path $regPath -Name "Desktop" -ErrorAction SilentlyContinue).Desktop
+					if ($desktopPath) {
+						# Replace %USERPROFILE% before expanding other env vars, because
+						# ExpandEnvironmentVariables runs in the current (possibly SYSTEM) context
+						# and would substitute the wrong profile path for the target user.
+						if ($desktopPath -like "*%USERPROFILE%*" -and $DefaultPath) {
+							$userProfilePath = Split-Path -Parent $DefaultPath
+							$desktopPath = $desktopPath -replace '%USERPROFILE%', $userProfilePath
+						}
+						# Expand any remaining environment variables (e.g. OneDrive paths)
+						$desktopPath = [Environment]::ExpandEnvironmentVariables($desktopPath)
+						if (Test-Path $desktopPath) {
+							Write-Verbose "Found redirected Desktop for SID ${UserSID} at: $desktopPath"
+							return $desktopPath
+						}
+						else {
+							Write-Verbose "Redirected path doesn't exist, using default: $DefaultPath"
+						}
+					}
+				}
+			}
+			catch {
+				Write-Verbose "Could not read registry for SID ${UserSID}: $_"
+			}
+
+			# Fallback to default path
+			Write-Verbose "Using default Desktop path for SID ${UserSID}: $DefaultPath"
+			return $DefaultPath
+		}
+
+		# Retrieve all registry paths for actual users (excluding system or network service accounts)
+		function Get-UserHives {
+			param (
+				[Parameter()]
+				[ValidateSet('AzureAD', 'DomainAndLocal', 'All')]
+				[String]$Type = "All",
+				[Parameter()]
+				[String[]]$ExcludedUsers,
+				[Parameter()]
+				[switch]$IncludeDefault
+			)
+
+			# User account SIDs follow a particular pattern
+			$Patterns = switch ($Type) {
+				"AzureAD" { "S-1-12-1-(\d+-?){4}$" }
+				"DomainAndLocal" { "S-1-5-21-(\d+-?){4}$" }
+				"All" { "S-1-12-1-(\d+-?){4}$" ; "S-1-5-21-(\d+-?){4}$" }
+			}
+
+			# Get NTuser.dat file to load each users registry hive
+			$UserProfiles = Foreach ($Pattern in $Patterns) {
+				Get-ItemProperty "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\*" |
+					Where-Object { $_.PSChildName -match $Pattern } |
+					Select-Object @{Name = "SID"; Expression = { $_.PSChildName } },
+					@{Name = "UserHive"; Expression = { "$($_.ProfileImagePath)\NTuser.dat" } },
+					@{Name = "UserName"; Expression = { "$($_.ProfileImagePath | Split-Path -Leaf)" } },
+					@{Name = "Path"; Expression = { $_.ProfileImagePath } },
+					@{Name = "DesktopPath"; Expression = {
+						$defaultDesktop = "$($_.ProfileImagePath)\Desktop"
+						Get-UserDesktopPath -UserSID $_.PSChildName -DefaultPath $defaultDesktop
+					}}
+			}
+
+			# In some cases, retrieve the .Default user information
+			switch ($IncludeDefault) {
+				$True {
+					$DefaultProfile = "" | Select-Object UserName, SID, UserHive, Path, DesktopPath
+					$DefaultProfile.UserName = "Default"
+					$DefaultProfile.SID = "DefaultProfile"
+					$DefaultProfile.Userhive = "$env:SystemDrive\Users\Default\NTUSER.DAT"
+					$DefaultProfile.Path = "C:\Users\Default"
+					$DefaultProfile.DesktopPath = "C:\Users\Default\Desktop"
+
+					$DefaultProfile | Where-Object { $ExcludedUsers -notcontains $_.UserName }
+				}
+			}
+
+			# Deduplicate by ProfileImagePath: hybrid AAD-joined machines have both an AzureAD
+			# and a local SID entry in the ProfileList that share the same folder, causing both
+			# pattern passes to return the same profile and generate duplicate shortcut paths.
+			$UserProfiles | Sort-Object -Property Path -Unique | Where-Object { $ExcludedUsers -notcontains $_.UserName }
+		}
+	}
+	process {
+		$script:hasErrors = $false
+		$ShortcutPath = New-Object System.Collections.Generic.List[String]
+
+		# Create the filenames for the path
+		if ($RDPTarget) { $File = "$Name.rdp" }
+
+		# Build the paths and add them to the ShortcutPath list
+		if ($AllUsers) {
+			# For All Users, check if Public Desktop is redirected
+			$publicDesktop = [Environment]::GetFolderPath('CommonDesktopDirectory')
+			if (-not $publicDesktop) {
+				$publicDesktop = "$env:Public\Desktop"
+			}
+			$ShortcutPath.Add("$publicDesktop\$File")
+		}
+
+		if ($AllExistingUsers) {
+			$UserProfiles = Get-UserHives -ExcludedUsers $ExcludeUsers
+			# Loop through each user profile, using their actual Desktop path
+			$UserProfiles | ForEach-Object {
+				$ShortcutPath.Add("$($_.DesktopPath)\$File")
+			}
+		}
+
+		if ($User) {
+			# Always look up via the user's profile rather than GetFolderPath('Desktop').
+			# GetFolderPath resolves against the running process's token, so when this
+			# runs as SYSTEM (or any account that inherited $env:USERNAME from a user
+			# shell) it would write to the wrong desktop.
+			$UserProfiles = @(Get-UserHives | Where-Object { $_.Username -like $User })
+			if ($UserProfiles.Count -eq 0) {
+				Write-Error "User profile for '$User' not found"
+				return
+			}
+			foreach ($UserProfile in $UserProfiles) {
+				$ShortcutPath.Add("$($UserProfile.DesktopPath)\$File")
+			}
+		}
+
+		$RDPFile = New-Object System.Collections.Generic.List[String]
+
+		# Enhanced template with MSP-specific defaults
+		# FIX 1: Changed gatewaycredentialssource from 4 to 0
+		# FIX 2: Changed use redirection server name from 0 to 1
+		$Template = @"
+session bpp:i:24
+compression:i:1
+keyboardhook:i:2
+audiocapturemode:i:1
+videoplaybackmode:i:1
+connection type:i:7
+networkautodetect:i:1
+bandwidthautodetect:i:1
+displayconnectionbar:i:1
+enableworkspacereconnect:i:0
+disable wallpaper:i:0
+allow font smoothing:i:1
+allow desktop composition:i:0
+disable full window drag:i:1
+disable menu anims:i:1
+disable themes:i:0
+disable cursor setting:i:0
+bitmapcachepersistenable:i:1
+audiomode:i:0
+redirectprinters:i:1
+redirectcomports:i:0
+redirectsmartcards:i:0
+redirectwebauthn:i:0
+redirectclipboard:i:1
+redirectposdevices:i:0
+autoreconnection enabled:i:1
+authentication level:i:2
+negotiate security layer:i:1
+remoteapplicationmode:i:0
+alternate shell:s:
+shell working directory:s:
+gatewaycredentialssource:i:0
+gatewaybrokeringtype:i:0
+use redirection server name:i:1
+rdgiskdcproxy:i:0
+kdcproxyname:s:
+enablerdsaadauth:i:0
+prompt for credentials on client:i:1
+server port:i:3389
+"@
+		$RDPFile.Add($Template)
+
+		# Process drive redirection settings
+		# FIX 4: Added redirectdrives:i:1 for drive redirection
+		$driveList = ""
+		switch ($EnableDrives) {
+			"All" {
+				$RDPFile.Add("drivestoredirect:s:*")
+				$RDPFile.Add("redirectdrives:i:1")
+			}
+			"None" {
+				$RDPFile.Add("drivestoredirect:s:")
+				$RDPFile.Add("redirectdrives:i:0")
+			}
+			"AllButC" {
+				# Get all drive letters except C
+				$drives = Get-PSDrive -PSProvider FileSystem | Where-Object { $_.Name -ne 'C' } | ForEach-Object { $_.Name }
+				if ($drives) {
+					$driveList = ($drives | ForEach-Object { "${_}:" }) -join ";"
+					$RDPFile.Add("drivestoredirect:s:$driveList")
+				} else {
+					$RDPFile.Add("drivestoredirect:s:*")
+				}
+				$RDPFile.Add("redirectdrives:i:1")
+			}
+			default {
+				# Specific drives provided
+				$RDPFile.Add("drivestoredirect:s:$EnableDrives")
+				$RDPFile.Add("redirectdrives:i:1")
+			}
+		}
+
+		# Add location redirection
+		if ($EnableLocation) {
+			$RDPFile.Add("redirectlocation:i:1")
+		} else {
+			$RDPFile.Add("redirectlocation:i:0")
+		}
+
+		# Add video capture redirection
+		if ($EnableVideoCapture) {
+			$RDPFile.Add("camerastoredirect:s:*")
+			$RDPFile.Add("devicestoredirect:s:*")
+		} else {
+			$RDPFile.Add("camerastoredirect:s:")
+			$RDPFile.Add("devicestoredirect:s:")
+		}
+
+		# Add PnP device redirection
+		if ($EnablePnPDevices) {
+			$RDPFile.Add("usbdevicestoredirect:s:*")
+		} else {
+			$RDPFile.Add("usbdevicestoredirect:s:")
+		}
+
+		# This will generate the actual .rdp file
+		$CreatedFiles = New-Object System.Collections.Generic.List[String]
+
+		$ShortcutPath | ForEach-Object {
+			# Create a fresh RDP file for each shortcut path
+			$CurrentRDPFile = New-Object System.Collections.Generic.List[String]
+			$CurrentRDPFile.AddRange($RDPFile)
+
+			$CurrentRDPFile.Add("full address:s:$RDPTarget")
+
+			# FIX 3: Add workspace id and alternate full address for RD Connection Broker support
+			$CurrentRDPFile.Add("alternate full address:s:$RDPTarget")
+			$CurrentRDPFile.Add("workspace id:s:$RDPTarget")
+
+			if ($Gateway) {
+				$CurrentRDPFile.Add("gatewayhostname:s:$Gateway")
+			}
+
+			if ($LoadBalanceInfo) {
+				$CurrentRDPFile.Add("loadbalanceinfo:s:$LoadBalanceInfo")
+			}
+
+			if ($Width) { $CurrentRDPFile.Add("desktopwidth:i:$Width") }
+			if ($Height) { $CurrentRDPFile.Add("desktopheight:i:$Height") }
+			if ($MultiMon) { $CurrentRDPFile.Add("use multimon:i:1") } else { $CurrentRDPFile.Add("use multimon:i:0") }
+			if ($FullScreen -or $MultiMon -or !$Height -or !$Width) {
+				$CurrentRDPFile.Add("screen mode id:i:2")
+			} else {
+				$CurrentRDPFile.Add("screen mode id:i:1")
+			}
+			if ($AlwaysPrompt) {
+				$CurrentRDPFile.Add("prompt for credentials:i:1")
+			} else {
+				$CurrentRDPFile.Add("prompt for credentials:i:0")
+			}
+
+			# Gateway usage method settings
+			if ($Gateway) {
+				# When Gateway is specified, always use it explicitly
+				$CurrentRDPFile.Add("gatewayusagemethod:i:1")
+				$CurrentRDPFile.Add("gatewayprofileusagemethod:i:1")
+			} else {
+				# When no Gateway specified, don't use one
+				$CurrentRDPFile.Add("gatewayusagemethod:i:0")
+			}
+
+			if ($SeparateGateWayCreds) {
+				$CurrentRDPFile.Add("promptcredentialonce:i:0")
+			}
+			else {
+				$CurrentRDPFile.Add("promptcredentialonce:i:1")
+			}
+
+			if ($RDPUser) {
+				$CurrentRDPFile.Add("username:s:$RDPUser")
+			}
+
+			# Add window position string
+			$CurrentRDPFile.Add("winposstr:s:0,3,0,0,800,600")
+
+			# Add remote app mouse move inject
+			$CurrentRDPFile.Add("remoteappmousemoveinject:i:1")
+
+			Write-Host "Creating Shortcut at $_"
+
+			# Write RDP file with Unicode encoding
+			$CurrentRDPFile | Out-File $_ -Encoding Unicode
+
+			if (!(Test-Path $_ -ErrorAction SilentlyContinue)) {
+				Write-Error "Unable to create Shortcut at $_"
+				$script:hasErrors = $true
+			}
+			else {
+				$CreatedFiles.Add($_)
+			}
+		}
+
+		if ($script:hasErrors) {
+			Write-Error "One or more shortcuts failed to create"
+			if (-not $PassThru) {
+				return
+			}
+		}
+		else {
+			Write-Host "Successfully created RDP shortcuts" -ForegroundColor Green
+		}
+
+		if (-not [string]::IsNullOrEmpty($SigningPassword) -and $CreatedFiles.Count -gt 0) {
+			Set-RDPSignature -Path $CreatedFiles.ToArray() -SigningPassword $SigningPassword
+		}
+
+		# Return created file paths if PassThru is specified
+		if ($PassThru) {
+			return $CreatedFiles.ToArray()
+		}
+	}
+	end {
+	}
+}
+
+Function Add-RDPCertificate {
+<#
+.SYNOPSIS
+	Extracts the signing certificate from a signed RDP file and adds it to the Trusted Publishers store.
+.DESCRIPTION
+	Reads the signature:s: field from one or more signed .rdp files, extracts the signer's certificate
+	from the embedded PKCS#7 data, and imports it to Cert:\LocalMachine\TrustedPublisher (falling back
+	to Cert:\CurrentUser\TrustedPublisher if the machine store is inaccessible). Once the certificate
+	is trusted, Windows will not show the Unknown Publisher security warning when launching the file.
+.PARAMETER Path
+	One or more paths to signed .rdp files. Accepts pipeline input from Get-ChildItem.
+.PARAMETER CurrentUser
+	Import to the current user's Trusted Publishers store rather than the local machine store.
+.EXAMPLE
+	Add-RDPCertificate -Path "C:\Users\Public\Desktop\Server.rdp"
+	Trusts the signing certificate from a single RDP file.
+.EXAMPLE
+	Get-ChildItem "C:\RDP Files" -Filter *.rdp | Add-RDPCertificate
+	Trusts the signing certificate from all RDP files in a folder.
+#>
+	[CmdletBinding(SupportsShouldProcess)]
+	param(
+		[Parameter(Mandatory=$true, ValueFromPipeline=$true, ValueFromPipelineByPropertyName=$true)]
+		[Alias('FullName')]
+		[string[]]$Path,
+		[Parameter()]
+		[switch]$CurrentUser
+	)
+
+	begin {
+		Add-Type -AssemblyName System.Security -ErrorAction SilentlyContinue
+	}
+
+	process {
+		foreach ($rdpFile in $Path) {
+			if (-not (Test-Path $rdpFile -PathType Leaf)) {
+				Write-Host "File not found: $rdpFile" -ForegroundColor Red
+				continue
+			}
+			if ([System.IO.Path]::GetExtension($rdpFile) -ine '.rdp') {
+				Write-Host "Not an RDP file: $rdpFile" -ForegroundColor Red
+				continue
+			}
+
+			$content = Get-Content -Path $rdpFile -Raw
+			if ($content -notmatch '(?m)^signature:s:(.+)$') {
+				Write-Host "$(Split-Path $rdpFile -Leaf): no signature found -- file is not signed." -ForegroundColor Yellow
+				continue
+			}
+			# RDP signature values may contain embedded whitespace from line-wrapping
+			$sigBase64 = $Matches[1].Trim() -replace '\s+', ''
+
+			try {
+				$sigBytes = [Convert]::FromBase64String($sigBase64)
+			} catch {
+				Write-Host "$(Split-Path $rdpFile -Leaf): failed to decode signature: $_" -ForegroundColor Red
+				continue
+			}
+
+			try {
+				# rdpsign.exe prepends a 12-byte proprietary header before the PKCS#7 blob.
+				# Locate the ASN.1 SEQUENCE tag (0x30) to skip it.
+				$pkcs7Start = 0
+				for ($i = 0; $i -lt [Math]::Min(32, $sigBytes.Length); $i++) {
+					if ($sigBytes[$i] -eq 0x30) { $pkcs7Start = $i; break }
+				}
+				$pkcs7Bytes = $sigBytes[$pkcs7Start..($sigBytes.Length - 1)]
+				$cms = New-Object System.Security.Cryptography.Pkcs.SignedCms
+				$cms.Decode($pkcs7Bytes)
+				$cert = $cms.SignerInfos[0].Certificate
+			} catch {
+				Write-Host "$(Split-Path $rdpFile -Leaf): failed to parse signature: $_" -ForegroundColor Red
+				continue
+			}
+
+			if ($null -eq $cert) {
+				Write-Host "$(Split-Path $rdpFile -Leaf): no certificate embedded in signature." -ForegroundColor Yellow
+				continue
+			}
+
+			Write-Host "$(Split-Path $rdpFile -Leaf)" -ForegroundColor Cyan
+			Write-Host "  Subject:    $($cert.Subject)" -ForegroundColor Gray
+			Write-Host "  Thumbprint: $($cert.Thumbprint)" -ForegroundColor Gray
+			Write-Host "  Expires:    $($cert.NotAfter.ToString('yyyy-MM-dd'))" -ForegroundColor Gray
+
+			$storeLocation = if ($CurrentUser) {
+				[System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser
+			} else {
+				[System.Security.Cryptography.X509Certificates.StoreLocation]::LocalMachine
+			}
+
+			$trusted = $false
+			$store = New-Object System.Security.Cryptography.X509Certificates.X509Store('TrustedPublisher', $storeLocation)
+			try {
+				$store.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+				if ($store.Certificates | Where-Object { $_.Thumbprint -eq $cert.Thumbprint }) {
+					Write-Host "  Already trusted in $storeLocation\TrustedPublisher." -ForegroundColor Green
+					$trusted = $true
+				} elseif ($PSCmdlet.ShouldProcess("$storeLocation\TrustedPublisher", "Add certificate '$($cert.Subject)'")) {
+					$store.Add($cert)
+					Write-Host "  [TRUSTED] Added to $storeLocation\TrustedPublisher." -ForegroundColor Green
+					$trusted = $true
+				}
+			} catch {
+				if (-not $CurrentUser) {
+					Write-Host "  LocalMachine store not accessible, retrying with CurrentUser..." -ForegroundColor Yellow
+				} else {
+					Write-Host "  Failed to add certificate: $_" -ForegroundColor Red
+				}
+			} finally {
+				$store.Close()
+			}
+
+			if (-not $trusted -and -not $CurrentUser) {
+				$cuStore = New-Object System.Security.Cryptography.X509Certificates.X509Store(
+					'TrustedPublisher',
+					[System.Security.Cryptography.X509Certificates.StoreLocation]::CurrentUser)
+				try {
+					$cuStore.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+					if ($cuStore.Certificates | Where-Object { $_.Thumbprint -eq $cert.Thumbprint }) {
+						Write-Host "  Already trusted in CurrentUser\TrustedPublisher." -ForegroundColor Green
+					} elseif ($PSCmdlet.ShouldProcess('CurrentUser\TrustedPublisher', "Add certificate '$($cert.Subject)'")) {
+						$cuStore.Add($cert)
+						Write-Host "  [TRUSTED] Added to CurrentUser\TrustedPublisher." -ForegroundColor Green
+					}
+				} catch {
+					Write-Host "  Failed to add certificate: $_" -ForegroundColor Red
+				} finally {
+					$cuStore.Close()
+				}
+			}
+		}
+	}
+}
+
 # SIG # Begin signature block
 # MIIF0AYJKoZIhvcNAQcCoIIFwTCCBb0CAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR

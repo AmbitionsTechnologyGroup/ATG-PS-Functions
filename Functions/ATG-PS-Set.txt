@@ -534,6 +534,223 @@ if ($Volume.ProtectionStatus -eq 'Off') {
 	}
 }
 
+Function Set-RDPSignature {
+	<#
+	.SYNOPSIS
+		Signs one or more .rdp files using the code-signing certificate from Azure Key Vault.
+	.DESCRIPTION
+		Retrieves the organization's code-signing certificate from Azure Key Vault and uses
+		rdpsign.exe to apply a digital signature to each specified .rdp file. Signed RDP files
+		suppress the "Unknown Publisher" security warning when clients launch remote desktop
+		connections.
+
+		Supports two config modes:
+		  -VaultConfigPath: Load vault credentials from a local JSON file (for testing).
+		  -SigningPassword: Download and decrypt vault credentials from the config repo (production).
+	.PARAMETER Path
+		One or more paths to .rdp files to sign.
+	.PARAMETER VaultConfigPath
+		Path to a local JSON file containing vault credentials. Used for testing before the
+		encrypted config file is uploaded to the config repo. Mutually exclusive with -SigningPassword.
+	.PARAMETER SigningPassword
+		Password to decrypt the vault config from the config repo. Mutually exclusive with -VaultConfigPath.
+	.PARAMETER VaultConfigUrl
+		URL of the encrypted vault config in the config repo. Defaults to the VConfig.enc URL.
+		Only used with -SigningPassword.
+	.EXAMPLE
+		Set-RDPSignature -Path "C:\Users\Public\Desktop\Server.rdp" -VaultConfigPath "C:\Ambitions\GitHub\PWSH\VaultConfig.json"
+
+		Signs a single RDP file using a local vault config JSON for testing.
+	.EXAMPLE
+		Set-RDPSignature -Path "C:\Users\Public\Desktop\Server.rdp" -SigningPassword "mypassword"
+
+		Signs a single RDP file using the encrypted vault config from the config repo.
+	.EXAMPLE
+		Set-RDPSignature -Path @("C:\server1.rdp","C:\server2.rdp") -SigningPassword "mypassword"
+
+		Signs multiple RDP files in one call using the production encrypted vault config.
+	#>
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory=$true)]
+		[string[]]$Path,
+		[Parameter()]
+		[string]$VaultConfigPath,
+		[Parameter()]
+		[string]$SigningPassword,
+		[Parameter()]
+		[string]$VaultConfigUrl = "https://raw.githubusercontent.com/<YOUR_ORG>/<YOUR_BINCACHE_REPO>/refs/heads/main/Utilities/VConfig.enc"
+	)
+
+	if ([string]::IsNullOrEmpty($VaultConfigPath) -and [string]::IsNullOrEmpty($SigningPassword)) {
+		Write-Error "Provide either -VaultConfigPath (local JSON file) or -SigningPassword (encrypted config repo)."
+		return
+	}
+	if (-not [string]::IsNullOrEmpty($VaultConfigPath) -and -not [string]::IsNullOrEmpty($SigningPassword)) {
+		Write-Error "Provide only one of -VaultConfigPath or -SigningPassword, not both."
+		return
+	}
+
+	$rdpSignPath = "$env:SystemRoot\System32\rdpsign.exe"
+	if (-not (Test-Path $rdpSignPath)) {
+		Write-Error "rdpsign.exe not found at $rdpSignPath. Ensure Remote Desktop services are installed."
+		return
+	}
+
+	$validPaths = $Path | Where-Object {
+		if (-not (Test-Path $_)) {
+			Write-Warning "File not found, skipping: $_"
+			$false
+		} elseif ([System.IO.Path]::GetExtension($_).ToLower() -ne '.rdp') {
+			Write-Warning "Not an .rdp file, skipping: $_"
+			$false
+		} else {
+			$true
+		}
+	}
+
+	if (-not $validPaths) {
+		Write-Error "No valid .rdp files to sign."
+		return
+	}
+
+	try {
+		if (-not [string]::IsNullOrEmpty($VaultConfigPath)) {
+			Write-Host "Loading vault config from local file..." -ForegroundColor Cyan
+			$configJson = Get-Content -Path $VaultConfigPath -Raw -ErrorAction Stop
+		} else {
+			Write-Host "Downloading and decrypting vault config from the config repo..." -ForegroundColor Cyan
+			$configJson = Get-DecryptedConfig -Url $VaultConfigUrl -Password $SigningPassword
+		}
+		$config = $configJson | ConvertFrom-Json
+	} catch {
+		Write-Error "Failed to load vault config: $_"
+		return
+	}
+
+	foreach ($field in @('VaultName','CertName','TenantId','ClientId','ClientSecret')) {
+		if ([string]::IsNullOrEmpty($config.$field)) {
+			Write-Error "Vault config is missing required field: $field"
+			return
+		}
+	}
+
+	$vaultName    = $config.VaultName
+	$certName     = $config.CertName
+	$tenantId     = $config.TenantId
+	$clientId     = $config.ClientId
+	$clientSecret = $config.ClientSecret
+
+	$certThumbprint = $null
+	$tempPfx        = $null
+
+	try {
+		# Authenticate via OAuth 2.0 client credentials - no Az module dependency
+		Write-Host "Authenticating to Azure AD..." -ForegroundColor Cyan
+		$tokenUri  = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
+		$tokenBody = @{
+			grant_type    = "client_credentials"
+			client_id     = $clientId
+			client_secret = $clientSecret
+			scope         = "https://vault.azure.net/.default"
+		}
+		$tokenResponse = Invoke-RestMethod -Method POST -Uri $tokenUri -Body $tokenBody `
+			-ContentType "application/x-www-form-urlencoded" -ErrorAction Stop
+		$accessToken = $tokenResponse.access_token
+		Write-Host "  Authenticated as service principal ($clientId)." -ForegroundColor Green
+
+		# Get certificate metadata - the 'sid' field is the secret URI containing the PFX
+		Write-Host "Retrieving certificate '$certName' from vault '$vaultName'..." -ForegroundColor Cyan
+		$kvHeaders = @{ Authorization = "Bearer $accessToken" }
+		$certUri   = "https://$vaultName.vault.azure.net/certificates/$certName/?api-version=7.4"
+		$certInfo  = Invoke-RestMethod -Uri $certUri -Headers $kvHeaders -Method GET -ErrorAction Stop
+		if (-not $certInfo.sid) {
+			throw "Certificate '$certName' returned no secret identifier. Verify the certificate name and permissions."
+		}
+		Write-Host "  Certificate found." -ForegroundColor Gray
+
+		# Download PFX with private key via the secret identifier
+		Write-Host "  Downloading PFX..." -ForegroundColor Gray
+		$secretUri  = "$($certInfo.sid)?api-version=7.4"
+		$secretInfo = Invoke-RestMethod -Uri $secretUri -Headers $kvHeaders -Method GET -ErrorAction Stop
+		$base64Value = $secretInfo.value
+		Write-Host "  PFX retrieved. ContentType: $($secretInfo.contentType)" -ForegroundColor Gray
+
+		$accessToken = $null
+
+		$pfxBytes    = [Convert]::FromBase64String($base64Value)
+		$base64Value = $null
+		Write-Host "  PFX size: $($pfxBytes.Length) bytes" -ForegroundColor Gray
+
+		$tempPfx = Join-Path ([System.IO.Path]::GetTempPath()) "rdpsign-$([Guid]::NewGuid().ToString('N')).pfx"
+		[System.IO.File]::WriteAllBytes($tempPfx, $pfxBytes)
+		[System.Array]::Clear($pfxBytes, 0, $pfxBytes.Length)
+
+		# rdpsign.exe searches Cert:\LocalMachine\My; import there first (requires admin),
+		# fall back to CurrentUser\My if elevation is unavailable.
+		$emptyPw           = New-Object System.Security.SecureString
+		$certStoreLocation = $null
+		try {
+			$cert              = Import-PfxCertificate -FilePath $tempPfx -CertStoreLocation Cert:\LocalMachine\My `
+				-Password $emptyPw -Exportable -ErrorAction Stop
+			$certStoreLocation = 'Cert:\LocalMachine\My'
+		} catch {
+			Write-Host "  LocalMachine store unavailable (requires admin), trying CurrentUser..." -ForegroundColor Yellow
+			$cert              = Import-PfxCertificate -FilePath $tempPfx -CertStoreLocation Cert:\CurrentUser\My `
+				-Password $emptyPw -Exportable -ErrorAction Stop
+			$certStoreLocation = 'Cert:\CurrentUser\My'
+		}
+		$certThumbprint = $cert.Thumbprint
+		Write-Host "  Certificate imported to $certStoreLocation" -ForegroundColor Gray
+		Write-Host "  SHA1 thumbprint: $certThumbprint" -ForegroundColor Gray
+
+		if (-not $cert.HasPrivateKey) {
+			throw "Certificate lacks a private key. In Key Vault, set 'Exportable Private Key' to YES and create a new certificate version."
+		}
+		if ($cert.NotAfter -lt (Get-Date)) {
+			throw "Certificate expired on $($cert.NotAfter). Renew before signing."
+		}
+
+		Write-Host "  Certificate ready: $($cert.Subject)" -ForegroundColor Green
+
+		$signed = 0
+		$failed = 0
+		foreach ($rdpFile in $validPaths) {
+			Write-Host "Signing: $rdpFile" -ForegroundColor Cyan
+			& $rdpSignPath /sha256 $certThumbprint $rdpFile
+			if ($LASTEXITCODE -eq 0) {
+				$fileContent = Get-Content $rdpFile -Raw
+				if ($fileContent -match 'signature:s:') {
+					Write-Host "  [SIGNED] $(Split-Path $rdpFile -Leaf)" -ForegroundColor Green
+				} else {
+					Write-Host "  [SIGNED - no signature line found in file]" -ForegroundColor Yellow
+				}
+				$signed++
+			} else {
+				Write-Host "  [FAILED] $(Split-Path $rdpFile -Leaf) (rdpsign.exe exit code: $LASTEXITCODE)" -ForegroundColor Red
+				$failed++
+			}
+		}
+
+		if ($failed -gt 0) {
+			Write-Host "Signing complete: $signed signed, $failed failed." -ForegroundColor Yellow
+		} else {
+			Write-Host "Signing complete: $signed file(s) signed successfully." -ForegroundColor Green
+		}
+
+	} catch {
+		Write-Host "RDP signing failed: $_" -ForegroundColor Red
+		Write-Host $_.ScriptStackTrace -ForegroundColor DarkRed
+	} finally {
+		if ($certThumbprint -and $certStoreLocation) {
+			Get-ChildItem "$certStoreLocation\$certThumbprint" -ErrorAction SilentlyContinue | Remove-Item -Force
+		}
+		if ($tempPfx -and (Test-Path $tempPfx -ErrorAction SilentlyContinue)) {
+			Remove-Item $tempPfx -Force -ErrorAction SilentlyContinue
+		}
+	}
+}
+
 # SIG # Begin signature block
 # MIIF0AYJKoZIhvcNAQcCoIIFwTCCBb0CAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR

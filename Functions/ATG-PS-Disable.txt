@@ -84,6 +84,116 @@ Function Disable-SleepOnAC {
 }
 
 
+function Disable-EdgeOOBE {
+	<#
+	.SYNOPSIS
+		Disables Microsoft Edge OOBE (Out of Box Experience) and startup prompts.
+	
+	.DESCRIPTION
+		Configures registry policies to disable Edge's first run experience,
+		startup prompts, and various telemetry/recommendations. Says "no" to everything.
+	
+	.PARAMETER Scope
+		Specify 'Machine' for HKLM (all users) or 'User' for HKCU (current user only).
+		Default is 'Machine'.
+	
+	.EXAMPLE
+		Disable-EdgeOOBE
+		Disables Edge OOBE for all users on the machine.
+	
+	.EXAMPLE
+		Disable-EdgeOOBE -Scope User
+		Disables Edge OOBE for the current user only.
+	
+	.NOTES
+		Requires administrative privileges when using -Scope Machine.
+	#>
+
+	[CmdletBinding(SupportsShouldProcess = $true)]
+	param(
+		[Parameter(Mandatory = $false)]
+		[ValidateSet('Machine', 'User')]
+		[string]$Scope = 'Machine'
+	)
+	
+	begin {
+		# Determine registry path based on scope
+		$regPath = switch ($Scope) {
+			'Machine' { 'HKLM:\SOFTWARE\Policies\Microsoft\Edge' }
+			'User'    { 'HKCU:\SOFTWARE\Policies\Microsoft\Edge' }
+		}
+		
+		# Check for admin rights if Machine scope
+		if ($Scope -eq 'Machine') {
+			$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+			if (-not $isAdmin) {
+				throw "Administrator privileges required for Machine scope. Run PowerShell as Administrator or use -Scope User."
+			}
+		}
+		
+		# Registry settings to disable OOBE and prompts
+		$settings = @{
+			# Core OOBE settings
+			'HideFirstRunExperience'                = 1
+			'StartupBoostEnabled'                   = 0
+			'HardwareAccelerationModeEnabled'       = 0
+			'BackgroundModeEnabled'                 = 0
+			
+			# Download and browser behavior
+			'PromptForDownloadLocation'             = 0
+			'DefaultBrowserSettingEnabled'          = 0
+			'ShowRecommendationsEnabled'            = 0
+			
+			# Data collection and telemetry
+			'UserFeedbackAllowed'                   = 0
+			'MetricsReportingEnabled'               = 0
+			'DiagnosticData'                        = 0
+			'PersonalizationReportingEnabled'       = 0
+			
+			# Shopping and services
+			'EdgeShoppingAssistantEnabled'          = 0
+			'EdgeCollectionsEnabled'                = 0
+			'ShowMicrosoftRewards'                  = 0
+			'EdgeWalletCheckoutEnabled'             = 0
+			
+			# Misc prompts and features
+			'WalletDonationEnabled'                 = 0
+			'ConfigureDoNotTrack'                   = 1
+			'AlternateErrorPagesEnabled'            = 0
+			'AutofillAddressEnabled'                = 0
+			'AutofillCreditCardEnabled'             = 0
+			'PasswordManagerEnabled'                = 0
+		}
+	}
+	
+	process {
+		try {
+			# Create registry path if it doesn't exist
+			if (-not (Test-Path $regPath)) {
+				if ($PSCmdlet.ShouldProcess($regPath, "Create registry path")) {
+					New-Item -Path $regPath -Force | Out-Null
+					Write-Verbose "Created registry path: $regPath"
+				}
+			}
+			
+			# Apply each setting
+			foreach ($setting in $settings.GetEnumerator()) {
+				if ($PSCmdlet.ShouldProcess("$regPath\$($setting.Key)", "Set value to $($setting.Value)")) {
+					Set-ItemProperty -Path $regPath -Name $setting.Key -Value $setting.Value -Type DWord -Force
+					Write-Verbose "Set $($setting.Key) = $($setting.Value)"
+				}
+			}
+			
+			Write-Host "Successfully disabled Edge OOBE and startup prompts for scope: $Scope" -ForegroundColor Green
+			Write-Host "Changes will take effect the next time Edge is launched." -ForegroundColor Yellow
+			
+		} catch {
+			Write-Error "Failed to disable Edge OOBE: $_"
+			throw
+		}
+	}
+}
+
 # SIG # Begin signature block
 # MIIF0AYJKoZIhvcNAQcCoIIFwTCCBb0CAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR

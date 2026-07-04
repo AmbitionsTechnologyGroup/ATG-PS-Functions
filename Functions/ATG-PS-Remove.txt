@@ -355,6 +355,860 @@ Function Remove-StaleObjects {
 	}
 }
 
+function Remove-ClaudeCode {
+	<#
+	.SYNOPSIS
+		Removes Claude Code credentials and/or installation.
+	.DESCRIPTION
+		By default, removes only the current user's credentials (logout).
+		Use -Full to completely uninstall (requires admin).
+
+		Credentials are per-user, so logging out only affects the current account.
+		The system-wide installation remains for other users.
+	.PARAMETER Full
+		Completely uninstall Claude Code (requires admin).
+		Removes program files, PATH entry, and current user credentials.
+	.PARAMETER Force
+		Skip confirmation prompts.
+	.EXAMPLE
+		Remove-ClaudeCode
+		# Removes credentials for current user only
+	.EXAMPLE
+		Remove-ClaudeCode -Full
+		# Complete uninstall (admin required)
+	.EXAMPLE
+		Remove-ClaudeCode -Full -Force
+		# Complete uninstall without prompts
+	.NOTES
+		Run this when done using Claude Code on a client machine.
+	#>
+	[CmdletBinding()]
+	param(
+		[switch]$Full,
+		[switch]$Force
+	)
+
+	# Paths
+	$ClaudeFolder = "C:\Ambitions\ClaudeCode"
+	$ClaudeExe = "$ClaudeFolder\claude.exe"
+	$ClaudeConfig = "$env:USERPROFILE\.claude"
+	$ClaudeJson = "$env:USERPROFILE\.claude.json"
+
+	Write-Host "`n=== Removing Claude Code ===" -ForegroundColor Cyan
+
+	# Try to logout via CLI first
+	if (Test-Path $ClaudeExe) {
+		if ($env:Path -notlike "*$ClaudeFolder*") { $env:Path = "$env:Path;$ClaudeFolder" }
+		Write-Host "Running logout command..." -ForegroundColor Gray
+		try { & $ClaudeExe auth logout 2>$null } catch { }
+	}
+
+	# Remove user credentials
+	$CredsRemoved = $false
+	if (Test-Path $ClaudeConfig) {
+		Remove-Item -Path $ClaudeConfig -Recurse -Force -ErrorAction SilentlyContinue
+		Write-Host " [OK] Removed credentials folder (.claude)" -ForegroundColor Green
+		$CredsRemoved = $true
+	}
+	if (Test-Path $ClaudeJson) {
+		Remove-Item -Path $ClaudeJson -Force -ErrorAction SilentlyContinue
+		Write-Host " [OK] Removed config file (.claude.json)" -ForegroundColor Green
+		$CredsRemoved = $true
+	}
+
+	if (-not $CredsRemoved) {
+		Write-Host " [-] No credentials found for current user" -ForegroundColor Yellow
+	}
+
+	# Full uninstall
+	if ($Full) {
+		# Check admin
+		$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+		$principal = New-Object Security.Principal.WindowsPrincipal($identity)
+		if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+			Write-Host "`n[!] Administrator privileges required for full uninstall." -ForegroundColor Red
+			Write-Host "    Run PowerShell as Administrator and try again." -ForegroundColor Yellow
+			Write-Host "    Credentials for current user have been removed." -ForegroundColor Gray
+			return
+		}
+
+		# Confirm unless forced
+		if (-not $Force) {
+			$confirm = Read-Host "`nCompletely remove Claude Code from this machine? (Y/N)"
+			if ($confirm -ne "Y" -and $confirm -ne "y") {
+				Write-Host "Cancelled. Credentials removed, program still installed." -ForegroundColor Yellow
+				return
+			}
+		}
+
+		# Remove program folder
+		if (Test-Path $ClaudeFolder) {
+			Remove-Item -Path $ClaudeFolder -Recurse -Force -ErrorAction SilentlyContinue
+			Write-Host " [OK] Removed program folder ($ClaudeFolder)" -ForegroundColor Green
+		}
+
+		# Remove from system PATH
+		$currentPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+		if ($currentPath -like "*$ClaudeFolder*") {
+			$newPath = ($currentPath -split ";" | Where-Object { $_ -ne $ClaudeFolder -and $_ -ne "" }) -join ";"
+			[Environment]::SetEnvironmentVariable("Path", $newPath, "Machine")
+			Write-Host " [OK] Removed from system PATH" -ForegroundColor Green
+		}
+
+		# Clean up any user-local installs too
+		$UserClaudeFolder = "$env:LOCALAPPDATA\Programs\claude-code"
+		$UserClaudeExe = "$env:LOCALAPPDATA\Microsoft\WindowsApps\claude.exe"
+		if (Test-Path $UserClaudeFolder) {
+			Remove-Item -Path $UserClaudeFolder -Recurse -Force -ErrorAction SilentlyContinue
+			Write-Host " [OK] Removed user-local install" -ForegroundColor Green
+		}
+		if (Test-Path $UserClaudeExe) {
+			Remove-Item -Path $UserClaudeExe -Force -ErrorAction SilentlyContinue
+		}
+
+		Write-Host "`nClaude Code completely uninstalled." -ForegroundColor Green
+	} else {
+		Write-Host "`nCredentials removed. Program still installed for other users." -ForegroundColor Green
+		Write-Host "For full uninstall, run: Remove-ClaudeCode -Full (as admin)" -ForegroundColor Gray
+	}
+}
+
+function Remove-OrphanedInstallerFiles {
+	<#
+	.SYNOPSIS
+		Identifies and removes orphaned MSI/MSP files from the Windows Installer cache.
+
+	.DESCRIPTION
+		Compares files in C:\Windows\Installer against registry-registered packages.
+		Files not registered are considered orphaned and removed by default.
+		Displays associated product names where possible.
+
+	.PARAMETER WhatIf
+		Shows what would be deleted without actually removing files.
+
+	.PARAMETER Verbose
+		Shows detailed progress information.
+
+	.EXAMPLE
+		Remove-OrphanedInstallerFiles
+		Deletes all orphaned installer files.
+
+	.EXAMPLE
+		Remove-OrphanedInstallerFiles -WhatIf
+		Shows what would be deleted without removing anything.
+
+	.NOTES
+		Requires administrator privileges.
+		Assumes backups exist for disaster recovery.
+	#>
+
+	[CmdletBinding(SupportsShouldProcess)]
+	param()
+
+	# Check for admin
+	$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+	if (-not $isAdmin) {
+		Write-Warning "This function requires administrator privileges. Please run as admin."
+		return
+	}
+
+	function Get-MsiProductName {
+		param([string]$MsiPath)
+
+		try {
+			$installer = New-Object -ComObject WindowsInstaller.Installer
+			$database = $installer.GetType().InvokeMember(
+				"OpenDatabase",
+				[System.Reflection.BindingFlags]::InvokeMethod,
+				$null, $installer, @($MsiPath, 0)
+			)
+
+			$query = "SELECT Value FROM Property WHERE Property = 'ProductName'"
+			$view = $database.GetType().InvokeMember(
+				"OpenView",
+				[System.Reflection.BindingFlags]::InvokeMethod,
+				$null, $database, @($query)
+			)
+
+			$view.GetType().InvokeMember("Execute", [System.Reflection.BindingFlags]::InvokeMethod, $null, $view, $null)
+			$record = $view.GetType().InvokeMember("Fetch", [System.Reflection.BindingFlags]::InvokeMethod, $null, $view, $null)
+
+			if ($record) {
+				$productName = $record.GetType().InvokeMember("StringData", [System.Reflection.BindingFlags]::GetProperty, $null, $record, @(1))
+				[System.Runtime.Interopservices.Marshal]::ReleaseComObject($record) | Out-Null
+			}
+
+			$view.GetType().InvokeMember("Close", [System.Reflection.BindingFlags]::InvokeMethod, $null, $view, $null)
+			[System.Runtime.Interopservices.Marshal]::ReleaseComObject($view) | Out-Null
+			[System.Runtime.Interopservices.Marshal]::ReleaseComObject($database) | Out-Null
+			[System.Runtime.Interopservices.Marshal]::ReleaseComObject($installer) | Out-Null
+
+			return $productName
+		} catch {
+			return $null
+		}
+	}
+
+	function Get-MspProductName {
+		param([string]$MspPath)
+
+		try {
+			$installer = New-Object -ComObject WindowsInstaller.Installer
+			$summaryInfo = $installer.GetType().InvokeMember(
+				"SummaryInformation",
+				[System.Reflection.BindingFlags]::GetProperty,
+				$null, $installer, @($MspPath, 0)
+			)
+
+			$title = $summaryInfo.GetType().InvokeMember("Property", [System.Reflection.BindingFlags]::GetProperty, $null, $summaryInfo, @(2))
+
+			[System.Runtime.Interopservices.Marshal]::ReleaseComObject($summaryInfo) | Out-Null
+			[System.Runtime.Interopservices.Marshal]::ReleaseComObject($installer) | Out-Null
+
+			return $title
+		} catch {
+			return $null
+		}
+	}
+
+	# Build hashtable of registered packages with their product names
+	Write-Verbose "Enumerating registered packages from registry..."
+	$registeredPackages = @{}
+
+	# Get products and their names
+	$productBase = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Installer\UserData\S-1-5-18\Products"
+	Get-ChildItem $productBase -ErrorAction SilentlyContinue | ForEach-Object {
+		$installProps = Join-Path $_.PSPath "InstallProperties"
+
+		if (Test-Path $installProps) {
+			$props = Get-ItemProperty $installProps -ErrorAction SilentlyContinue
+			$localPkg = $props.LocalPackage
+			$displayName = $props.DisplayName
+
+			if ($localPkg) {
+				$registeredPackages[$localPkg.ToLower()] = @{
+					Path = $localPkg
+					ProductName = $displayName
+					Type = "Product"
+				}
+			}
+		}
+	}
+
+	# Get patches
+	$patchBase = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Installer\UserData\S-1-5-18\Patches"
+	Get-ChildItem $patchBase -ErrorAction SilentlyContinue | ForEach-Object {
+		$props = Get-ItemProperty $_.PSPath -ErrorAction SilentlyContinue
+		$localPkg = $props.LocalPackage
+		$displayName = $props.DisplayName
+
+		if ($localPkg) {
+			$registeredPackages[$localPkg.ToLower()] = @{
+				Path = $localPkg
+				ProductName = $displayName
+				Type = "Patch"
+			}
+		}
+	}
+
+	Write-Verbose "Found $($registeredPackages.Count) registered packages"
+
+	# Get all installer files
+	Write-Verbose "Scanning C:\Windows\Installer..."
+	$installerFiles = Get-ChildItem "C:\Windows\Installer\*.msi", "C:\Windows\Installer\*.msp" -ErrorAction SilentlyContinue
+
+	# Separate into registered and orphaned
+	$orphanedFiles = @()
+	$registeredFiles = @()
+
+	foreach ($file in $installerFiles) {
+		$filePath = $file.FullName.ToLower()
+
+		if ($registeredPackages.ContainsKey($filePath)) {
+			$info = $registeredPackages[$filePath]
+			$registeredFiles += [PSCustomObject]@{
+				Name = $file.Name
+				FullName = $file.FullName
+				SizeMB = [math]::Round($file.Length / 1MB, 2)
+				ProductName = $info.ProductName
+				Type = $info.Type
+				Status = "Registered"
+			}
+		} else {
+			# Orphaned - try to extract product name from the file itself
+			$productName = $null
+			if ($file.Extension -eq ".msi") {
+				$productName = Get-MsiProductName -MsiPath $file.FullName
+			} elseif ($file.Extension -eq ".msp") {
+				$productName = Get-MspProductName -MspPath $file.FullName
+			}
+
+			$orphanedFiles += [PSCustomObject]@{
+				Name = $file.Name
+				FullName = $file.FullName
+				SizeMB = [math]::Round($file.Length / 1MB, 2)
+				ProductName = if ($productName) { $productName } else { "(Unknown)" }
+				Type = if ($file.Extension -eq ".msi") { "Product" } else { "Patch" }
+				Status = "Orphaned"
+			}
+		}
+	}
+
+	# Display summary
+	Write-Host "`n========================================" -ForegroundColor Cyan
+	Write-Host "  Windows Installer Cache Analysis" -ForegroundColor Cyan
+	Write-Host "========================================" -ForegroundColor Cyan
+
+	$totalFiles = $installerFiles.Count
+	$totalSizeMB = [math]::Round(($installerFiles | Measure-Object Length -Sum).Sum / 1MB, 2)
+	$orphanedSizeMB = [math]::Round(($orphanedFiles | Measure-Object SizeMB -Sum).Sum, 2)
+	$registeredSizeMB = [math]::Round(($registeredFiles | Measure-Object SizeMB -Sum).Sum, 2)
+
+	Write-Host "`nTotal files in Installer folder: " -NoNewline
+	Write-Host "$totalFiles" -ForegroundColor Yellow -NoNewline
+	Write-Host " ($totalSizeMB MB)"
+
+	Write-Host "Registered (in use):             " -NoNewline
+	Write-Host "$($registeredFiles.Count)" -ForegroundColor Green -NoNewline
+	Write-Host " ($registeredSizeMB MB)"
+
+	Write-Host "Orphaned (safe to remove):       " -NoNewline
+	Write-Host "$($orphanedFiles.Count)" -ForegroundColor Red -NoNewline
+	Write-Host " ($orphanedSizeMB MB)"
+
+	if ($orphanedFiles.Count -eq 0) {
+		Write-Host "`nNo orphaned files found. Nothing to clean up." -ForegroundColor Green
+		return
+	}
+
+	# Display orphaned files with product names
+	Write-Host "`n----------------------------------------" -ForegroundColor DarkGray
+	Write-Host "  Orphaned Files to Remove" -ForegroundColor Yellow
+	Write-Host "----------------------------------------" -ForegroundColor DarkGray
+
+	$orphanedFiles | Sort-Object SizeMB -Descending | ForEach-Object {
+		$sizeStr = "{0,8:N2} MB" -f $_.SizeMB
+		$typeStr = if ($_.Type -eq "Product") { "[MSI]" } else { "[MSP]" }
+
+		Write-Host "  $typeStr " -ForegroundColor DarkCyan -NoNewline
+		Write-Host $sizeStr -ForegroundColor White -NoNewline
+		Write-Host "  $($_.Name)" -ForegroundColor Gray -NoNewline
+		Write-Host "  ->  " -ForegroundColor DarkGray -NoNewline
+		Write-Host $_.ProductName -ForegroundColor Cyan
+	}
+
+	Write-Host "`n----------------------------------------" -ForegroundColor DarkGray
+
+	# Process deletions
+	$deletedCount = 0
+	$deletedSize = 0
+	$failedCount = 0
+
+	if ($WhatIfPreference) {
+		Write-Host "`n[WhatIf] Would delete $($orphanedFiles.Count) files, freeing $orphanedSizeMB MB" -ForegroundColor Magenta
+	} else {
+		Write-Host "`nDeleting orphaned files..." -ForegroundColor Yellow
+
+		foreach ($file in $orphanedFiles) {
+			if ($PSCmdlet.ShouldProcess($file.FullName, "Delete")) {
+				try {
+					Remove-Item -Path $file.FullName -Force -ErrorAction Stop
+					$deletedCount++
+					$deletedSize += $file.SizeMB
+					Write-Verbose "Deleted: $($file.Name)"
+				} catch {
+					$failedCount++
+					Write-Warning "Failed to delete $($file.Name): $($_.Exception.Message)"
+				}
+			}
+		}
+
+		Write-Host "`n========================================" -ForegroundColor Cyan
+		Write-Host "  Cleanup Complete" -ForegroundColor Cyan
+		Write-Host "========================================" -ForegroundColor Cyan
+		Write-Host "Files deleted:  " -NoNewline
+		Write-Host $deletedCount -ForegroundColor Green
+		Write-Host "Space freed:    " -NoNewline
+		Write-Host "$([math]::Round($deletedSize, 2)) MB" -ForegroundColor Green
+
+		if ($failedCount -gt 0) {
+			Write-Host "Failed:         " -NoNewline
+			Write-Host $failedCount -ForegroundColor Red
+		}
+	}
+
+	Write-Host ""
+}
+
+Function Remove-StaleProfiles {
+<#
+	.SYNOPSIS
+		Removes local user profiles that have had no activity within a given number of days or months.
+
+	.DESCRIPTION
+		Enumerates Win32_UserProfile and removes profiles considered stale. A profile is only
+		removed when ALL of the following are true:
+		  - The profile is not currently loaded.
+		  - The profile is not a special system profile (systemprofile, LocalService, NetworkService).
+		  - The profile path does not match ExcludePattern (default: 'Remote Support|admin').
+		  - The profile was created before the staleness cutoff.
+		  - The most recent activity on the profile is older than the staleness cutoff.
+
+		Activity is determined the way Windows itself has aged profiles since Windows 10 1809 and
+		Server 2019: from the profile service's load, unload, and cleanup-check timestamps stored
+		under HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\<SID>. These values
+		only change when the profile is genuinely loaded or unloaded (logon/logoff), so Windows
+		Update servicing and antivirus hive scans do not inflate them. On builds where those
+		values are absent, activity falls back to the newest LastWriteTime found among the
+		profile folder itself, its NTUSER.DAT registry hive, and its first-level subfolders
+		(hidden folders such as AppData included). The fallback can be inflated by servicing
+		activity, which errs toward keeping profiles.
+
+		Win32_UserProfile.LastUseTime is deliberately not used as the activity signal because
+		Windows servicing and antivirus scans update it, making profiles untouched for years
+		appear recently used.
+
+		Removal is performed with Remove-CimInstance, which deletes both the ProfileList registry
+		entry and the profile folder. If files remain afterwards they are force-removed with
+		Remove-PathForcefully. Profile registry entries whose folder no longer exists on disk are
+		treated as orphans and removed. Profiles that cannot be assessed are left alone.
+
+		Deleting a profile permanently destroys any data stored only in that profile. Supports
+		-WhatIf to preview, and prompts for confirmation on each profile when run interactively.
+		Pass -Confirm:$false for unattended use. Requires an elevated (Administrator) session.
+		Use caution on RDS/terminal servers where many profiles are expected.
+
+	.PARAMETER Days
+		Number of days without activity before a profile is considered stale.
+		Defaults to 730 (2 years). Minimum 30 as a safety floor. Cannot be combined with -Months.
+
+	.PARAMETER Months
+		Number of calendar months without activity before a profile is considered stale.
+		Minimum 1. Cannot be combined with -Days.
+
+	.PARAMETER ExcludePattern
+		Case-insensitive regular expression tested against each profile's LocalPath. Matching
+		profiles are never touched. Defaults to 'Remote Support|admin'.
+
+	.PARAMETER PassThru
+		Outputs a result object for each assessed profile (ProfilePath, SID, LastActivity,
+		ActivitySource, Action).
+
+	.EXAMPLE
+		Remove-StaleProfiles -WhatIf
+		Previews which profiles would be removed using the default 730-day threshold.
+
+	.EXAMPLE
+		Remove-StaleProfiles -Months 18
+		Interactively removes profiles with no activity in the last 18 months, prompting per profile.
+
+	.EXAMPLE
+		Remove-StaleProfiles -Days 365 -Confirm:$false
+		Removes profiles idle for over a year without prompting. Suitable for RMM deployment.
+
+	.EXAMPLE
+		Remove-StaleProfiles -Days 365 -ExcludePattern 'Remote Support|admin|svc_' -Confirm:$false -PassThru
+		Also protects service account profiles and returns result objects for logging.
+
+	.LINK
+		https://learn.microsoft.com/en-us/troubleshoot/windows-server/support-tools/scripts-to-retrieve-profile-age
+#>
+	[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'High', DefaultParameterSetName = 'Days')]
+	param (
+		[Parameter(ParameterSetName = 'Days')]
+		[ValidateRange(30, 3650)]
+		[int] $Days = 730,
+
+		[Parameter(Mandatory = $true, ParameterSetName = 'Months')]
+		[ValidateRange(1, 120)]
+		[int] $Months,
+
+		[ValidateNotNullOrEmpty()]
+		[string] $ExcludePattern = 'Remote Support|admin',
+
+		[switch] $PassThru
+	)
+
+	Function Convert-ProfileListTime {
+		# ProfileList stores FILETIMEs as paired DWORDs. PowerShell reads DWORDs back as
+		# signed Int32, so negative values must be restored to their unsigned bit pattern
+		# before the two halves are recombined.
+		param($High, $Low)
+		If ($null -eq $High -or $null -eq $Low) { Return $null }
+		$H = [Int64]$High
+		If ($H -lt 0) { $H += 4294967296 }
+		$L = [Int64]$Low
+		If ($L -lt 0) { $L += 4294967296 }
+		$FileTime = ($H -shl 32) -bor $L
+		If ($FileTime -le 0) { Return $null }
+		Try { Return [datetime]::FromFileTime($FileTime) } Catch { Return $null }
+	}
+
+	$Identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+	$Principal = New-Object Security.Principal.WindowsPrincipal($Identity)
+	If (-not $Principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+		Write-Host "Remove-StaleProfiles requires an elevated session. Run as Administrator." -ForegroundColor Red
+		Return
+	}
+
+	# A malformed exclusion regex must fail closed, not fall through to deletions.
+	Try {
+		$null = [regex]::new($ExcludePattern)
+	} Catch {
+		Write-Host "ExcludePattern '$ExcludePattern' is not a valid regular expression: $($_.Exception.Message)" -ForegroundColor Red
+		Return
+	}
+
+	If ($PSCmdlet.ParameterSetName -eq 'Months') {
+		$CutoffDate = (Get-Date).AddMonths(-$Months)
+		$ThresholdText = "$Months month(s)"
+	} Else {
+		$CutoffDate = (Get-Date).AddDays(-$Days)
+		$ThresholdText = "$Days day(s)"
+	}
+
+	Write-Host "Checking for user profiles with no activity since $($CutoffDate.ToString('yyyy-MM-dd')) ($ThresholdText)..." -ForegroundColor Cyan
+
+	Try {
+		# A null CreationTime (seen on damaged profiles) passes the age gate; the activity
+		# check below is still required before anything is removed.
+		$Candidates = Get-CimInstance -ClassName Win32_UserProfile -ErrorAction Stop | Where-Object {
+			($_.Loaded -eq $false) -and
+			($_.Special -ne $true) -and
+			($_.LocalPath) -and
+			($_.LocalPath -notmatch $ExcludePattern) -and
+			((-not $_.CreationTime) -or ($_.CreationTime -lt $CutoffDate))
+		}
+	} Catch {
+		Write-Host "Failed to enumerate user profiles: $($_.Exception.Message)" -ForegroundColor Red
+		Return
+	}
+
+	If (-not $Candidates) {
+		Write-Host "No unloaded user profiles older than $ThresholdText found." -ForegroundColor Green
+		Return
+	}
+
+	$Results = [System.Collections.ArrayList]::new()
+
+	ForEach ($StaleProfile in $Candidates) {
+		$ProfilePath = $StaleProfile.LocalPath
+		$ProfileSID = $StaleProfile.SID
+		Write-Host "Assessing $ProfilePath" -ForegroundColor Cyan
+		$Action = 'Kept'
+		$LastActivity = $null
+		$ActivitySource = $null
+
+		If (-not (Test-Path -LiteralPath $ProfilePath)) {
+			If ($PSCmdlet.ShouldProcess("$ProfilePath (SID: $ProfileSID)", "Remove orphaned profile registry entry")) {
+				Try {
+					Remove-CimInstance -InputObject $StaleProfile -ErrorAction Stop
+					Write-Host "Removed orphaned profile entry for $ProfilePath (no folder on disk)." -ForegroundColor Green
+					$Action = 'RemovedOrphan'
+				} Catch {
+					Write-Host "Failed to remove orphaned profile entry for ${ProfilePath}: $($_.Exception.Message)" -ForegroundColor Red
+					$Action = 'Failed'
+				}
+			} Else {
+				$Action = 'Declined'
+			}
+		} Else {
+			$ProfileRoot = Get-Item -LiteralPath $ProfilePath -Force -ErrorAction SilentlyContinue
+			If (-not $ProfileRoot) {
+				Write-Host "Unable to read $ProfilePath. Leaving the profile alone." -ForegroundColor Yellow
+				$Action = 'Unreadable'
+			} Else {
+				# Primary signal: profile service load/unload/cleanup timestamps. These only
+				# change on a real profile load or unload, unlike file timestamps, which
+				# Windows Update servicing and antivirus hive scans inflate.
+				$RegInfo = Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\ProfileList\$ProfileSID" -ErrorAction SilentlyContinue
+				If ($RegInfo) {
+					$RegTimes = @()
+					ForEach ($ValueName in 'LocalProfileLoadTime', 'LocalProfileUnLoadTime', 'LocalProfileCleanupCheckTime') {
+						$Converted = Convert-ProfileListTime -High $RegInfo."$($ValueName)High" -Low $RegInfo."$($ValueName)Low"
+						If ($Converted) { $RegTimes += $Converted }
+					}
+					If ($RegTimes) {
+						$LastActivity = $RegTimes | Sort-Object -Descending | Select-Object -First 1
+						$ActivitySource = 'Profile service registry'
+					}
+				}
+
+				If (-not $LastActivity) {
+					# Fallback for builds without profile service timestamps.
+					$ActivityTimes = @($ProfileRoot.LastWriteTime)
+					$Hive = Get-Item -LiteralPath (Join-Path -Path $ProfilePath -ChildPath 'NTUSER.DAT') -Force -ErrorAction SilentlyContinue
+					If ($Hive) { $ActivityTimes += $Hive.LastWriteTime }
+					$SubDirs = Get-ChildItem -LiteralPath $ProfilePath -Directory -Force -ErrorAction SilentlyContinue
+					If ($SubDirs) { $ActivityTimes += @($SubDirs | ForEach-Object { $_.LastWriteTime }) }
+					$LastActivity = $ActivityTimes | Sort-Object -Descending | Select-Object -First 1
+					$ActivitySource = 'File timestamps'
+				}
+
+				$IdleDays = [int][math]::Floor(((Get-Date) - $LastActivity).TotalDays)
+				Write-Host "Most recent activity on $ProfilePath was $IdleDays day(s) ago ($($LastActivity.ToString('yyyy-MM-dd'))). Source: $ActivitySource."
+
+				If ($LastActivity -ge $CutoffDate) {
+					Write-Host "Keeping $ProfilePath (activity within $ThresholdText)." -ForegroundColor Yellow
+				} ElseIf ($PSCmdlet.ShouldProcess("$ProfilePath (SID: $ProfileSID, idle $IdleDays days)", "Permanently remove user profile and all of its files")) {
+					Try {
+						Remove-CimInstance -InputObject $StaleProfile -ErrorAction Stop
+						Write-Host "Removed profile $ProfilePath (SID: $ProfileSID)." -ForegroundColor Green
+						$Action = 'Removed'
+						If (Test-Path -LiteralPath $ProfilePath) {
+							Write-Host "Folder still present after profile removal. Force-removing leftovers..." -ForegroundColor Yellow
+							Remove-PathForcefully -Path $ProfilePath
+						}
+					} Catch {
+						# Do not force-delete files when profile removal failed; a ProfileList entry
+						# pointing at a gutted folder breaks that user's next logon.
+						Write-Host "Failed to remove profile ${ProfilePath}: $($_.Exception.Message)" -ForegroundColor Red
+						$Action = 'Failed'
+					}
+				} Else {
+					$Action = 'Declined'
+				}
+			}
+		}
+
+		[void]$Results.Add([PSCustomObject]@{
+			ProfilePath    = $ProfilePath
+			SID            = $ProfileSID
+			LastActivity   = $LastActivity
+			ActivitySource = $ActivitySource
+			Action         = $Action
+		})
+	}
+
+	$RemovedCount = @($Results | Where-Object { $_.Action -in @('Removed', 'RemovedOrphan') }).Count
+	$FailedCount = @($Results | Where-Object { $_.Action -eq 'Failed' }).Count
+	Write-Host "Stale profile cleanup complete. Removed: $RemovedCount. Failed: $FailedCount. Assessed: $($Results.Count)." -ForegroundColor Cyan
+	If ($PassThru) {
+		Write-Output $Results
+	}
+}
+
+Function Remove-SyncroAgent {
+	<#
+	.SYNOPSIS
+		Removes the Syncro RMM agent from a Windows machine without an uninstall authorization code.
+
+	.DESCRIPTION
+		Built for MSP takeover scenarios where the previous provider's Syncro agent must be
+		removed but the Syncro uninstall token is not available (e.g. the prior IT provider
+		ghosted the client). Performs a manual teardown rather than calling the vendor
+		uninstaller: disables and stops services, kills processes, deletes services with
+		sc.exe, removes scheduled tasks, deletes program and data folders, and cleans the
+		registry.
+
+		The vendor uninstaller is deliberately NOT used. Syncro's uninstaller is what prompts
+		for the authorization code, and run as SYSTEM with no interactive desktop it would hang
+		waiting for input. sc.exe delete is used instead of Remove-Service because Remove-Service
+		does not exist in Windows PowerShell 5.1, which is what most RMM deployment shells use.
+
+		Designed to be pushed as SYSTEM from the new RMM. Idempotent and safe to re-run. Honors
+		-WhatIf and -Confirm. Reuses the ATG-PS-Functions library (Remove-PathForcefully,
+		Get-InstalledApplication) when it can be loaded.
+
+	.PARAMETER RemoveSplashtop
+		Also removes the Splashtop Streamer that Syncro bundles for remote control. Off by
+		default so an unrelated or legitimate Splashtop install is not touched. Enable only
+		after confirming the Splashtop instance belongs to Syncro.
+
+	.EXAMPLE
+		Remove-SyncroAgent -Verbose
+		Detects and removes Syncro, logging each step.
+
+	.EXAMPLE
+		Remove-SyncroAgent -WhatIf
+		Shows what would be removed without changing anything.
+
+	.EXAMPLE
+		Remove-SyncroAgent -RemoveSplashtop -Verbose
+		Removes Syncro and its bundled Splashtop Streamer.
+
+	.NOTES
+		Run elevated or as SYSTEM. A reboot may be required to finalize deletion of files that
+		were locked at runtime (Remove-PathForcefully schedules those for delete-on-reboot).
+	#>
+	[CmdletBinding(SupportsShouldProcess = $True, ConfirmImpact = 'Medium')]
+	param(
+		[switch] $RemoveSplashtop
+	)
+
+	# --- Load ATG-PS-Functions helpers if not already present in the session ---
+	If (-not (Get-Command Remove-PathForcefully -ErrorAction SilentlyContinue)) {
+		Write-Verbose 'Remove-PathForcefully not found. Attempting to load PWSH function library.'
+		Try {
+			Invoke-RestMethod ps.acgs.io | Invoke-Expression
+		} Catch {
+			Write-Verbose "Could not load PWSH library: $($_.Exception.Message). Falling back to built-in removal only."
+		}
+	}
+
+	# --- Warn (do not block) if not elevated ---
+	$IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+	If (-not $IsAdmin) { Write-Warning 'Not running elevated. Service and registry removal will likely fail. Run as Administrator or SYSTEM.' }
+
+	# --- Known Syncro component identifiers ---
+	# Wildcard patterns catch every version-specific name in one shot:
+	# Syncro, SyncroLive, SyncroOvermind (display "SyncroRecovery", the watchdog), and legacy Kabuto.*
+	$ServicePatterns = @('Syncro*', 'Kabuto*')
+	$ProcessPatterns = @('Syncro*', 'Kabuto*')
+	$FolderPaths = @(
+		"$env:ProgramFiles\RepairTech\Syncro",
+		"${env:ProgramFiles(x86)}\RepairTech\Syncro",
+		"$env:ProgramFiles\RepairTech\Kabuto",
+		"$env:ProgramData\Syncro",
+		"$env:ProgramData\RepairTech"
+	)
+	$RegPaths = @(
+		'HKLM:\SOFTWARE\RepairTech',
+		'HKLM:\SOFTWARE\WOW6432Node\RepairTech'
+	)
+	$TaskMatch    = 'Syncro|RepairTech|Kabuto'
+	$DisplayMatch = 'Syncro|Kabuto'
+
+	If ($RemoveSplashtop) {
+		Write-Verbose 'RemoveSplashtop set. Splashtop Streamer will also be targeted.'
+		$ServicePatterns += 'SplashtopRemoteService'
+		$ProcessPatterns += @('SRService', 'SRManager', 'SRFeature')
+		$FolderPaths  += @(
+			"$env:ProgramFiles\Splashtop\Splashtop Remote\Server",
+			"${env:ProgramFiles(x86)}\Splashtop\Splashtop Remote\Server"
+		)
+		$DisplayMatch  = 'Syncro|Kabuto|Splashtop'
+	}
+
+	# --- Detection: is anything Syncro present? ---
+	$FoundServices = @(Get-Service -Name $ServicePatterns -ErrorAction SilentlyContinue)
+	$FoundFolders  = $FolderPaths | Where-Object { Test-Path -LiteralPath $_ }
+	$FoundReg      = $RegPaths    | Where-Object { Test-Path -LiteralPath $_ }
+	$AppHit        = $False
+	If (Get-Command Get-InstalledApplication -ErrorAction SilentlyContinue) {
+		$AppHit = [bool](Get-InstalledApplication -Name $DisplayMatch)
+	}
+
+	If (-not ($FoundServices -or $FoundFolders -or $FoundReg -or $AppHit)) {
+		Write-Host 'Syncro does not appear to be installed. Nothing to do.' -ForegroundColor Cyan
+		return [PSCustomObject]@{ Computer = $env:COMPUTERNAME; SyncroFound = $False; Removed = $False; RebootRecommended = $False }
+	}
+
+	Write-Host 'Syncro components detected. Beginning removal.' -ForegroundColor Cyan
+	$RebootRecommended = $False
+
+	# --- 1. Disable startup on ALL matched services first, then stop them. ---
+	# --- Disabling before stopping prevents SyncroOvermind (the watchdog) from relaunching siblings. ---
+	ForEach ($svc in $FoundServices) {
+		If ($PSCmdlet.ShouldProcess($svc.Name, 'Disable service startup')) {
+			Write-Verbose "Disabling service: $($svc.Name)"
+			Set-Service -Name $svc.Name -StartupType Disabled -ErrorAction SilentlyContinue
+		}
+	}
+	ForEach ($svc in $FoundServices) {
+		If ($PSCmdlet.ShouldProcess($svc.Name, 'Stop service')) {
+			Write-Verbose "Stopping service: $($svc.Name)"
+			Stop-Service -Name $svc.Name -Force -ErrorAction SilentlyContinue
+		}
+	}
+
+	# --- 2. Kill processes ---
+	$ProcNames = @(Get-Process -Name $ProcessPatterns -ErrorAction SilentlyContinue | Select-Object -ExpandProperty Name -Unique)
+	ForEach ($pn in $ProcNames) {
+		If ($PSCmdlet.ShouldProcess($pn, 'Stop process')) {
+			Write-Verbose "Stopping process: $pn"
+			Stop-Process -Name $pn -Force -ErrorAction SilentlyContinue
+		}
+	}
+	Start-Sleep -Seconds 3
+
+	# --- 3. Delete services (sc.exe for 5.1 compatibility) ---
+	ForEach ($svc in @(Get-Service -Name $ServicePatterns -ErrorAction SilentlyContinue)) {
+		If ($PSCmdlet.ShouldProcess($svc.Name, 'Delete service')) {
+			Write-Verbose "Deleting service: $($svc.Name)"
+			$null = & "$env:SystemRoot\System32\sc.exe" delete "$($svc.Name)"
+		}
+	}
+
+	# --- 4. Remove scheduled tasks ---
+	$tasks = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { ($_.TaskName + $_.TaskPath) -match $TaskMatch }
+	ForEach ($task in $tasks) {
+		If ($PSCmdlet.ShouldProcess("$($task.TaskPath)$($task.TaskName)", 'Unregister scheduled task')) {
+			Write-Verbose "Removing scheduled task: $($task.TaskPath)$($task.TaskName)"
+			Unregister-ScheduledTask -TaskName $task.TaskName -TaskPath $task.TaskPath -Confirm:$False -ErrorAction SilentlyContinue
+		}
+	}
+
+	# --- 5. Delete folders ---
+	ForEach ($path in $FolderPaths) {
+		If (Test-Path -LiteralPath $path) {
+			If ($PSCmdlet.ShouldProcess($path, 'Delete folder')) {
+				Write-Verbose "Removing folder: $path"
+				If (Get-Command Remove-PathForcefully -ErrorAction SilentlyContinue) {
+					Remove-PathForcefully -Path $path
+				} Else {
+					Remove-Item -LiteralPath $path -Recurse -Force -ErrorAction SilentlyContinue
+				}
+				If (Test-Path -LiteralPath $path) { $RebootRecommended = $True }
+			}
+		}
+	}
+
+	# --- 6. Clean registry: RepairTech keys ---
+	ForEach ($reg in $RegPaths) {
+		If (Test-Path -LiteralPath $reg) {
+			If ($PSCmdlet.ShouldProcess($reg, 'Remove registry key')) {
+				Write-Verbose "Removing registry key: $reg"
+				Remove-Item -LiteralPath $reg -Recurse -Force -ErrorAction SilentlyContinue
+			}
+		}
+	}
+
+	# --- 6b. Clean registry: Uninstall entries whose DisplayName matches ---
+	$UninstallRoots = @(
+		'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall',
+		'HKLM:\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall'
+	)
+	ForEach ($root in $UninstallRoots) {
+		If (Test-Path -LiteralPath $root) {
+			Get-ChildItem -LiteralPath $root -ErrorAction SilentlyContinue | ForEach-Object {
+				$dn = (Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue).DisplayName
+				If ($dn -and $dn -match $DisplayMatch) {
+					If ($PSCmdlet.ShouldProcess("$dn ($($_.PSChildName))", 'Remove Uninstall registry entry')) {
+						Write-Verbose "Removing Uninstall entry: $dn"
+						Remove-Item -LiteralPath $_.PSPath -Recurse -Force -ErrorAction SilentlyContinue
+					}
+				}
+			}
+		}
+	}
+
+	# --- 7. Verify ---
+	$StillServices = @(Get-Service -Name $ServicePatterns -ErrorAction SilentlyContinue)
+	$StillFolders  = $FolderPaths | Where-Object { Test-Path -LiteralPath $_ }
+	$StillReg      = $RegPaths    | Where-Object { Test-Path -LiteralPath $_ }
+	$Clean         = -not ($StillServices -or $StillReg)
+	$FullyClean    = ($Clean -and -not $StillFolders)
+
+	If ($FullyClean) {
+		Write-Host 'Syncro removal complete. No remaining services, folders, or registry keys detected.' -ForegroundColor Green
+	} ElseIf ($Clean -and $RebootRecommended) {
+		Write-Host 'Syncro services and registry removed. Some files are locked and scheduled for delete-on-reboot. Reboot to finalize.' -ForegroundColor Yellow
+	} Else {
+		Write-Warning 'Some Syncro components could not be removed. Review remaining items below.'
+		If ($StillServices) { Write-Warning ("Remaining services: " + ($StillServices.Name -join ', ')) }
+		If ($StillFolders)  { Write-Warning ("Remaining folders: "  + ($StillFolders  -join ', ')) }
+		If ($StillReg)      { Write-Warning ("Remaining reg keys: " + ($StillReg      -join ', ')) }
+	}
+
+	return [PSCustomObject]@{
+		Computer          = $env:COMPUTERNAME
+		SyncroFound       = $True
+		Removed           = $FullyClean
+		RebootRecommended = $RebootRecommended
+	}
+}
+
 # SIG # Begin signature block
 # MIIF0AYJKoZIhvcNAQcCoIIFwTCCBb0CAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
