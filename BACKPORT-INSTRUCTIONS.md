@@ -343,18 +343,58 @@ existing `Restart-Computer -Force`, insert:
 - **Invoke-NDDCScan webhook (P2, security):** original embeds a base64-obfuscated Ambitions
   Teams webhook URL in this public repo. Maintainer decision: leave as-is for now — do NOT
   externalize or rotate this without explicit sign-off.
-- **Invoke-ValidatedDownload infrastructure:** SHA256-manifest download validation
-  (fork `PS-Invoke.psm1` ~1656+ plus `DownloadManifest.json`). Worthwhile hardening, but
-  needs an Ambitions manifest and adaptation away from `$Global:PWSHFolder`.
-- **Set-AutoLogon:** fork parameterized username/password; original derives password from
-  SiteCode (predictable, plaintext in registry). Changing it breaks existing deploy flows.
-- **Update-PWSH choco-dependency retry:** depends on fork-only `Repair-ChocoDependency`
-  (~2000 lines in `PS-Repair.psm1`). Pull both or skip.
-- **Legacy root `ATG-PS-Functions.txt`:** stale single-file copy of ~73 functions that does
-  not receive these fixes. It's still the target of `Get-ATGPS`/`Deploy-ATGPSFunctions.txt`
-  (git.io shortlinks pointing at it were replaced with direct raw.githubusercontent.com URLs,
-  but the staleness itself is unresolved). Confirm nothing else still relies on it, then
-  either regenerate it from the individual `Functions/ATG-PS-*.txt` files or retire it.
+- **Invoke-ValidatedDownload infrastructure: REJECTED, do not implement.** SHA256-manifest
+  download validation (fork `PS-Invoke.psm1` ~1656+ plus `DownloadManifest.json`) needs a
+  manifest that is kept current every time a download URL in this repo changes — a hash
+  goes stale the moment the upstream vendor ships a new build, and a stale/missing entry
+  either blocks scheduled/RMM runs outright or silently downgrades to "no validation." That
+  upkeep requires an assigned maintainer, which this repo does not have guaranteed. Skip it
+  entirely rather than land infrastructure with an unmet maintenance requirement.
+- **Set-AutoLogon:** original signature is `Set-AutoLogon([String] $SiteCode)` — it always
+  logs in as the fixed username `ATGLocal`, and derives the autologon password as
+  `$SiteCode + 'T3mpP@ss'` (e.g. site code `DEN01` → password `DEN01T3mpP@ss`), written in
+  plaintext to `HKLM:\...\Winlogon\DefaultPassword`. That's a real weakness (predictable,
+  guessable from the site code alone, plaintext at rest) but it is also a *convention*:
+  every deploy script that calls `Set-AutoLogon $SiteCode` and everyone who has ever needed
+  to log into one of these machines assumes that exact formula. The fork's fix replaces it
+  with `-Username`/`-Password` parameters and no default derivation — dropping the formula
+  without a coordinated rollout would silently autologon as a machine-specific *different*
+  password than what techs are trained to expect, or fail to autologon at all if callers
+  aren't updated. This needs the maintainer to choose: keep the current formula (accept the
+  known weakness), add optional `-Username`/`-Password` parameters *alongside* a
+  `SiteCode`-derived default so existing callers keep working, or do a coordinated migration
+  where old and new logic run in parallel until every deploy script is confirmed updated.
+- **Update-PWSH choco-dependency retry:** Chocolatey v2 sometimes reports a package as
+  "failed to resolve dependency" when a dependency's own dependency graph is inconsistent
+  (a known choco v2 issue), and a plain `choco upgrade pwsh` just fails outright in that
+  state. The fork's fix retries up to 3 times, and between attempts calls
+  `Repair-ChocoDependency` — a ~2000-line function (in `PS-Repair.psm1`) that inspects
+  choco's package cache and config, clears conflicting version pins, and re-registers the
+  affected package sources. It is a large, single-purpose repair tool that exists *only* to
+  support this retry loop; nothing else in either repo calls it. Backporting the retry
+  without it would mean the retry loop spins 3 times against the same unresolved state and
+  still fails — no benefit. Bringing over ~2000 lines of unfamiliar repair logic that no
+  Ambitions engineer has read line-by-line, to fix an intermittent choco quirk on one
+  function, is a maintainability trade a maintainer should make deliberately, not one that
+  should happen as a side effect of a PWSH-update fix.
+- **Legacy root `ATG-PS-Functions.txt`:** a single file at the repo root containing roughly
+  73 functions concatenated together — an older, pre-per-verb-file snapshot of this
+  codebase. None of the fixes in this PR (or any fix going forward, unless someone
+  remembers to update it separately) touch it, because nothing in the backport work read
+  from or wrote to it. It matters because `Scripts/Get-ATGPS.txt` and
+  `Scripts/Deploy-ATGPSFunctions.txt` (an alternate/older bootstrap path, documented as
+  the second loading method in `README.md`) both download and `Import-Module` that exact
+  file — so any machine bootstrapped that way is running Connect-Wifi, Get-FileDownload,
+  Uninstall-Application, and everything else from *before* all the fixes in this PR, not
+  after. The primary, documented loading path (`irm ps.acgs.io | iex`) does not use this
+  file at all — it loads the individual `Functions/ATG-PS-*.txt` files per `URL-List.csv`
+  and already has every fix. This is a decision because there are two legitimate fixes with
+  different costs: (a) regenerate `ATG-PS-Functions.txt` by concatenating the current
+  `Functions/ATG-PS-*.txt` files, likely as a one-time script or a CI step that keeps it in
+  sync going forward, or (b) retire `Get-ATGPS`/`Deploy-ATGPSFunctions.txt` entirely and
+  point anyone still using that path at `irm ps.acgs.io | iex`. Both require a maintainer
+  to confirm which machines, if any, currently depend on the `Get-ATGPS` bootstrap path
+  before acting, since (b) would break them outright if they exist.
 
 ## New fork functions worth cherry-picking later (P3, optional)
 
