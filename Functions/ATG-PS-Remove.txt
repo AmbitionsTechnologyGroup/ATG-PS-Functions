@@ -44,26 +44,135 @@ Function Remove-ADStaleComputers {
 }
 
 Function Remove-DuplicateFiles {
+	<#
+	.SYNOPSIS
+		Finds and removes duplicate files in a specified folder.
+	.DESCRIPTION
+		Scans a folder for files with identical content (by hash). Keeps the file
+		with the shortest path and marks the rest for removal. By default, displays
+		a list of duplicates with a summary of how many files and how much space
+		would be freed, then prompts for confirmation before deleting.
+	.PARAMETER Path
+		The folder to scan for duplicates. Defaults to the current directory.
+	.PARAMETER Recurse
+		Scan subdirectories as well, deduplicating within each directory.
+	.EXAMPLE
+		Remove-DuplicateFiles -Path "C:\Users\John\Downloads"
+		# Lists duplicates, shows summary, prompts before deleting.
+	.EXAMPLE
+		Remove-DuplicateFiles -Path "C:\Data" -Recurse
+		# Scans all subdirectories under C:\Data.
+	.EXAMPLE
+		Remove-DuplicateFiles -Path "C:\Temp" -Confirm:$false
+		# Deletes duplicates immediately without prompting.
+	#>
+	[CmdletBinding(SupportsShouldProcess, ConfirmImpact = 'High')]
 	param (
 		[string]$Path = $PWD.Path,
-		[switch]$Recurse = $False
+		[switch]$Recurse = $false
 	)
 	If (-not(Get-Command "Remove-PathForcefully" -ErrorAction SilentlyContinue)) { Invoke-RestMethod ps.acgs.io | Invoke-Expression }
-	Function Remove-DuplicateFilesInt {
-		$DuplicateFiles = @((Get-ChildItem -Path $Path -Force | Get-FileHash -ErrorAction SilentlyContinue | Group-Object -property hash | Where-Object { $_.count -gt 1 } | ForEach-Object { $_.group | Sort-Object { $_.Path.Length } | Select-Object -Skip 1 }).Path)
-		If ($DuplicateFiles) {
-			ForEach ($File in $DuplicateFiles) { Remove-PathForcefully -Path $file }
+
+	Function Remove-DuplicateFilesInFolder {
+		param (
+			[parameter(Mandatory = $true)]
+			[string]$FolderPath,
+			[System.Management.Automation.PSCmdlet]$Cmdlet
+		)
+
+		$Hashes = Get-ChildItem -Path $FolderPath -File -Force -ErrorAction SilentlyContinue |
+			Get-FileHash -ErrorAction SilentlyContinue
+		$DuplicateGroups = $Hashes |
+			Group-Object -Property Hash |
+			Where-Object { $_.Count -gt 1 }
+
+		If (-not $DuplicateGroups) {
+			Write-Host "No duplicate files found in $FolderPath"
+			return
 		}
-		Else {
-			Write-Host "No duplicate files found in $Path"
+
+		# Build list of files to remove (keep shortest path from each group)
+		$FilesToRemove = @()
+		ForEach ($Group in $DuplicateGroups) {
+			$Sorted = $Group.Group | Sort-Object { $_.Path.Length }
+			$Keeping = $Sorted | Select-Object -First 1
+			$Removing = $Sorted | Select-Object -Skip 1
+			ForEach ($Item in $Removing) {
+				$FileInfo = Get-Item -LiteralPath $Item.Path -Force -ErrorAction SilentlyContinue
+				If (-not $FileInfo) { continue }
+				$FilesToRemove += [PSCustomObject]@{
+					Path       = $Item.Path
+					Hash       = $Item.Hash
+					SizeBytes  = $FileInfo.Length
+					KeptFile   = $Keeping.Path
+				}
+			}
 		}
+
+		If ($FilesToRemove.Count -eq 0) {
+			Write-Host "No duplicate files found in $FolderPath"
+			return
+		}
+
+		# Display the list
+		Write-Host "`n========================================" -ForegroundColor Cyan
+		Write-Host "  Duplicate Files in: $FolderPath" -ForegroundColor Cyan
+		Write-Host "========================================" -ForegroundColor Cyan
+
+		ForEach ($File in $FilesToRemove) {
+			$SizeStr = "{0,10:N2} KB" -f ($File.SizeBytes / 1KB)
+			Write-Host "  REMOVE: " -ForegroundColor Red -NoNewline
+			Write-Host $SizeStr -ForegroundColor White -NoNewline
+			Write-Host "  $($File.Path)" -ForegroundColor Gray
+			Write-Host "    KEEP: " -ForegroundColor Green -NoNewline
+			Write-Host "$($File.KeptFile)" -ForegroundColor DarkGray
+		}
+
+		# Summary
+		$TotalFiles = $FilesToRemove.Count
+		$TotalBytes = ($FilesToRemove | Measure-Object -Property SizeBytes -Sum).Sum
+		$TotalMB = [math]::Round($TotalBytes / 1MB, 2)
+
+		Write-Host "`n----------------------------------------" -ForegroundColor DarkGray
+		Write-Host "  Files to remove: " -NoNewline
+		Write-Host "$TotalFiles" -ForegroundColor Yellow
+		Write-Host "  Space to free:   " -NoNewline
+		If ($TotalMB -ge 1) {
+			Write-Host "$TotalMB MB" -ForegroundColor Yellow
+		} Else {
+			Write-Host "$([math]::Round($TotalBytes / 1KB, 2)) KB" -ForegroundColor Yellow
+		}
+		Write-Host "----------------------------------------" -ForegroundColor DarkGray
+
+		# Confirmation via ShouldProcess (respects -Confirm:$false)
+		If (-not $Cmdlet.ShouldProcess("$TotalFiles duplicate file(s) in $FolderPath ($TotalMB MB)", "Remove")) {
+			return
+		}
+
+		# Delete
+		$DeletedCount = 0
+		$DeletedBytes = 0
+		ForEach ($File in $FilesToRemove) {
+			Try {
+				Remove-PathForcefully -Path $File.Path
+				$DeletedCount++
+				$DeletedBytes += $File.SizeBytes
+			} Catch {
+				Write-Warning "Failed to remove: $($File.Path) - $($_.Exception.Message)"
+			}
+		}
+
+		$FreedMB = [math]::Round($DeletedBytes / 1MB, 2)
+		Write-Host "`nRemoved $DeletedCount duplicate file(s), freed $FreedMB MB." -ForegroundColor Green
 	}
+
 	If ($Recurse) {
-		# Get all directories recursively and run Remove-DuplicateFiles for each directory
-		Get-ChildItem -Directory -Recurse | ForEach-Object { Remove-DuplicateFilesInt -Path $_.FullName }
-	}
- Else {
-		Remove-DuplicateFilesInt
+		$Directories = @($Path) + @((Get-ChildItem -Path $Path -Directory -Recurse -Force -ErrorAction SilentlyContinue).FullName)
+		ForEach ($Dir in $Directories) {
+			Remove-DuplicateFilesInFolder -FolderPath $Dir -Cmdlet $PSCmdlet
+		}
+	} Else {
+		Remove-DuplicateFilesInFolder -FolderPath $Path -Cmdlet $PSCmdlet
 	}
 }
 
@@ -74,9 +183,11 @@ Function Remove-ITS247InstallFolder {
 
 Function Remove-PathForcefully {
 	param(
-		[parameter(Mandatory = $true)]
+		[parameter(Mandatory = $true, ValueFromPipeline = $true, ValueFromPipelineByPropertyName = $true)]
+		[Alias("FullName", "PSPath")]
 		[string] $Path
 	)
+	process {
 	<# the code below has been used from
 		- https://blogs.technet.com/b/heyscriptingguy/archive/2013/10/19/weekend-scripter-use-powershell-and-pinvoke-to-remove-stubborn-files.aspx
 	with inspiration from
@@ -110,10 +221,10 @@ Function Remove-PathForcefully {
 			[parameter(Mandatory = $true)]
 			[string] $SubPath
 		)
-		$SubPath = (Resolve-Path $SubPath -ErrorAction SilentlyContinue).Path
+		$SubPath = (Resolve-Path -LiteralPath $SubPath -ErrorAction SilentlyContinue).ProviderPath
 		If ($SubPath) {
 			try {
-				Remove-Item $SubPath -Force -Recurse -ErrorAction Stop
+				Remove-Item -LiteralPath $SubPath -Force -Recurse -ErrorAction Stop
 				Write-Host -ForegroundColor Green -BackgroundColor Black "Deletion of $SubPath succeeded."
 			}
 			catch {
@@ -127,20 +238,31 @@ Function Remove-PathForcefully {
 			}
 		}
 	}
-	If (Test-Path -Path $Path -Verbose) {
-		$SubFiles = Get-ChildItem -Path $Path -Recurse -Force -File
-		$SubFolders = Get-ChildItem -Path $Path -Recurse -Force -Directory
-		If ($SubFiles -or $SubFolders) {
-			$SubFiles | ForEach-Object { Remove-SubPath -SubPath $_.FullName }
-			$SubFolders | ForEach-Object { Remove-SubPath -SubPath $_.FullName }
-			Remove-SubPath -SubPath $Path
+	If (Test-Path -LiteralPath $Path -Verbose) {
+		# Fast path: try to delete everything in one shot
+		try {
+			Remove-Item -LiteralPath $Path -Force -Recurse -ErrorAction Stop
+			Write-Host -ForegroundColor Green -BackgroundColor Black "Deletion of $Path succeeded."
 		}
-		Else {
-			Remove-SubPath -SubPath $Path
+		catch {
+			# Slow path: bulk delete failed (locked or protected files). Clean up what we can individually.
+			Write-Host "Bulk delete of $Path failed: $($_.Exception.Message). Cleaning up individually..."
+			$SubFiles = Get-ChildItem -LiteralPath $Path -Recurse -Force -File -ErrorAction SilentlyContinue
+			$SubFolders = Get-ChildItem -LiteralPath $Path -Recurse -Force -Directory -ErrorAction SilentlyContinue
+			If ($SubFiles -or $SubFolders) {
+				$SubFiles | ForEach-Object { Remove-SubPath -SubPath $_.FullName }
+				# Sort folders deepest-first so children are removed before parents
+				$SubFolders | Sort-Object { $_.FullName.Length } -Descending | ForEach-Object { Remove-SubPath -SubPath $_.FullName }
+				Remove-SubPath -SubPath $Path
+			}
+			Else {
+				Remove-SubPath -SubPath $Path
+			}
 		}
 	}
  Else {
 		Write-Warning "$Path was not found."
+	}
 	}
 	<#
 	.SYNOPSIS
@@ -166,12 +288,12 @@ Function Remove-StaleObjects {
 	#$DaysOld = 30
 	$thresholdDate = (Get-Date).AddDays(-$DaysOld)
 	
-	If (! $(Test-Path $targetDirectory -ErrorAction SilentlyContinue)) {
+	If (! $(Test-Path -LiteralPath $targetDirectory -ErrorAction SilentlyContinue)) {
 		Write-Warning "$targetDirectory does not exist."
 		Break
 	}
 	# Recursively get all files and folders in the target directory
-	$itemsToDelete = Get-ChildItem -Path $targetDirectory -Recurse | Where-Object {
+	$itemsToDelete = Get-ChildItem -LiteralPath $targetDirectory -Recurse -ErrorAction SilentlyContinue | Where-Object {
 		$_.LastWriteTime -lt $thresholdDate
 	}
 	#$itemsToDelete.FullName
@@ -180,7 +302,6 @@ Function Remove-StaleObjects {
 		if ($item.PSIsContainer) {
 			# If it's a folder, remove it recursively
 			Remove-Item -Path $item.FullName -Recurse -Force -ErrorAction SilentlyContinue
-			Write-Host $VerbosePreference
 			If ( $PSBoundParameters['Verbose'] -or $VerbosePreference -eq 'Continue' ) { Write-Verbose "Deleted folder: $($item.FullName)" }
 		}
 		else {
@@ -191,33 +312,33 @@ Function Remove-StaleObjects {
 	}
 
 	# Get all empty folders recursively
-	$emptyFolders = Get-ChildItem -Path $targetDirectory -Recurse | Where-Object {
-		$_.PSIsContainer -and @(Get-ChildItem -Path $_.FullName -Force).Count -eq 0
+	$emptyFolders = Get-ChildItem -LiteralPath $targetDirectory -Recurse -ErrorAction SilentlyContinue | Where-Object {
+		$_.PSIsContainer -and @(Get-ChildItem -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue).Count -eq 0
 	}
 
 	foreach ($folder in $emptyFolders) {
 		Remove-Item -Path $folder.FullName -Force -ErrorAction SilentlyContinue
 		If ( $PSBoundParameters['Verbose'] -or $VerbosePreference -eq 'Continue' ) { Write-Host "Deleted empty folder: $($folder.FullName)" }
 	}
-	$itemsUnableToDelete = Get-ChildItem -Path $targetDirectory -Recurse | Where-Object {
+	$itemsUnableToDelete = Get-ChildItem -LiteralPath $targetDirectory -Recurse -ErrorAction SilentlyContinue | Where-Object {
 		$_.LastWriteTime -lt $thresholdDate
 	}
 
 	#Try again for stubborn items.
 	ForEach ($StubbornItem in $itemsUnableToDelete) {
-		Remove-PathForcefully -Path $StubbornItem.PSPath -Verbose
+		Remove-PathForcefully -Path $StubbornItem.FullName -Verbose
 	}
 
 	# Get all empty folders recursively
-	$emptyFolders = Get-ChildItem -Path $targetDirectory -Recurse | Where-Object {
-		$_.PSIsContainer -and @(Get-ChildItem -Path $_.FullName -Force).Count -eq 0
+	$emptyFolders = Get-ChildItem -LiteralPath $targetDirectory -Recurse -ErrorAction SilentlyContinue | Where-Object {
+		$_.PSIsContainer -and @(Get-ChildItem -LiteralPath $_.FullName -Force -ErrorAction SilentlyContinue).Count -eq 0
 	}
 
 	foreach ($folder in $emptyFolders) {
 		Remove-PathForcefully -Path $folder.FullName -Verbose
 		If ( $PSBoundParameters['Verbose'] -or $VerbosePreference -eq 'Continue' ) { Write-Host "Deleted empty folder: $($folder.FullName)" }
 	}
-	$itemsUnableToDelete = Get-ChildItem -Path $targetDirectory -Recurse | Where-Object {
+	$itemsUnableToDelete = Get-ChildItem -LiteralPath $targetDirectory -Recurse -ErrorAction SilentlyContinue | Where-Object {
 		$_.LastWriteTime -lt $thresholdDate
 	}
 	

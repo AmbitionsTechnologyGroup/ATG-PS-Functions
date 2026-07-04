@@ -384,21 +384,80 @@ Function Invoke-IPv4NetworkScan {
 			$PropertiesToDisplay += "MAC"
 		}
 
-		# Check if it is possible to assign vendor to MAC --> import CSV-File 
+		# Check if it is possible to assign vendor to MAC --> import CSV-File
 		if ($EnableMACResolving) {
-			$LatestOUIs = (Invoke-WebRequest -Uri "https://standards-oui.ieee.org/oui/oui.txt" -UseBasicParsing).Content
-			$Output = ""
-
-			foreach($Line in $LatestOUIs -split '[\r\n]')
-			{
-				if($Line -match "^[A-F0-9]{6}")
-				{        
-					# Line looks like: 2405F5     (base 16)		Integrated Device Technology (Malaysia) Sdn. Bhd.
-					$Output += ($Line -replace '\s+', ' ').Replace(' (base 16) ', '|').Trim() + "`n"
-				}
+			$OUI_Sources = @(
+				@{ Uri = "https://standards-oui.ieee.org/oui/oui.txt"; Name = "IEEE" },
+				@{ Uri = "https://www.wireshark.org/download/automated/data/manuf"; Name = "Wireshark" },
+				@{ Uri = "https://maclookup.app/downloads/json-database/get-db"; Name = "maclookup.app" }
+			)
+			$OUILines = $null
+			$PreviousSecurityProtocol = [Net.ServicePointManager]::SecurityProtocol
+			try {
+				[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls13
+			}
+			catch {
+				[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 			}
 
-			Out-File -InputObject $Output -FilePath "C:\Ambitions\oui.txt"
+			foreach ($Source in $OUI_Sources) {
+				for ($RetryCount = 1; $RetryCount -le 2; $RetryCount++) {
+					try {
+						$RawData = Invoke-RestMethod -Uri $Source.Uri -ErrorAction Stop
+						$OUILines = [System.Collections.Generic.List[string]]::new()
+
+						switch ($Source.Name) {
+							"IEEE" {
+								# Lines: "2405F5     (base 16)		Vendor Name"
+								foreach ($Line in $RawData -split '[\r\n]') {
+									if ($Line -match "^[A-F0-9]{6}") {
+										$OUILines.Add(($Line -replace '\s+', ' ').Replace(' (base 16) ', '|').Trim())
+									}
+								}
+							}
+							"Wireshark" {
+								# Lines: "00:00:0C\tShortName\tFull Vendor Name"
+								foreach ($Line in $RawData -split '[\r\n]') {
+									if ($Line -match "^[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}\t") {
+										$Parts = $Line -split "`t"
+										$MAC = $Parts[0].Replace(":", "").ToUpper()
+										$Vendor = if ($Parts.Count -ge 3 -and $Parts[2]) { $Parts[2] } else { $Parts[1] }
+										$OUILines.Add("$MAC|$Vendor")
+									}
+								}
+							}
+							"maclookup.app" {
+								# JSON array of objects with macPrefix and vendorName
+								foreach ($Entry in $RawData) {
+									if ($Entry.macPrefix -and $Entry.vendorName) {
+										$MAC = $Entry.macPrefix.Replace(":", "").ToUpper()
+										$OUILines.Add("$MAC|$($Entry.vendorName)")
+									}
+								}
+							}
+						}
+
+						if ($OUILines.Count -gt 0) { break }
+					}
+					catch {
+						if ($RetryCount -lt 2) {
+							Write-Warning "OUI download from $($Source.Name) failed: $($_.Exception.Message). Retrying..."
+							Start-Sleep -Seconds 2
+						}
+					}
+				}
+				if ($OUILines -and $OUILines.Count -gt 0) {
+					Write-Verbose -Message "Downloaded OUI data from $($Source.Name) ($($OUILines.Count) entries)"
+					break
+				}
+				Write-Warning "Failed to download OUI data from $($Source.Name), trying next source..."
+			}
+
+			[Net.ServicePointManager]::SecurityProtocol = $PreviousSecurityProtocol
+
+			if ($OUILines -and $OUILines.Count -gt 0) {
+				Out-File -InputObject ($OUILines -join "`n") -FilePath "C:\Ambitions\oui.txt"
+			}
 			if (Test-Path -Path $OUIListPath -PathType Leaf) {
 				$OUIHashTable = @{ }
 
@@ -443,7 +502,7 @@ Function Invoke-IPv4NetworkScan {
 			# +++ Send ICMP requests +++
 			$Status = [String]::Empty
 
-			for ($i = 0; $i -lt $Tries; i++) {
+			for ($i = 0; $i -lt $Tries; $i++) {
 				try {
 					$PingObj = New-Object System.Net.NetworkInformation.Ping
 					
@@ -628,10 +687,10 @@ Function Invoke-IPv4NetworkScan {
 							Status       = $Job_Result.Status
 							Hostname     = $Job_Result.Hostname
 							MAC          = $Job_Result.MAC
-							Vendor       = $Vendor  
+							Vendor       = $Vendor
 							BufferSize   = $Job_Result.BufferSize
 							ResponseTime = $Job_Result.ResponseTime
-							TTL          = $ResuJob_Resultlt.TTL
+							TTL          = $Job_Result.TTL
 						} | Select-Object -Property $PropertiesToDisplay
 					}
 					else {
@@ -812,6 +871,31 @@ Write-Host "Running NDDC"
 	Write-Host "Cleaning up"
 		Remove-Item -Recurse -Force $outputfolder
 	}
+}
+
+Function Invoke-WinGetInstall {
+	<#
+	.SYNOPSIS
+		Run winget install or upgrade with standard hardened arg set.
+	.DESCRIPTION
+		Wraps winget install/upgrade with the refined arg set used across this
+		repo: --exact, --silent, --source winget, --accept-package-agreements,
+		--accept-source-agreements, --disable-interactivity.
+	.PARAMETER Id
+		Winget package ID (e.g., 'Microsoft.Edge').
+	.PARAMETER Command
+		Either 'install' or 'upgrade'. Default: install.
+	.EXAMPLE
+		Invoke-WinGetInstall -Id Microsoft.Edge
+	.EXAMPLE
+		Invoke-WinGetInstall -Id Dell.CommandUpdate -Command upgrade
+	#>
+	[CmdletBinding()]
+	Param(
+		[Parameter(Mandatory = $true)][string]$Id,
+		[ValidateSet('install', 'upgrade')][string]$Command = 'install'
+	)
+	& winget $Command --id $Id -e -h --accept-package-agreements --accept-source-agreements --source winget --disable-interactivity
 }
 
 # SIG # Begin signature block
