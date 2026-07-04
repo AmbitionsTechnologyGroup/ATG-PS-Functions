@@ -149,13 +149,33 @@ Function Enable-O365AuditLog {
 	Function Enable-SSL {
 		Write-Host "Enabling SSL"
 		try {
-		# Set TLS 1.2 (3072), then TLS 1.1 (768), then TLS 1.0 (192)
-		# Use integers because the enumeration values for TLS 1.2 and TLS 1.1 won't
-		# exist in .NET 4.0, even though they are addressable if .NET 4.5+ is
-		# installed (.NET 4.5 is an in-place upgrade).
-		[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192
+			# Set TLS 1.2 (3072) via integer literal, dropping deprecated TLS 1.1 (768) and TLS 1.0 (192)
+			# Use integers because the enumeration values for TLS 1.2 won't exist in .NET 4.0,
+			# even though they are addressable if .NET 4.5+ is installed (.NET 4.5 is an in-place upgrade).
+			[System.Net.ServicePointManager]::SecurityProtocol = 3072
 		} catch {
-		Write-Output 'Unable to set PowerShell to use TLS 1.2 and TLS 1.1 due to old .NET Framework installed. If you see underlying connection closed or trust errors, you may need to upgrade to .NET Framework 4.5+ and PowerShell v3+.'
+			Write-Output 'Unable to set PowerShell to use TLS 1.2 due to old .NET Framework installed. If you see underlying connection closed or trust errors, you may need to upgrade to .NET Framework 4.5+ and PowerShell v3+.'
+		}
+
+		# Attempt to add TLS 1.3 (12288) in a separate try/catch
+		try {
+			[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 12288
+		} catch {
+			# Silently continue if TLS 1.3 is not available (older .NET Framework)
+		}
+
+		# Persist SchUseStrongCrypto = 1 (DWORD) to the registry for .NET Framework
+		try {
+			Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\.NETFramework\v4.0.30319' -Name 'SchUseStrongCrypto' -Value 1 -Type DWord -ErrorAction SilentlyContinue
+			Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\.NETFramework\v2.0.50727' -Name 'SchUseStrongCrypto' -Value 1 -Type DWord -ErrorAction SilentlyContinue
+
+			# For 64-bit systems, also set the Wow6432Node keys
+			if ([Environment]::Is64BitOperatingSystem) {
+				Set-ItemProperty -Path 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\.NETFramework\v4.0.30319' -Name 'SchUseStrongCrypto' -Value 1 -Type DWord -ErrorAction SilentlyContinue
+				Set-ItemProperty -Path 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\.NETFramework\v2.0.50727' -Name 'SchUseStrongCrypto' -Value 1 -Type DWord -ErrorAction SilentlyContinue
+			}
+		} catch {
+			Write-Output 'Unable to persist TLS settings to registry. Non-admin sessions may not have permission.'
 		}
 	}
 
