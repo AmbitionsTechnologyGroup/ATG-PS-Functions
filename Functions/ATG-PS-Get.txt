@@ -2080,6 +2080,1143 @@ Function Get-VSSWriter {
 	END { } #END
 }
 
+Function Find-CrocExe {
+	<#
+	.SYNOPSIS
+		Searches PATH and known WinGet install locations for croc.exe.
+	.DESCRIPTION
+		Refreshes the PATH environment variable, then checks for croc via
+		Get-Command and known WinGet package installation directories.
+		Returns the full path to croc.exe if found, or $null.
+	.EXAMPLE
+		Find-CrocExe
+		Returns "C:\Users\user\AppData\Local\...\croc.exe" or $null
+	#>
+	[CmdletBinding()]
+	param()
+
+	$env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+	$cmd = Get-Command croc -ErrorAction SilentlyContinue
+	if ($cmd) { return $cmd.Source }
+
+	$knownPaths = @(
+		"$env:LOCALAPPDATA\Microsoft\WinGet\Packages\schollz.croc_Microsoft.Winget.Source_8wekyb3d8bbwe\croc.exe",
+		"C:\Windows\System32\config\systemprofile\AppData\Local\Microsoft\WinGet\Packages\schollz.croc_Microsoft.Winget.Source_8wekyb3d8bbwe\croc.exe"
+	)
+	foreach ($p in $knownPaths) { if (Test-Path $p) { return $p } }
+
+	# Targeted search: only look inside schollz.croc_* directories, not a full recursive scan
+	foreach ($root in @("$env:LOCALAPPDATA\Microsoft\WinGet\Packages", "C:\Windows\System32\config\systemprofile\AppData\Local\Microsoft\WinGet\Packages")) {
+		if (Test-Path $root) {
+			$match = Get-ChildItem -Path $root -Filter 'schollz.croc_*' -Directory -ErrorAction SilentlyContinue |
+					 ForEach-Object { Join-Path $_.FullName 'croc.exe' } |
+					 Where-Object { Test-Path $_ } |
+					 Select-Object -First 1
+			if ($match) { return $match }
+		}
+	}
+	return $null
+}
+function Get-ADLockedAccount {
+	<#
+	.SYNOPSIS
+		Finds locked-out Active Directory accounts and displays details about lock state, bad password attempts, and timing.
+	.DESCRIPTION
+		Queries Active Directory for locked-out user accounts and returns details including when the account
+		was locked, how many bad password attempts occurred, the last bad password time, and user metadata
+		(department, title, email). Optionally unlocks matched accounts and verifies the unlock succeeded.
+
+		By default queries the PDC Emulator for the most accurate and up-to-date lockout information.
+		Supports filtering by SamAccountName, email address, or display name with wildcard support.
+	.PARAMETER Identity
+		Filter by SamAccountName. Supports wildcards (e.g. "john*", "*smith*"). Defaults to "*" (all locked accounts).
+	.PARAMETER EmailAddress
+		Filter by email address. Supports wildcards (e.g. "*@contoso.com").
+	.PARAMETER DisplayName
+		Filter by display name. Supports wildcards (e.g. "John*").
+	.PARAMETER Unlock
+		Unlock each matched account, then re-query to verify the account is no longer locked.
+		Supports -WhatIf and -Confirm for safe bulk operations.
+	.PARAMETER IncludeDisabled
+		Include disabled accounts in results. By default only enabled accounts are returned.
+	.PARAMETER Server
+		Target a specific domain controller. Defaults to the PDC Emulator for accurate lockout data.
+	.EXAMPLE
+		Get-ADLockedAccount
+		Returns all currently locked-out enabled accounts.
+	.EXAMPLE
+		Get-ADLockedAccount -Identity "jdoe"
+		Returns lockout details for the account with SamAccountName "jdoe".
+	.EXAMPLE
+		Get-ADLockedAccount -Identity "john*"
+		Returns all locked accounts whose username starts with "john".
+	.EXAMPLE
+		Get-ADLockedAccount -EmailAddress "*@contoso.com"
+		Returns all locked accounts with a contoso.com email address.
+	.EXAMPLE
+		Get-ADLockedAccount -DisplayName "John*" -Unlock
+		Finds all locked accounts with a display name starting with "John" and unlocks them, then verifies.
+	.EXAMPLE
+		Get-ADLockedAccount -Identity "jdoe" -Unlock -WhatIf
+		Shows what would happen without actually unlocking the account.
+	.EXAMPLE
+		Get-ADLockedAccount -IncludeDisabled
+		Returns all locked accounts including disabled ones.
+	.OUTPUTS
+		PSCustomObject with properties:
+		- SamAccountName: Login name
+		- DisplayName: Full display name
+		- EmailAddress: Email address
+		- Department: Department
+		- Title: Job title
+		- Enabled: Whether the account is enabled
+		- LockedOut: Current lock state
+		- LockoutTime: When the account was locked (null if not locked or no data)
+		- BadLogonCount: Number of consecutive bad password attempts
+		- LastBadPasswordAttempt: Timestamp of the most recent bad password attempt
+		- PasswordLastSet: When the password was last changed
+	.NOTES
+		Requires the ActiveDirectory PowerShell module (RSAT or on a domain controller).
+		The -Unlock operation requires sufficient AD permissions (Account Operators or higher).
+	#>
+	[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+	param(
+		[Parameter(HelpMessage = "SamAccountName to search for. Supports wildcards.")]
+		[string]$Identity = '*',
+
+		[Parameter(HelpMessage = "Email address to filter by. Supports wildcards.")]
+		[string]$EmailAddress,
+
+		[Parameter(HelpMessage = "Display name to filter by. Supports wildcards.")]
+		[string]$DisplayName,
+
+		[Parameter(HelpMessage = "Unlock matched accounts and verify the unlock succeeded.")]
+		[switch]$Unlock,
+
+		[Parameter(HelpMessage = "Include disabled accounts (default: enabled accounts only).")]
+		[switch]$IncludeDisabled,
+
+		[Parameter(HelpMessage = "Target domain controller. Defaults to PDC Emulator.")]
+		[string]$Server
+	)
+
+	# Verify Active Directory module is available
+	if (-not (Get-Command ActiveDirectory\Get-ADUser -ErrorAction SilentlyContinue)) {
+		Write-Error "This function requires the ActiveDirectory PowerShell module. Please run on a domain controller or install RSAT."
+		return
+	}
+
+	# Default to PDC Emulator for most accurate lockout information
+	$dc = if ($Server) {
+		$Server
+	} else {
+		try {
+			(Get-ADDomain -ErrorAction Stop).PDCEmulator
+		} catch {
+			Write-Warning "Could not determine PDC Emulator: $_. Querying default DC."
+			$null
+		}
+	}
+
+	$searchParams = @{ LockedOut = $true; UsersOnly = $true }
+	if ($dc) { $searchParams['Server'] = $dc }
+
+	$propList = @(
+		'DisplayName', 'GivenName', 'Surname', 'EmailAddress',
+		'Department', 'Title', 'Enabled', 'LockedOut',
+		'lockoutTime', 'BadLogonCount', 'LastBadPasswordAttempt',
+		'PasswordLastSet'
+	)
+
+	Write-Verbose "Querying $(if ($dc) { $dc } else { 'default DC' }) for locked accounts..."
+
+	try {
+		$lockedUsers = Search-ADAccount @searchParams | ForEach-Object {
+			$getParams = @{ Identity = $_.DistinguishedName; Properties = $propList }
+			if ($dc) { $getParams['Server'] = $dc }
+			Get-ADUser @getParams
+		}
+	} catch {
+		Write-Error "Failed to query Active Directory: $_"
+		return
+	}
+
+	# Apply client-side filters for wildcard support across all three search fields
+	$filtered = $lockedUsers | Where-Object {
+		$matchIdentity    = $_.SamAccountName -like $Identity
+		$matchEmail       = -not $EmailAddress  -or ($_.EmailAddress -like $EmailAddress)
+		$matchDisplayName = -not $DisplayName   -or ($_.DisplayName  -like $DisplayName)
+		$matchEnabled     = $IncludeDisabled    -or $_.Enabled
+
+		$matchIdentity -and $matchEmail -and $matchDisplayName -and $matchEnabled
+	}
+
+	if (-not $filtered) {
+		Write-Warning "No locked accounts found matching the specified criteria."
+		return
+	}
+
+	# Build output objects
+	$results = $filtered | ForEach-Object {
+		$lockoutTime = if ($_.lockoutTime -and $_.lockoutTime -ne 0) {
+			[datetime]::FromFileTime($_.lockoutTime)
+		} else {
+			$null
+		}
+
+		[PSCustomObject]@{
+			SamAccountName         = $_.SamAccountName
+			DisplayName            = $_.DisplayName
+			EmailAddress           = $_.EmailAddress
+			Department             = $_.Department
+			Title                  = $_.Title
+			Enabled                = $_.Enabled
+			LockedOut              = $_.LockedOut
+			LockoutTime            = $lockoutTime
+			BadLogonCount          = $_.BadLogonCount
+			LastBadPasswordAttempt = $_.LastBadPasswordAttempt
+			PasswordLastSet        = $_.PasswordLastSet
+		}
+	}
+
+	if (-not $Unlock) {
+		$results
+		return
+	}
+
+	# Unlock flow - emit post-unlock state so pipeline reflects actual lock state after operation
+	foreach ($user in $results) {
+		$sam = $user.SamAccountName
+
+		if ($PSCmdlet.ShouldProcess($sam, "Unlock AD account")) {
+			try {
+				$unlockParams = @{ Identity = $sam }
+				if ($dc) { $unlockParams['Server'] = $dc }
+				Write-Host "Attempting to unlock: $sam..." -ForegroundColor Cyan
+				Unlock-ADAccount @unlockParams -ErrorAction Stop
+
+				# Re-query to get post-unlock state and emit updated object
+				$verifyParams = @{ Identity = $sam; Properties = @('LockedOut', 'lockoutTime') }
+				if ($dc) { $verifyParams['Server'] = $dc }
+				$verify = Get-ADUser @verifyParams -ErrorAction Stop
+
+				$user.LockedOut = $verify.LockedOut
+				$user.LockoutTime = if ($verify.lockoutTime -and $verify.lockoutTime -ne 0) {
+					[datetime]::FromFileTime($verify.lockoutTime)
+				} else { $null }
+
+				if (-not $verify.LockedOut) {
+					Write-Host "Unlocked: $sam" -ForegroundColor Green
+				} else {
+					Write-Host "Failed to unlock: $sam (still locked after attempt)" -ForegroundColor Red
+				}
+			} catch {
+				Write-Error "Failed to unlock ${sam}: $_"
+			}
+		}
+		# Emit object (pre-unlock on WhatIf/error, post-unlock on success)
+		$user
+	}
+}
+function Get-ADUsersPasswordExpiring {
+	<#
+	.SYNOPSIS
+		Retrieves Active Directory users whose passwords will expire within a specified number of days.
+	.DESCRIPTION
+		This function queries Active Directory for enabled user accounts that have password expiration
+		enabled and whose passwords will expire within the specified threshold. It returns details
+		including the user's name, when their password was last set, when it expires, and how many
+		days remain until expiration.
+
+		When the Specops.SpecopsPasswordPolicy module is available, the function uses the SpecOps
+		password policy MaximumPasswordAge setting for accurate expiration calculation. Otherwise,
+		it falls back to the standard msDS-UserPasswordExpiryTimeComputed attribute which calculates
+		expiration based on the default domain password policy.
+	.PARAMETER DaysUntilExpiration
+		The number of days to look ahead for expiring passwords. Users whose passwords expire
+		within this many days from today will be included in the results. Defaults to 60 days.
+	.EXAMPLE
+		Get-ADUsersPasswordExpiring
+		Returns all users whose passwords expire within the next 60 days.
+	.EXAMPLE
+		Get-ADUsersPasswordExpiring -DaysUntilExpiration 14
+		Returns all users whose passwords expire within the next 14 days.
+	.EXAMPLE
+		Get-ADUsersPasswordExpiring -DaysUntilExpiration 7 | Export-Csv -Path ".\ExpiringSoon.csv" -NoTypeInformation
+		Exports users with passwords expiring in the next week to a CSV file.
+	.OUTPUTS
+		PSCustomObject with properties:
+		- SamAccountName: The user's login name
+		- Name: The user's display name
+		- PasswordLastSet: When the password was last changed
+		- ExpiresOn: The date/time the password will expire
+		- DaysRemaining: Number of days until expiration
+	.NOTES
+		Requires the ActiveDirectory PowerShell module.
+		Must be run with permissions to query AD user objects.
+		Supports SpecOps Password Policy when the Specops.SpecopsPasswordPolicy module is installed.
+	#>
+	[CmdletBinding()]
+	param(
+		[Parameter(HelpMessage = "Number of days to look ahead for expiring passwords")]
+		[ValidateRange(1, 365)]
+		[int]$DaysUntilExpiration = 60
+	)
+
+	# Verify Active Directory module is available
+	if (-not (Get-Command ActiveDirectory\Get-ADUser -ErrorAction SilentlyContinue)) {
+		Write-Error "This function requires the ActiveDirectory PowerShell module. Please run on a domain controller or install RSAT."
+		return
+	}
+
+	$today = Get-Date
+	$threshold = $today.AddDays($DaysUntilExpiration)
+
+	# Check if SpecOps Password Policy module is available
+	$useSpecOps = $false
+	$specopsMaxAge = $null
+	if (Get-Module -ListAvailable -Name "Specops.SpecopsPasswordPolicy" -ErrorAction SilentlyContinue) {
+		try {
+			Import-Module Specops.SpecopsPasswordPolicy -ErrorAction Stop
+			$specopsPolicy = Get-PasswordPolicy -ErrorAction Stop
+			if ($specopsPolicy -and $specopsPolicy.Policy -and $specopsPolicy.Policy.MaximumPasswordAge) {
+				$specopsMaxAge = $specopsPolicy.Policy.MaximumPasswordAge
+				$useSpecOps = $true
+				Write-Verbose "Using SpecOps Password Policy. MaximumPasswordAge: $specopsMaxAge days"
+			}
+		} catch {
+			Write-Verbose "SpecOps module found but failed to get policy: $_. Falling back to standard AD method."
+		}
+	}
+
+	if ($useSpecOps) {
+		# Use SpecOps password policy for expiration calculation
+		Get-ADUser -Filter {Enabled -eq $true -and PasswordNeverExpires -eq $false} -Properties PasswordLastSet |
+		Where-Object { $_.PasswordLastSet } |
+		ForEach-Object {
+			$expiryDate = $_.PasswordLastSet.AddDays($specopsMaxAge)
+			if ($expiryDate -gt $today -and $expiryDate -le $threshold) {
+				[PSCustomObject]@{
+					SamAccountName  = $_.SamAccountName
+					Name            = $_.Name
+					PasswordLastSet = $_.PasswordLastSet
+					ExpiresOn       = $expiryDate
+					DaysRemaining   = ($expiryDate - $today).Days
+				}
+			}
+		} | Sort-Object DaysRemaining
+	} else {
+		# Standard AD method using msDS-UserPasswordExpiryTimeComputed
+		Write-Verbose "Using standard AD password expiration (msDS-UserPasswordExpiryTimeComputed)"
+		Get-ADUser -Filter {Enabled -eq $true -and PasswordNeverExpires -eq $false} `
+			-Properties PasswordLastSet, PasswordNeverExpires, msDS-UserPasswordExpiryTimeComputed |
+		Where-Object { $_.'msDS-UserPasswordExpiryTimeComputed' } |
+		ForEach-Object {
+			$expiryDate = [DateTime]::FromFileTime($_.'msDS-UserPasswordExpiryTimeComputed')
+			if ($expiryDate -gt $today -and $expiryDate -le $threshold) {
+				[PSCustomObject]@{
+					SamAccountName  = $_.SamAccountName
+					Name            = $_.Name
+					PasswordLastSet = $_.PasswordLastSet
+					ExpiresOn       = $expiryDate
+					DaysRemaining   = ($expiryDate - $today).Days
+				}
+			}
+		} | Sort-Object DaysRemaining
+	}
+}
+function Get-ClaudeCodeStatus {
+	<#
+	.SYNOPSIS
+		Gets the installation and authentication status of Claude Code.
+	.DESCRIPTION
+		Returns an object with installation status, version, paths, and auth status.
+		Useful for checking before running Start-ClaudeCode or Update-ClaudeCode.
+	.PARAMETER Quiet
+		Returns just $true/$false for installed status (for scripting).
+	.EXAMPLE
+		Get-ClaudeCodeStatus
+	.EXAMPLE
+		if (Get-ClaudeCodeStatus -Quiet) { Start-ClaudeCode }
+	#>
+	[CmdletBinding()]
+	param(
+		[switch]$Quiet
+	)
+
+	# Paths
+	$ClaudeFolder = "C:\Ambitions\ClaudeCode"
+	$ClaudeExe = "$ClaudeFolder\claude.exe"
+	$ClaudeConfig = "$env:USERPROFILE\.claude"
+	$ClaudeJson = "$env:USERPROFILE\.claude.json"
+
+	$Installed = Test-Path $ClaudeExe
+	$HasCredentials = (Test-Path $ClaudeConfig) -or (Test-Path $ClaudeJson)
+
+	if ($Quiet) {
+		return $Installed
+	}
+
+	# Get version if installed
+	$Version = $null
+	$LatestVersion = $null
+	$UpdateAvailable = $false
+
+	if ($Installed) {
+		# Ensure in PATH for this session
+		if ($env:Path -notlike "*$ClaudeFolder*") { $env:Path = "$env:Path;$ClaudeFolder" }
+
+		try {
+			$Version = (& $ClaudeExe --version 2>$null).Trim()
+		} catch { }
+
+		# Check latest version from npm
+		try {
+			[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+			$npmInfo = Invoke-RestMethod -Uri "https://registry.npmjs.org/@anthropic-ai/claude-code/latest" -UseBasicParsing -ErrorAction SilentlyContinue
+			if ($npmInfo.version) {
+				$LatestVersion = $npmInfo.version
+				if ($Version -and $LatestVersion -and $Version -ne $LatestVersion) {
+					$UpdateAvailable = $true
+				}
+			}
+		} catch { }
+	}
+
+	# Build status object
+	$Status = [PSCustomObject]@{
+		Installed       = $Installed
+		Path            = if ($Installed) { $ClaudeExe } else { $null }
+		Version         = $Version
+		LatestVersion   = $LatestVersion
+		UpdateAvailable = $UpdateAvailable
+		HasCredentials  = $HasCredentials
+		ConfigPath      = $ClaudeConfig
+	}
+
+	# Display if not quiet
+	Write-Host "`n=== Claude Code Status ===" -ForegroundColor Cyan
+
+	if ($Installed) {
+		Write-Host " [OK] Installed: $ClaudeExe" -ForegroundColor Green
+		if ($Version) { Write-Host "      Version: $Version" -ForegroundColor Gray }
+		if ($LatestVersion) { Write-Host "      Latest:  $LatestVersion" -ForegroundColor Gray }
+		if ($UpdateAvailable) { Write-Host "      Update available! Run Update-ClaudeCode" -ForegroundColor Yellow }
+	} else {
+		Write-Host " [X] Not installed" -ForegroundColor Red
+		Write-Host "     Run Install-ClaudeCode (as admin) to install." -ForegroundColor Yellow
+	}
+
+	if ($HasCredentials) {
+		Write-Host " [OK] Credentials found for current user" -ForegroundColor Green
+	} else {
+		Write-Host " [-] No credentials (not logged in)" -ForegroundColor Yellow
+	}
+
+	Write-Host ""
+	return $Status
+}
+Function Get-CrocPath {
+	<#
+	.SYNOPSIS
+		Returns the path to the croc executable, installing it if needed.
+	.DESCRIPTION
+		Searches for croc.exe using Find-CrocExe. If not found, calls
+		Install-Croc to install it automatically. Throws if the executable
+		cannot be found or installed.
+	.EXAMPLE
+		Get-CrocPath
+		Returns "C:\Users\user\AppData\Local\...\croc.exe"
+	#>
+	[CmdletBinding()]
+	param()
+
+	$path = Find-CrocExe
+	if ($path) { return $path }
+
+	$path = Install-Croc
+	if (-not $path -or -not (Test-Path $path)) {
+		throw "croc installation completed but executable not found. Try running Install-Croc manually."
+	}
+	return $path
+}
+function Get-DatacenterLocation {
+	<#
+	.SYNOPSIS
+	Detects which datacenter a computer is in based on ping response times.
+	
+	.DESCRIPTION
+	Pings gateway IPs in Albuquerque and Phoenix datacenters and determines location
+	based on which has lower latency.
+	
+	.PARAMETER AlbuquerqueIP
+	IP address of Albuquerque datacenter gateway. Default: 140.82.177.82
+	
+	.PARAMETER PhoenixIP
+	IP address of Phoenix datacenter gateway. Default: 207.38.71.50
+	
+	.PARAMETER Count
+	Number of ping attempts. Default: 2
+	
+	.EXAMPLE
+	Get-DatacenterLocation
+	Returns: Albuquerque (or Phoenix)
+	
+	.EXAMPLE
+	Get-DatacenterLocation -Count 8
+	Uses 8 pings for more accurate average
+	
+	.NOTES
+	Used for stretched VLAN environments to determine physical location.
+	#>
+	
+	[CmdletBinding()]
+	param(
+		[string]$AlbuquerqueIP = "140.82.177.82",
+		[string]$PhoenixIP = "207.38.71.50",
+		[int]$Count = 2
+	)
+	
+	Write-Verbose "Pinging Albuquerque gateway: $AlbuquerqueIP"
+	$abqPing = Test-Connection -ComputerName $AlbuquerqueIP -Count $Count -ErrorAction SilentlyContinue
+	
+	Write-Verbose "Pinging Phoenix gateway: $PhoenixIP"
+	$phxPing = Test-Connection -ComputerName $PhoenixIP -Count $Count -ErrorAction SilentlyContinue
+	
+	if (-not $abqPing -and -not $phxPing) {
+		Write-Warning "Unable to reach either datacenter gateway"
+		return "Unknown"
+	} elseif (-not $abqPing) {
+		Write-Verbose "Albuquerque gateway unreachable, defaulting to Phoenix"
+		return "Phoenix"
+	} elseif (-not $phxPing) {
+		Write-Verbose "Phoenix gateway unreachable, defaulting to Albuquerque"
+		return "Albuquerque"
+	}
+	
+	$abqAvg = ($abqPing | Measure-Object -Property ResponseTime -Average).Average
+	$phxAvg = ($phxPing | Measure-Object -Property ResponseTime -Average).Average
+	
+	Write-Verbose "Albuquerque average: $abqAvg ms"
+	Write-Verbose "Phoenix average: $phxAvg ms"
+	
+	if ($abqAvg -lt $phxAvg) {
+		return "Albuquerque"
+	} else {
+		return "Phoenix"
+	}
+}
+Function Get-DecryptedConfig {
+	<#
+	.Synopsis
+	Downloads and decrypts an encrypted configuration file from a URL
+	.Description
+	Fetches an encrypted .enc file via HTTPS and decrypts it using Unprotect-ConfigFile.
+	Returns the plaintext content as a string.
+	.Parameter Url
+	The URL of the encrypted .enc file
+	.Parameter Password
+	The password to decrypt the file
+	#>
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory = $true)]
+		[string]$Url,
+		[Parameter(Mandatory = $true)]
+		[string]$Password
+	)
+
+	$content = (Invoke-WebRequest -Uri $Url -Headers @{"Cache-Control"="no-cache"} -UseBasicParsing).Content.Trim()
+	return Unprotect-ConfigFile -EncryptedContent $content -Password $Password
+}
+Function Get-DotNetFrameworkVersion {
+	<#
+	.SYNOPSIS
+		Returns the highest installed .NET Framework 4.x version on the local machine.
+	.DESCRIPTION
+		Reads the Release DWORD from the .NET Framework Setup registry key and maps it to a friendly
+		version number using Microsoft's documented Release thresholds (greater-than-or-equal match).
+	.EXAMPLE
+		Get-DotNetFrameworkVersion
+	.OUTPUTS
+		PSCustomObject with Release (int) and Version (string) properties.
+	#>
+	[CmdletBinding()]
+	Param()
+
+	$RegPath = 'HKLM:\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full'
+	$Release = $null
+	If (Test-Path $RegPath) {
+		$Release = (Get-ItemProperty -Path $RegPath -Name Release -ErrorAction SilentlyContinue).Release
+	}
+
+	If ($null -eq $Release) {
+		Return [PSCustomObject]@{ Release = $null; Version = 'Not detected (.NET 4.x missing)' }
+	}
+
+	# Newest first so the first qualifying threshold wins. Values are Microsoft's
+	# documented minimum Release keys for each version.
+	$Map = [ordered]@{
+		533320 = '4.8.1'
+		528040 = '4.8'
+		461808 = '4.7.2'
+		461308 = '4.7.1'
+		460798 = '4.7'
+		394802 = '4.6.2'
+		394254 = '4.6.1'
+		393295 = '4.6'
+		379893 = '4.5.2'
+		378675 = '4.5.1'
+		378389 = '4.5'
+	}
+
+	$Version = "Unknown (Release $Release)"
+	ForEach ($Key in $Map.Keys) {
+		If ($Release -ge $Key) { $Version = $Map[$Key]; break }
+	}
+
+	[PSCustomObject]@{ Release = [int]$Release; Version = $Version }
+}
+Function Get-PowerShellHealth {
+	<#
+	.SYNOPSIS
+		Runs a set of health and configuration checks against the local Windows PowerShell 5.1 environment.
+	.DESCRIPTION
+		Get-PowerShellHealth inspects engine version and patch level, .NET Framework version, execution
+		policy (all scopes), language mode, TLS / strong crypto, PSModulePath integrity, PowerShellGet /
+		PackageManagement / NuGet provider state, the PSGallery repository, PSReadLine, PowerShell logging
+		policy, WinRM / remoting, profile scripts, free disk space, console encoding, session errors, and
+		pending reboot.
+
+		Each check is isolated in its own try / catch so one failure never aborts the rest of the report.
+		By default a color coded report is written to the host. Use -PassThru to emit the result objects to
+		the pipeline instead.
+	.PARAMETER PassThru
+		Returns the individual check results as objects on the pipeline instead of the console report.
+	.EXAMPLE
+		Get-PowerShellHealth
+		Runs all checks and prints a color coded report to the console.
+	.EXAMPLE
+		Get-PowerShellHealth -PassThru | Where-Object { $_.Status -eq 'WARN' -or $_.Status -eq 'FAIL' }
+		Returns only the checks that need attention.
+	.EXAMPLE
+		Get-PowerShellHealth -PassThru | Export-Csv C:\Ambitions\Logs\PSHealth.csv -NoTypeInformation
+		Captures the full result set to CSV.
+	.OUTPUTS
+		PSCustomObject (Category, Check, Status, Detail) when -PassThru is used.
+	.NOTES
+		Read only. Safe to run unelevated, though a few checks (WSMan listeners) report more detail when
+		run from an elevated session.
+		Related library functions: Enable-SSL (TLS 1.2 / strong crypto), Update-PowerShellModules,
+		Test-IsElevated, Repair-Windows.
+	#>
+	[CmdletBinding()]
+	Param(
+		[switch]$PassThru
+	)
+
+	# Snapshot the session error count up front. The probing below uses -ErrorAction
+	# SilentlyContinue and try / catch, both of which still append to $Error, so reading
+	# $Error.Count after the checks would mostly reflect this function's own activity.
+	$InitialErrorCount = $Error.Count
+
+	$Results = [System.Collections.Generic.List[object]]::new()
+
+	# Nested helper: record one result row into $Results.
+	Function Add-Result {
+		Param([string]$Category, [string]$Check, [string]$Status, [string]$Detail)
+		$Results.Add([PSCustomObject]@{
+			Category = $Category
+			Check    = $Check
+			Status   = $Status
+			Detail   = $Detail
+		})
+	}
+
+	# Elevation state (a few checks report more detail when elevated).
+	$IsElevated = $false
+	Try {
+		$IsElevated = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+	} Catch { }
+
+	#region Engine
+	Try {
+		$PSV = $PSVersionTable.PSVersion
+		$Edition = If ($PSVersionTable.PSEdition) { $PSVersionTable.PSEdition } Else { 'Desktop' }
+		If ($PSV.Major -eq 5 -and $PSV.Minor -eq 1) {
+			Add-Result 'Engine' 'PowerShell version' 'PASS' "$PSV ($Edition edition), host $($Host.Name)"
+		} ElseIf ($PSV.Major -eq 5) {
+			Add-Result 'Engine' 'PowerShell version' 'WARN' "$PSV detected. WMF 5.1 (5.1.x) is recommended on Windows."
+		} Else {
+			Add-Result 'Engine' 'PowerShell version' 'INFO' "$PSV ($Edition). This check targets Windows PowerShell 5.1."
+		}
+		Write-Verbose "Detected PowerShell $PSV ($Edition)"
+		Add-Result 'Engine' 'CLR version' 'INFO' "$($PSVersionTable.CLRVersion)"
+	} Catch {
+		Add-Result 'Engine' 'PowerShell version' 'FAIL' $_.Exception.Message
+	}
+	#endregion
+
+	#region .NET Framework
+	Try {
+		$Net = Get-DotNetFrameworkVersion
+		If ($null -eq $Net.Release) {
+			Add-Result '.NET' '.NET Framework 4.x' 'FAIL' 'No .NET Framework 4.x detected. WMF 5.1 requires at least 4.5.2.'
+		} ElseIf ($Net.Release -lt 379893) {
+			Add-Result '.NET' '.NET Framework 4.x' 'WARN' "Version $($Net.Version) (Release $($Net.Release)). Below the 4.5.2 minimum for WMF 5.1."
+		} ElseIf ($Net.Release -lt 461808) {
+			Add-Result '.NET' '.NET Framework 4.x' 'WARN' "Version $($Net.Version). Meets minimum, but 4.7.2 or newer is recommended."
+		} Else {
+			Add-Result '.NET' '.NET Framework 4.x' 'PASS' "Version $($Net.Version) (Release $($Net.Release))."
+		}
+	} Catch {
+		Add-Result '.NET' '.NET Framework 4.x' 'FAIL' $_.Exception.Message
+	}
+	#endregion
+
+	#region Execution policy
+	Try {
+		ForEach ($P in (Get-ExecutionPolicy -List)) {
+			$St = 'INFO'
+			If (($P.ExecutionPolicy -eq 'Unrestricted' -or $P.ExecutionPolicy -eq 'Bypass') -and ($P.Scope -eq 'LocalMachine' -or $P.Scope -eq 'CurrentUser')) { $St = 'WARN' }
+			Add-Result 'ExecutionPolicy' "Scope $($P.Scope)" $St "$($P.ExecutionPolicy)"
+		}
+		$Effective = Get-ExecutionPolicy
+		If ($Effective -eq 'Restricted') {
+			Add-Result 'ExecutionPolicy' 'Effective policy' 'WARN' "$Effective (scripts blocked; RemoteSigned is typical for managed endpoints)."
+		} Else {
+			Add-Result 'ExecutionPolicy' 'Effective policy' 'PASS' "$Effective"
+		}
+	} Catch {
+		Add-Result 'ExecutionPolicy' 'Execution policy' 'FAIL' $_.Exception.Message
+	}
+	#endregion
+
+	#region Language mode
+	Try {
+		$Lang = $ExecutionContext.SessionState.LanguageMode
+		If ($Lang -eq 'FullLanguage') {
+			Add-Result 'Security' 'Language mode' 'PASS' "$Lang"
+		} Else {
+			Add-Result 'Security' 'Language mode' 'WARN' "$Lang. Constrained or restricted language usually means AppLocker or WDAC is active and may block scripts."
+		}
+	} Catch {
+		Add-Result 'Security' 'Language mode' 'FAIL' $_.Exception.Message
+	}
+	#endregion
+
+	#region TLS / strong crypto
+	Try {
+		$Protocols = [Net.ServicePointManager]::SecurityProtocol
+		If ($Protocols -band [Net.SecurityProtocolType]::Tls12) {
+			Add-Result 'TLS' 'Session security protocol' 'PASS' "Includes TLS 1.2 ($Protocols)."
+		} ElseIf ([int]$Protocols -eq 0) {
+			Add-Result 'TLS' 'Session security protocol' 'INFO' 'SystemDefault. The OS selects the protocol (TLS 1.2 / 1.3 on current Windows).'
+		} Else {
+			Add-Result 'TLS' 'Session security protocol' 'WARN' "$Protocols. TLS 1.2 not enabled in this session. Run Enable-SSL or set [Net.ServicePointManager]::SecurityProtocol."
+		}
+
+		$CryptoPaths = @(
+			'HKLM:\SOFTWARE\Microsoft\.NETFramework\v4.0.30319',
+			'HKLM:\SOFTWARE\Wow6432Node\Microsoft\.NETFramework\v4.0.30319'
+		)
+		$Missing = @()
+		ForEach ($CP in $CryptoPaths) {
+			If (Test-Path $CP) {
+				$Val = (Get-ItemProperty -Path $CP -Name 'SchUseStrongCrypto' -ErrorAction SilentlyContinue).SchUseStrongCrypto
+				If ($Val -ne 1) { $Missing += $CP }
+			}
+		}
+		If ($Missing.Count -eq 0) {
+			Add-Result 'TLS' 'SchUseStrongCrypto (machine)' 'PASS' 'Strong crypto enabled for .NET 4.x.'
+		} Else {
+			Add-Result 'TLS' 'SchUseStrongCrypto (machine)' 'WARN' "Not set on: $($Missing -join '; '). Run Enable-SSL to set this persistently."
+		}
+	} Catch {
+		Add-Result 'TLS' 'TLS / strong crypto' 'FAIL' $_.Exception.Message
+	}
+	#endregion
+
+	#region PSModulePath
+	Try {
+		$Paths = $env:PSModulePath -split ';' | Where-Object { $_ }
+		$Bad = @()
+		ForEach ($Pa in $Paths) {
+			If (-not (Test-Path $Pa)) { $Bad += $Pa }
+		}
+		If ($Bad.Count -eq 0) {
+			Add-Result 'Modules' 'PSModulePath' 'PASS' "$($Paths.Count) path(s), all present."
+		} Else {
+			Add-Result 'Modules' 'PSModulePath' 'WARN' "$($Bad.Count) of $($Paths.Count) path(s) missing: $($Bad -join '; ')"
+		}
+	} Catch {
+		Add-Result 'Modules' 'PSModulePath' 'FAIL' $_.Exception.Message
+	}
+	#endregion
+
+	#region PowerShellGet / PackageManagement
+	Try {
+		$PSGet = Get-Module PowerShellGet -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1
+		If ($PSGet) {
+			If ($PSGet.Version -lt [version]'2.2.5') {
+				Add-Result 'Modules' 'PowerShellGet' 'WARN' "v$($PSGet.Version). Inbox version is old; v2.2.5+ is recommended for reliable Gallery and TLS support."
+			} Else {
+				Add-Result 'Modules' 'PowerShellGet' 'PASS' "v$($PSGet.Version)"
+			}
+		} Else {
+			Add-Result 'Modules' 'PowerShellGet' 'WARN' 'Not found.'
+		}
+
+		$PkgMgmt = Get-Module PackageManagement -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1
+		If ($PkgMgmt) {
+			If ($PkgMgmt.Version -lt [version]'1.4.7') {
+				Add-Result 'Modules' 'PackageManagement' 'WARN' "v$($PkgMgmt.Version). v1.4.7+ is recommended."
+			} Else {
+				Add-Result 'Modules' 'PackageManagement' 'PASS' "v$($PkgMgmt.Version)"
+			}
+		} Else {
+			Add-Result 'Modules' 'PackageManagement' 'WARN' 'Not found.'
+		}
+	} Catch {
+		Add-Result 'Modules' 'PowerShellGet / PackageManagement' 'FAIL' $_.Exception.Message
+	}
+	#endregion
+
+	#region NuGet provider
+	Try {
+		$Nuget = Get-PackageProvider -ListAvailable -ErrorAction SilentlyContinue | Where-Object { $_.Name -eq 'NuGet' } | Sort-Object Version -Descending | Select-Object -First 1
+		If ($Nuget) {
+			Add-Result 'Modules' 'NuGet provider' 'PASS' "v$($Nuget.Version) installed (required for Install-Module)."
+		} Else {
+			Add-Result 'Modules' 'NuGet provider' 'WARN' 'Not installed. Install-Module will prompt to bootstrap it.'
+		}
+	} Catch {
+		Add-Result 'Modules' 'NuGet provider' 'INFO' 'Could not query package providers in this session.'
+	}
+	#endregion
+
+	#region PSGallery
+	Try {
+		$Gallery = Get-PSRepository -Name PSGallery -ErrorAction SilentlyContinue
+		If ($Gallery) {
+			If ($Gallery.InstallationPolicy -eq 'Trusted') {
+				Add-Result 'Modules' 'PSGallery repository' 'PASS' 'Registered, InstallationPolicy=Trusted.'
+			} Else {
+				Add-Result 'Modules' 'PSGallery repository' 'INFO' "Registered, InstallationPolicy=$($Gallery.InstallationPolicy)."
+			}
+		} Else {
+			Add-Result 'Modules' 'PSGallery repository' 'WARN' 'PSGallery is not registered.'
+		}
+	} Catch {
+		Add-Result 'Modules' 'PSGallery repository' 'INFO' 'Could not query PSRepository.'
+	}
+	#endregion
+
+	#region PSReadLine
+	Try {
+		$PSRL = Get-Module PSReadLine -ListAvailable | Sort-Object Version -Descending | Select-Object -First 1
+		If ($PSRL) {
+			If ($PSRL.Version -lt [version]'2.0.0') {
+				Add-Result 'Console' 'PSReadLine' 'WARN' "v$($PSRL.Version). Older 1.x builds have known console rendering bugs; v2.x is recommended."
+			} Else {
+				Add-Result 'Console' 'PSReadLine' 'PASS' "v$($PSRL.Version)"
+			}
+		} Else {
+			Add-Result 'Console' 'PSReadLine' 'INFO' 'Not available.'
+		}
+	} Catch {
+		Add-Result 'Console' 'PSReadLine' 'INFO' $_.Exception.Message
+	}
+	#endregion
+
+	#region Logging policy
+	Try {
+		$Base = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\PowerShell'
+		$SBL = (Get-ItemProperty -Path "$Base\ScriptBlockLogging" -Name 'EnableScriptBlockLogging' -ErrorAction SilentlyContinue).EnableScriptBlockLogging
+		$Trans = (Get-ItemProperty -Path "$Base\Transcription" -Name 'EnableTranscripting' -ErrorAction SilentlyContinue).EnableTranscripting
+		$ModLog = (Get-ItemProperty -Path "$Base\ModuleLogging" -Name 'EnableModuleLogging' -ErrorAction SilentlyContinue).EnableModuleLogging
+		Add-Result 'Logging' 'Script block logging' 'INFO' $(If ($SBL -eq 1) { 'Enabled' } Else { 'Not enabled' })
+		Add-Result 'Logging' 'Transcription' 'INFO' $(If ($Trans -eq 1) { 'Enabled' } Else { 'Not enabled' })
+		Add-Result 'Logging' 'Module logging' 'INFO' $(If ($ModLog -eq 1) { 'Enabled' } Else { 'Not enabled' })
+	} Catch {
+		Add-Result 'Logging' 'PowerShell logging policy' 'INFO' 'Could not read logging policy.'
+	}
+	#endregion
+
+	#region WinRM / remoting
+	Try {
+		$WinRM = Get-Service -Name WinRM -ErrorAction SilentlyContinue
+		If ($WinRM -and $WinRM.Status -eq 'Running') {
+			$Detail = 'Service running'
+			If ($IsElevated) {
+				$ListenerCount = 0
+				Try { $ListenerCount = @(Get-ChildItem WSMan:\localhost\Listener -ErrorAction SilentlyContinue).Count } Catch { }
+				$Detail += ", $ListenerCount listener(s)"
+			} Else {
+				$Detail += ' (run elevated to enumerate listeners)'
+			}
+			Add-Result 'Remoting' 'WinRM / PSRemoting' 'PASS' $Detail
+		} ElseIf ($WinRM) {
+			Add-Result 'Remoting' 'WinRM / PSRemoting' 'INFO' "WinRM service is $($WinRM.Status). Remoting not active (often expected on workstations)."
+		} Else {
+			Add-Result 'Remoting' 'WinRM / PSRemoting' 'INFO' 'WinRM service not present.'
+		}
+	} Catch {
+		Add-Result 'Remoting' 'WinRM / PSRemoting' 'INFO' $_.Exception.Message
+	}
+	#endregion
+
+	#region Profiles
+	Try {
+		$ProfileMap = [ordered]@{
+			'AllUsersAllHosts'       = $PROFILE.AllUsersAllHosts
+			'AllUsersCurrentHost'    = $PROFILE.AllUsersCurrentHost
+			'CurrentUserAllHosts'    = $PROFILE.CurrentUserAllHosts
+			'CurrentUserCurrentHost' = $PROFILE.CurrentUserCurrentHost
+		}
+		$Found = @()
+		ForEach ($Name in $ProfileMap.Keys) {
+			If (Test-Path $ProfileMap[$Name]) { $Found += $Name }
+		}
+		If ($Found.Count -eq 0) {
+			Add-Result 'Profiles' 'Profile scripts' 'INFO' 'No profile scripts present.'
+		} Else {
+			Add-Result 'Profiles' 'Profile scripts' 'INFO' "Present: $($Found -join ', '). Review these if the session behaves oddly at startup."
+		}
+	} Catch {
+		Add-Result 'Profiles' 'Profile scripts' 'INFO' $_.Exception.Message
+	}
+	#endregion
+
+	#region Disk space
+	Try {
+		$SysDrive = $env:SystemDrive.TrimEnd('\', ':')
+		$Drive = Get-PSDrive -Name $SysDrive -ErrorAction SilentlyContinue
+		If ($Drive) {
+			$FreeGB = [math]::Round($Drive.Free / 1GB, 1)
+			$TotalGB = [math]::Round(($Drive.Free + $Drive.Used) / 1GB, 1)
+			$PctFree = If ($TotalGB -gt 0) { [math]::Round($Drive.Free / ($Drive.Free + $Drive.Used) * 100, 0) } Else { 0 }
+			If ($FreeGB -lt 5 -or $PctFree -lt 10) {
+				Add-Result 'System' 'System drive free space' 'WARN' "$FreeGB GB free of $TotalGB GB ($PctFree%). Low space can cause module and update failures."
+			} Else {
+				Add-Result 'System' 'System drive free space' 'PASS' "$FreeGB GB free of $TotalGB GB ($PctFree%)."
+			}
+		}
+	} Catch {
+		Add-Result 'System' 'System drive free space' 'INFO' $_.Exception.Message
+	}
+	#endregion
+
+	#region Console encoding
+	Try {
+		$OutEnc = [Console]::OutputEncoding.WebName
+		Add-Result 'Console' 'Console output encoding' 'INFO' "$OutEnc (pipeline OutputEncoding: $($OutputEncoding.WebName))"
+	} Catch {
+		Add-Result 'Console' 'Console output encoding' 'INFO' $_.Exception.Message
+	}
+	#endregion
+
+	#region Session errors
+	Try {
+		Add-Result 'Session' 'Errors before health check' 'INFO' "$InitialErrorCount error(s) were already recorded in this session before the health check ran."
+	} Catch { }
+	#endregion
+
+	#region Pending reboot
+	Try {
+		$Reasons = @()
+		If (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') { $Reasons += 'CBS' }
+		If (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') { $Reasons += 'WindowsUpdate' }
+		$PFRO = (Get-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager' -Name 'PendingFileRenameOperations' -ErrorAction SilentlyContinue).PendingFileRenameOperations
+		If ($PFRO) { $Reasons += 'PendingFileRename' }
+		If ($Reasons.Count -gt 0) {
+			Add-Result 'System' 'Pending reboot' 'WARN' "Reboot pending ($($Reasons -join ', ')). WMF / .NET changes may not be fully applied until reboot."
+		} Else {
+			Add-Result 'System' 'Pending reboot' 'PASS' 'No pending reboot detected.'
+		}
+	} Catch {
+		Add-Result 'System' 'Pending reboot' 'INFO' $_.Exception.Message
+	}
+	#endregion
+
+	# ---- Output ----
+	If ($PassThru) {
+		$Results
+		Return
+	}
+
+	$ColorMap = @{ PASS = 'Green'; WARN = 'Yellow'; FAIL = 'Red'; INFO = 'Cyan' }
+
+	Write-Host ''
+	Write-Host 'Windows PowerShell 5.1 Health Check' -ForegroundColor White
+	Write-Host ('Computer: {0}    User: {1}\{2}    Elevated: {3}' -f $env:COMPUTERNAME, $env:USERDOMAIN, $env:USERNAME, $IsElevated)
+	Write-Host ('Engine:   {0}    Date: {1}' -f $PSVersionTable.PSVersion, (Get-Date -Format 'yyyy-MM-dd HH:mm:ss'))
+	Write-Host ('=' * 78)
+
+	$LastCategory = ''
+	ForEach ($R in $Results) {
+		If ($R.Category -ne $LastCategory) {
+			Write-Host ''
+			Write-Host ("-- {0} --" -f $R.Category) -ForegroundColor Gray
+			$LastCategory = $R.Category
+		}
+		$Color = If ($ColorMap.ContainsKey($R.Status)) { $ColorMap[$R.Status] } Else { 'White' }
+		Write-Host ("  [{0}] {1,-26} {2}" -f $R.Status, $R.Check, $R.Detail) -ForegroundColor $Color
+	}
+
+	$Pass = @($Results | Where-Object { $_.Status -eq 'PASS' }).Count
+	$Warn = @($Results | Where-Object { $_.Status -eq 'WARN' }).Count
+	$Fail = @($Results | Where-Object { $_.Status -eq 'FAIL' }).Count
+	$Info = @($Results | Where-Object { $_.Status -eq 'INFO' }).Count
+
+	Write-Host ''
+	Write-Host ('=' * 78)
+	$SummaryColor = If ($Fail -gt 0) { 'Red' } ElseIf ($Warn -gt 0) { 'Yellow' } Else { 'Green' }
+	Write-Host ("Summary: {0} PASS, {1} WARN, {2} FAIL, {3} INFO" -f $Pass, $Warn, $Fail, $Info) -ForegroundColor $SummaryColor
+	If ($Warn -gt 0 -or $Fail -gt 0) {
+		Write-Host 'Tip: pipe -PassThru into Where-Object to capture just the WARN and FAIL items.' -ForegroundColor Gray
+	}
+	Write-Host ''
+}
+function Get-VMByFQDN {
+	param(
+		[Parameter(Mandatory=$true)]
+		[string]$FQDN,
+		[switch]$Detailed
+	)
+
+	Write-Verbose "Searching for VM with FQDN: $FQDN"
+
+	# Method 1: Try Integration Services/KVP data first (most reliable for Windows VMs)
+	Write-Verbose "Attempting Integration Services lookup..."
+	$VMs = Get-VM | Where-Object {$_.State -eq 'Running'}
+
+	foreach ($VM in $VMs) {
+		try {
+			# Get KVP Exchange Component data
+			$VMID = $VM.Id
+			$KvpData = Get-CimInstance -Namespace root\virtualization\v2 -ClassName Msvm_KvpExchangeComponent -Filter "SystemName='$VMID'"
+
+			if ($KvpData.GuestIntrinsicExchangeItems) {
+				# Parse XML KVP data
+				foreach ($Item in $KvpData.GuestIntrinsicExchangeItems) {
+					$XmlItem = [xml]$Item
+					if ($XmlItem.Instance.Property | Where-Object {$_.Name -eq 'Name' -and $_.Value -eq 'FullyQualifiedDomainName'}) {
+						$GuestFQDN = ($XmlItem.Instance.Property | Where-Object {$_.Name -eq 'Data'}).Value
+						if ($GuestFQDN -eq $FQDN) {
+							Write-Verbose "Found VM via Integration Services: $($VM.Name)"
+							$NetworkInfo = Get-VMNetworkAdapter -VM $VM | Select-Object -First 1
+							return [PSCustomObject]@{
+								VMName = $VM.Name
+								VMID = $VM.Id
+								State = $VM.State
+								FQDN = $GuestFQDN
+								IPAddresses = $NetworkInfo.IPAddresses -join ', '
+								MACAddress = $NetworkInfo.MacAddress
+								Method = 'IntegrationServices'
+								Host = $env:COMPUTERNAME
+							}
+						}
+					}
+				}
+			}
+		} catch {
+			Write-Verbose "Integration Services lookup failed for $($VM.Name): $_"
+		}
+	}
+
+	# Method 2: Fallback to IP resolution and matching
+	Write-Verbose "Falling back to IP resolution method..."
+	try {
+		$ResolvedIPs = [System.Net.Dns]::GetHostAddresses($FQDN) | Where-Object {$_.AddressFamily -eq 'InterNetwork'} | Select-Object -ExpandProperty IPAddressToString
+		Write-Verbose "Resolved $FQDN to: $($ResolvedIPs -join ', ')"
+	} catch {
+		Write-Warning "Unable to resolve FQDN: $FQDN"
+		$ResolvedIPs = @()
+	}
+
+	if ($ResolvedIPs.Count -gt 0) {
+		# Check all VMs (including stopped ones for IP matching)
+		$AllVMs = Get-VM
+		foreach ($VM in $AllVMs) {
+			$VMNetAdapters = Get-VMNetworkAdapter -VM $VM
+			foreach ($Adapter in $VMNetAdapters) {
+				$AdapterIPs = $Adapter.IPAddresses | Where-Object {$_ -notlike '*:*'}  # IPv4 only
+				foreach ($IP in $ResolvedIPs) {
+					if ($IP -in $AdapterIPs) {
+						Write-Verbose "Found VM via IP match: $($VM.Name)"
+						return [PSCustomObject]@{
+							VMName = $VM.Name
+							VMID = $VM.Id
+							State = $VM.State
+							FQDN = $FQDN
+							IPAddresses = $AdapterIPs -join ', '
+							MACAddress = $Adapter.MacAddress
+							Method = 'IPResolution'
+							Host = $env:COMPUTERNAME
+						}
+					}
+				}
+			}
+		}
+	}
+
+	# Method 3: Last resort - check if hostname matches VM name
+	Write-Verbose "Checking for hostname match..."
+	$Hostname = $FQDN.Split('.')[0]
+	$PossibleVM = Get-VM | Where-Object {$_.Name -eq $Hostname -or $_.Name -eq $Hostname.ToUpper()}
+	if ($PossibleVM) {
+		Write-Warning "Found VM with matching hostname but couldn't verify FQDN: $($PossibleVM.Name)"
+		if ($Detailed) {
+			$NetworkInfo = Get-VMNetworkAdapter -VM $PossibleVM | Select-Object -First 1
+			return [PSCustomObject]@{
+				VMName = $PossibleVM.Name
+				VMID = $PossibleVM.Id
+				State = $PossibleVM.State
+				FQDN = "$Hostname (unverified)"
+				IPAddresses = $NetworkInfo.IPAddresses -join ', '
+				MACAddress = $NetworkInfo.MacAddress
+				Method = 'HostnameOnly'
+				Host = $env:COMPUTERNAME
+			}
+		}
+	}
+
+	return $null
+}
+Function Get-VMHostName {
+	<#
+	.SYNOPSIS
+		Retrieves the Hyper-V host name from a VM's registry.
+	.DESCRIPTION
+		Checks the registry key that contains the physical host name for a Hyper-V virtual machine.
+	.EXAMPLE
+		Get-VMHostName
+	#>
+	[CmdletBinding()]
+	param()
+	
+	try {
+		$regPath = "HKLM:\SOFTWARE\Microsoft\Virtual Machine\Guest\Parameters"
+		
+		if (Test-Path $regPath) {
+			$hostName = Get-ItemProperty -Path $regPath -Name "PhysicalHostName" -ErrorAction SilentlyContinue
+			
+			if ($hostName) {
+				return $hostName.PhysicalHostName
+			} else {
+				Write-Warning "PhysicalHostName value not found in registry."
+				return $null
+			}
+		} else {
+			Write-Warning "This does not appear to be a Hyper-V virtual machine."
+			return $null
+		}
+	} catch {
+		Write-Error "Failed to retrieve host information: $_"
+		return $null
+	}
+}
 
 # SIG # Begin signature block
 # MIIF0AYJKoZIhvcNAQcCoIIFwTCCBb0CAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB

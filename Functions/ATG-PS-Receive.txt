@@ -1,0 +1,57 @@
+Function Receive-Item {
+	<#
+	.SYNOPSIS
+		Receives a file or folder from another computer via croc.
+	.DESCRIPTION
+		Wraps 'croc' receive to accept an incoming transfer using the code phrase
+		provided by the sender.
+	.PARAMETER Code
+		The code phrase displayed by the sender's Send-Item command.
+	.PARAMETER OutPath
+		Optional directory to save received files into. Defaults to current directory.
+	.PARAMETER Overwrite
+		Accept incoming files without prompting (adds --yes flag).
+	.EXAMPLE
+		Receive-Item -Code "1234-apple-banana-cherry"
+	.EXAMPLE
+		Receive-Item -Code "1234-apple-banana-cherry" -OutPath C:\Downloads -Overwrite
+	#>
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory, Position = 0)]
+		[string]$Code,
+
+		[Parameter()]
+		[string]$OutPath,
+
+		[Parameter()]
+		[switch]$Overwrite
+	)
+
+	$crocExe = Get-CrocPath
+
+	if ($OutPath) {
+		New-Item -ItemType Directory -Path $OutPath -Force -ErrorAction SilentlyContinue | Out-Null
+		Push-Location -Path $OutPath
+	}
+
+	try {
+		$crocArgs = @()
+		if ($Overwrite) {
+			$crocArgs += '--yes'
+		}
+		$crocArgs += $Code
+
+		Write-Host ""
+		Write-Host "============================================" -ForegroundColor Cyan
+		Write-Host " RECEIVING with code: $Code" -ForegroundColor Cyan
+		Write-Host "============================================" -ForegroundColor Cyan
+		Write-Host ""
+
+		& $crocExe @crocArgs
+	} finally {
+		if ($OutPath) {
+			Pop-Location
+		}
+	}
+}

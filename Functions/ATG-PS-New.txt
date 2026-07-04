@@ -1,0 +1,83 @@
+# Wordlist for croc code generation (allocated once at module load, not per-call)
+$script:CrocWords = @(
+	'acid','acme','alto','apex','aqua','arch','army','atom','aunt','avid',
+	'axis','band','barn','bass','beam','belt','bird','blade','blaze','blip',
+	'bloom','bold','bolt','bone','boss','brave','brick','brook','brush','burst',
+	'calm','camp','cape','cargo','cave','cedar','chain','chalk','champ','chess',
+	'chill','chip','civic','claim','clay','clerk','cliff','clock','cloud','clue',
+	'coal','cobra','coil','coral','core','craft','crane','creek','crisp','cross',
+	'crown','crush','cube','curve','dawn','deck','delta','dense','depth','disc',
+	'dodge','dove','draft','drift','drum','dusk','eagle','earth','edge','elder',
+	'ember','epic','equal','extra','fable','fair','fame','farm','fern','fiber',
+	'field','film','flame','flare','flask','fleet','flint','flood','flora','fluid',
+	'foam','forge','fort','frame','frost','fruit','fuse','gale','gate','gauge',
+	'gear','ghost','glade','gleam','globe','glow','gorge','grace','grain','grape',
+	'grasp','grove','guide','gulf','halo','haven','hawk','hazel','heart','hedge',
+	'hero','hinge','honey','hood','horse','house','hub','hull','hyper','ivory',
+	'jade','jewel','joint','judge','jump','jungle','keen','kelp','king','kite',
+	'knack','knot','label','lace','lance','latch','lava','leaf','ledge','lever',
+	'light','lilac','lime','linen','lion','lodge','logic','lotus','lunar','lure',
+	'mango','maple','marsh','mason','medal','mesa','metal','minor','mint','moat',
+	'model','molar','moose','moral','moss','mural','nerve','noble','north','novel',
+	'oak','oasis','ocean','olive','onyx','opera','orbit','otter','oxide','ozone',
+	'panda','panel','patch','pearl','pedal','penny','perch','pilot','pine','pixel',
+	'plaid','plaza','plumb','plume','point','polar','poppy','port','pouch','prism',
+	'probe','prong','prose','pulse','quake','quest','quilt','radar','rapid','raven',
+	'realm','ridge','river','robin','rocky','royal','ruby','ruler','sage','scale',
+	'scout','seal','shade','shark','shelf','shell','shore','sigma','silk','slate',
+	'slope','smith','snare','solar','sonic','south','spark','spear','spine','spoke',
+	'spray','squad','stamp','stark','steam','steel','stern','stock','stone','storm',
+	'stove','sugar','surge','swamp','swift','sword','table','tango','tempo','thorn',
+	'thumb','tidal','tiger','timer','toast','token','torch','tower','trace','trait',
+	'trend','triad','trick','trout','trump','tulip','tuner','ultra','unity','upper',
+	'urban','valve','vault','vigor','villa','viola','vivid','vocal','voice','vortex',
+	'wagon','waltz','watch','whale','wheat','wheel','whirl','widen','windy','wired',
+	'witch','world','yacht','zebra','zinc','zonal'
+)
+
+Function New-CrocCode {
+	<#
+	.SYNOPSIS
+		Generates a croc-compatible code phrase (number-word-word-word).
+	.DESCRIPTION
+		Creates a random code phrase in the format used by croc for file transfers.
+		The code consists of a 4-digit number followed by three random words from
+		a built-in wordlist, separated by hyphens.
+	.EXAMPLE
+		New-CrocCode
+		Returns something like "4821-flame-ridge-cobra"
+	#>
+	[CmdletBinding()]
+	param()
+
+	$num = Get-Random -Minimum 1000 -Maximum 9999
+	$w1, $w2, $w3 = Get-Random -InputObject $script:CrocWords -Count 3
+	return "$num-$w1-$w2-$w3"
+}
+
+Function New-BPAResultObject {
+	param(
+		[psobject]$Finding,
+		[psobject]$Model,
+		[string]$ComputerName,
+		[string]$Status,
+		[string]$Target = $null,
+		$PreviousValue = $null,
+		$NewValue = $null,
+		[string]$Reason = $null
+	)
+	return [PSCustomObject]@{
+		Timestamp     = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+		ComputerName  = $ComputerName
+		ModelId       = $Model.Id
+		RuleId        = $Finding.RuleId
+		Title         = $Finding.Title
+		Category      = $Finding.Category
+		Severity      = $Finding.Severity
+		Target        = $Target
+		Status        = $Status
+		PreviousValue = $PreviousValue
+		NewValue      = $NewValue
+		Reason        = $Reason
+	}
+}
