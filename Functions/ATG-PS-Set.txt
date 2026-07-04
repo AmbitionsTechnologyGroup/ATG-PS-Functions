@@ -12,6 +12,95 @@ Function Set-AutoLogon ([String] $SiteCode) {
 	Write-Host "End of Set autologon"
 }
 
+function Set-ChocolateySources {
+	# Check if Chocolatey is installed
+	if (-not (Get-Command choco.exe -ErrorAction SilentlyContinue)) {
+		Write-Warning "Chocolatey is not installed"
+		return
+	}
+
+	# Define desired sources
+	$desiredSources = @(
+		@{
+			Name     = 'chocolatey'
+			Source   = 'https://community.chocolatey.org/api/v2/'
+			Priority = 100
+			Disabled = $false
+		}
+		@{
+			Name     = 'MauleCache'
+			Source   = 'https://cache.mauletech.com/nuget/choco/'
+			Priority = 0
+			Disabled = $false
+		}
+	)
+
+	Write-Host "Setting Chocolatey sources to desired state..." -ForegroundColor Cyan
+
+	# Get current sources
+	$currentSources = choco source list --limit-output | ForEach-Object {
+		$parts = $_ -split '\|'
+
+		# Try to find priority - it should be a numeric value
+		$priority = 0
+		for ($i = 0; $i -lt $parts.Count; $i++) {
+			if ($parts[$i] -match '^\d+$') {
+				$priority = [int]$parts[$i]
+				break
+			}
+		}
+
+		[PSCustomObject]@{
+			Name     = $parts[0]
+			Source   = $parts[1]
+			Disabled = $parts[2] -eq 'True'
+			Priority = $priority
+		}
+	}
+
+	# Remove sources not in desired state (cleans up retired servers such as ACG-Choco / choco.ambitionsgroup.com)
+	$currentSources | Where-Object { $_.Name -notin $desiredSources.Name } | ForEach-Object {
+		Write-Host "  Removing source: $($_.Name)" -ForegroundColor Yellow
+		choco source remove --name="$($_.Name)" | Out-Null
+	}
+
+	# Add or update desired sources
+	foreach ($desired in $desiredSources) {
+		$existing = $currentSources | Where-Object Name -eq $desired.Name
+
+		if ($existing) {
+			# Check if update needed
+			if ($existing.Source -ne $desired.Source -or
+				$existing.Disabled -ne $desired.Disabled -or
+				$existing.Priority -ne $desired.Priority) {
+
+				Write-Host "  Updating source: $($desired.Name)" -ForegroundColor Yellow
+				choco source remove --name="$($desired.Name)" | Out-Null
+				choco source add --name="$($desired.Name)" --source="$($desired.Source)" --priority=$($desired.Priority) | Out-Null
+
+				if ($desired.Disabled) {
+					choco source disable --name="$($desired.Name)" | Out-Null
+				} else {
+					choco source enable --name="$($desired.Name)" | Out-Null
+				}
+			} else {
+				Write-Host "  Source already configured: $($desired.Name)" -ForegroundColor Green
+			}
+		} else {
+			# Add new source
+			Write-Host "  Adding source: $($desired.Name)" -ForegroundColor Green
+			choco source add --name="$($desired.Name)" --source="$($desired.Source)" --priority=$($desired.Priority) | Out-Null
+
+			if ($desired.Disabled) {
+				choco source disable --name="$($desired.Name)" | Out-Null
+			}
+		}
+	}
+
+	Write-Host "`nCurrent Chocolatey sources:" -ForegroundColor Cyan
+	choco source list
+}
+
 function Set-ComputerLanguage {
 	param (
 		[string]$Language = "en-US"
