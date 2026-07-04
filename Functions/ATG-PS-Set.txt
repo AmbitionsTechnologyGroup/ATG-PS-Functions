@@ -173,17 +173,68 @@ function Set-ComputerLanguage {
 Function Set-DailyReboot {
 <#
 	.SYNOPSIS
-		Creates a scheduled task to restart the computer daily at 3am, if no one is using the computer.
-		Helpful for maintaining updated and stability.
+		Creates a scheduled task to restart the computer daily at a specified time.
+		Suspends BitLocker if enabled before reboot to prevent recovery prompts.
+
+	.PARAMETER Time
+		The time of day to perform the restart. Defaults to 3am.
+
+	.EXAMPLE
+		Set-DailyReboot
+		Creates a daily restart task for 3am.
+
+	.EXAMPLE
+		Set-DailyReboot -Time "2am"
+		Creates a daily restart task for 2am.
 #>
+	[CmdletBinding()]
+	param (
+		[Parameter()]
+		[DateTime]$Time = "3:00 AM"
+	)
+
 	Write-Host "Schedule Daily Restart"
-		$Action = New-ScheduledTaskAction -Execute 'shutdown.exe' -Argument '-f -r -t 0'
-		$Trigger = New-ScheduledTaskTrigger -Daily -At 3am
-		$Idle = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration 00:30:00 -IdleWaitTimeout 02:00:00
-		$User = "NT AUTHORITY\SYSTEM"
-		Register-ScheduledTask -Action $action -Trigger $trigger -User $User -Settings $Idle -TaskName "Daily Restart" -Description "Daily restart" -Force | Out-Null
-		$NewDate = (Get-ScheduledTask -TaskName "Daily Restart").Triggers.StartBoundary.subString(0,16)
-	Write-Host "The next scheduled 'Daily Restart' task will happen at $([Datetime]::ParseExact($NewDate, 'yyyy-MM-ddTHH:mm', $null))"
+
+	# Create the resume BitLocker script
+	$ResumeScript = @'
+Start-Sleep -Seconds 30
+$Volume = Get-BitLockerVolume -MountPoint C:
+if ($Volume.ProtectionStatus -eq 'Off') {
+	Resume-BitLocker -MountPoint C:
+	New-Item -Path 'HKLM:\SOFTWARE\Ambitions' -Force | Out-Null
+	Set-ItemProperty -Path 'HKLM:\SOFTWARE\Ambitions' -Name 'BitLockerResumedDate' -Value (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') -Force
+}
+'@
+
+	# Save the resume script to a known location
+	$ScriptPath = "C:\Ambitions\Scripts\ResumeBitLocker.ps1"
+	New-Item -Path "C:\Ambitions\Scripts" -ItemType Directory -Force | Out-Null
+	$ResumeScript | Out-File -FilePath $ScriptPath -Encoding ASCII -Force
+
+	# Build the main command
+	$Command = "if ((Get-BitLockerVolume -MountPoint C:).ProtectionStatus -eq 'On') { Suspend-BitLocker -MountPoint C: -RebootCount 5; New-Item -Path 'HKLM:\SOFTWARE\Ambitions' -Force | Out-Null; Set-ItemProperty -Path 'HKLM:\SOFTWARE\Ambitions' -Name 'BitLockerSuspendedDate' -Value (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') -Force; Set-ItemProperty -Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'ResumeBitLocker' -Value 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $ScriptPath' -Force }; Restart-Computer -Force"
+
+	# Create the scheduled task action using PowerShell
+	$Action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -Command `"$Command`""
+
+	# Create the trigger with specified time
+	$Trigger = New-ScheduledTaskTrigger -Daily -At $Time
+
+	# Configure to run only when idle
+	$Idle = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration 00:30:00 -IdleWaitTimeout 02:00:00
+
+	$User = "NT AUTHORITY\SYSTEM"
+
+	Register-ScheduledTask -Action $Action -Trigger $Trigger -User $User -Settings $Idle -TaskName "Daily Restart" -Description "Daily restart with BitLocker suspension" -Force | Out-Null
+
+	# Get the actual next run time from the task
+	$NextRun = (Get-ScheduledTaskInfo -TaskName "Daily Restart").NextRunTime
+
+	if ($NextRun) {
+		Write-Host "The next scheduled 'Daily Restart' task will happen at $NextRun"
+	} else {
+		Write-Host "Daily Restart task created, but next run time could not be determined."
+	}
 }
 
 Function Set-DailyRebootDelay {
@@ -412,17 +463,75 @@ Function Set-ServerRebootScriptPassword {
 Function Set-WeeklyReboot {
 <#
 	.SYNOPSIS
-		Creates a scheduled task to restart the computer Weekly on Sunday at 3am, if no one is using the computer.
-		Helpful for maintaining updated and stability.
+		Creates a scheduled task to restart the computer weekly at a specified time and day.
+		Suspends BitLocker if enabled before reboot to prevent recovery prompts.
+
+	.PARAMETER Time
+		The time of day to perform the restart. Defaults to 3am.
+
+	.PARAMETER Day
+		The day of the week to perform the restart. Defaults to Sunday.
+
+	.EXAMPLE
+		Set-WeeklyReboot
+		Creates a weekly restart task for Sunday at 3am.
+
+	.EXAMPLE
+		Set-WeeklyReboot -Time "2am" -Day Monday
+		Creates a weekly restart task for Monday at 2am.
 #>
+	[CmdletBinding()]
+	param (
+		[Parameter()]
+		[DateTime]$Time = "3:00 AM",
+
+		[Parameter()]
+		[ValidateSet('Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday')]
+		[string]$Day = 'Sunday'
+	)
+
 	Write-Host "Schedule Weekly Restart"
-		$Action = New-ScheduledTaskAction -Execute 'shutdown.exe' -Argument '-f -r -t 0'
-		$Trigger = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek Sunday -At 3am
-		$Idle = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration 00:30:00 -IdleWaitTimeout 02:00:00
-		$User = "NT AUTHORITY\SYSTEM"
-		Register-ScheduledTask -Action $action -Trigger $trigger -User $User -Settings $Idle -TaskName "Weekly Restart" -Description "Weekly restart" -Force | Out-Null
-		$NewDate = (Get-ScheduledTask -TaskName "Weekly Restart").Triggers.StartBoundary.subString(0,16)
-	Write-Host "The next scheduled 'Weekly Restart' task will happen at $([Datetime]::ParseExact($NewDate, 'yyyy-MM-ddTHH:mm', $null))"
+
+	# Create the resume BitLocker script
+	$ResumeScript = @'
+Start-Sleep -Seconds 30
+$Volume = Get-BitLockerVolume -MountPoint C:
+if ($Volume.ProtectionStatus -eq 'Off') {
+	Resume-BitLocker -MountPoint C:
+	New-Item -Path 'HKLM:\SOFTWARE\Ambitions' -Force | Out-Null
+	Set-ItemProperty -Path 'HKLM:\SOFTWARE\Ambitions' -Name 'BitLockerResumedDate' -Value (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') -Force
+}
+'@
+
+	# Save the resume script to a known location
+	$ScriptPath = "C:\Ambitions\Scripts\ResumeBitLocker.ps1"
+	New-Item -Path "C:\Ambitions\Scripts" -ItemType Directory -Force | Out-Null
+	$ResumeScript | Out-File -FilePath $ScriptPath -Encoding ASCII -Force
+
+	# Build the main command
+	$Command = "if ((Get-BitLockerVolume -MountPoint C:).ProtectionStatus -eq 'On') { Suspend-BitLocker -MountPoint C: -RebootCount 5; New-Item -Path 'HKLM:\SOFTWARE\Ambitions' -Force | Out-Null; Set-ItemProperty -Path 'HKLM:\SOFTWARE\Ambitions' -Name 'BitLockerSuspendedDate' -Value (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') -Force; Set-ItemProperty -Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'ResumeBitLocker' -Value 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $ScriptPath' -Force }; Restart-Computer -Force"
+
+	# Create the scheduled task action using PowerShell
+	$Action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -Command `"$Command`""
+
+	# Create the trigger with specified day and time
+	$Trigger = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek $Day -At $Time
+
+	# Configure to run only when idle
+	$Idle = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration 00:30:00 -IdleWaitTimeout 02:00:00
+
+	$User = "NT AUTHORITY\SYSTEM"
+
+	Register-ScheduledTask -Action $Action -Trigger $Trigger -User $User -Settings $Idle -TaskName "Weekly Restart" -Description "Weekly restart with BitLocker suspension" -Force | Out-Null
+
+	# Get the actual next run time from the task
+	$NextRun = (Get-ScheduledTaskInfo -TaskName "Weekly Restart").NextRunTime
+
+	if ($NextRun) {
+		Write-Host "The next scheduled 'Weekly Restart' task will happen at $NextRun"
+	} else {
+		Write-Host "Weekly Restart task created, but next run time could not be determined."
+	}
 }
 
 # SIG # Begin signature block
