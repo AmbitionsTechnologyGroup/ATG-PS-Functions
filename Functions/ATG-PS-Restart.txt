@@ -61,6 +61,337 @@ Function Restart-VSSWriter {
 	END { } #END
 }
 
+Function Restart-ComputerSafely {
+<#
+	.SYNOPSIS
+		Restarts the computer with BitLocker protection, optional after-reboot script, and optional scheduling.
+		Suspends BitLocker if enabled to prevent recovery prompts, then resumes after reboot.
+
+	.PARAMETER Force
+		Forces applications to close without warning.
+
+	.PARAMETER Delay
+		Seconds to wait before restarting. Defaults to 10 seconds.
+
+	.PARAMETER AfterRebootScript
+		A PowerShell command or script block (as a string) to run as SYSTEM after the next reboot.
+		The ATG function library is loaded automatically before the command runs, so you can
+		call any ATG function directly (e.g. "Update-Windows" or "Install-WinGet").
+		A one-time scheduled task is created at startup and removed after it completes.
+
+	.PARAMETER ScheduleAt
+		Schedule the restart (and AfterRebootScript setup) to occur at a future date/time instead
+		of immediately. Accepts any valid [datetime] string.
+		If only a time is given and that time has already passed today, it is automatically
+		pushed to the same time tomorrow.
+
+		Examples:
+		  -ScheduleAt "11:00 PM"           # Tonight (or tomorrow if past 11 PM)
+		  -ScheduleAt "3/28/2026 8:00 PM"  # Specific date and time
+
+	.PARAMETER ScheduledTaskName
+		Name for the scheduled task created by -ScheduleAt.
+		Defaults to "Ambitions-RestartComputerSafely".
+
+	.EXAMPLE
+		Restart-ComputerSafely
+		Restarts the computer after 10 seconds, handling BitLocker automatically.
+
+	.EXAMPLE
+		Restart-ComputerSafely -Force -Delay 0
+		Immediately restarts the computer without delay, forcing apps to close.
+
+	.EXAMPLE
+		Restart-ComputerSafely -Force -AfterRebootScript "Update-Windows"
+		Restart immediately; after the reboot, load ATG functions and run Update-Windows as SYSTEM.
+
+	.EXAMPLE
+		Restart-ComputerSafely -Force -AfterRebootScript "Update-Windows" -ScheduleAt "11:00 PM"
+		Schedule the restart for 11 PM tonight; after the reboot, run Update-Windows as SYSTEM.
+#>
+	[CmdletBinding()]
+	param (
+		[Parameter()]
+		[switch]$Force,
+
+		[Parameter()]
+		[ValidateRange(0, 3600)]
+		[int]$Delay = 10,
+
+		[Parameter()]
+		[string]$AfterRebootScript,
+
+		[Parameter()]
+		[datetime]$ScheduleAt,
+
+		[Parameter()]
+		[string]$ScheduledTaskName = "Ambitions-RestartComputerSafely"
+	)
+
+	$LoaderCmd = "irm ps.acgs.io | iex"
+
+	#region Scheduled Execution
+	if ($PSBoundParameters.ContainsKey('ScheduleAt')) {
+		$now = Get-Date
+
+		if ($ScheduleAt -le $now) {
+			if ($ScheduleAt.Date -eq $now.Date) {
+				$ScheduleAt = $ScheduleAt.AddDays(1)
+				Write-Host "[WARN]  Specified time already passed today -- scheduling for tomorrow: $($ScheduleAt.ToString('g'))" -ForegroundColor Yellow
+			} else {
+				Write-Host "[ERROR] ScheduleAt value '$($ScheduleAt.ToString('g'))' is in the past." -ForegroundColor Red
+				return
+			}
+		}
+
+		$ExcludeParams = @('ScheduleAt', 'ScheduledTaskName')
+		$ForwardedParams = @()
+		foreach ($key in $PSBoundParameters.Keys) {
+			if ($key -in $ExcludeParams) { continue }
+			$val = $PSBoundParameters[$key]
+			if ($val -is [switch] -or $val -is [bool]) {
+				if ($val) { $ForwardedParams += "-$key" }
+			} else {
+				$escaped = "$val" -replace "'", "''"
+				$ForwardedParams += "-$key '$escaped'"
+			}
+		}
+		$ParamString = $ForwardedParams -join ' '
+
+		# Self-clean by unregistering first so the task does not linger in Task Scheduler.
+		# Deleting a scheduled task does not interrupt the running process, so the loader
+		# and Restart-ComputerSafely call still execute as normal.
+		$encodedCmd = ConvertTo-EncodedCommand -ScriptBlock "Unregister-ScheduledTask -TaskName '$ScheduledTaskName' -Confirm:`$false -ErrorAction SilentlyContinue; $LoaderCmd; Restart-ComputerSafely $ParamString"
+		$Action    = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $encodedCmd"
+		$Trigger   = New-ScheduledTaskTrigger -Once -At $ScheduleAt
+		$Settings  = New-ScheduledTaskSettingsSet -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 2)
+		$Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+
+		try {
+			Register-ScheduledTask -TaskName $ScheduledTaskName -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal -Force -ErrorAction Stop | Out-Null
+			Write-Host "[OK]    Restart scheduled for $($ScheduleAt.ToString('f'))" -ForegroundColor Green
+			Write-Host "[INFO]  Task name: $ScheduledTaskName" -ForegroundColor Cyan
+			Write-Host "[INFO]  To cancel: Unregister-ScheduledTask -TaskName '$ScheduledTaskName' -Confirm:`$false" -ForegroundColor Cyan
+			return
+		} catch {
+			Write-Host "[ERROR] Failed to create scheduled task: $($_.Exception.Message)" -ForegroundColor Red
+			return
+		}
+	}
+	#endregion
+
+	#region After-Reboot Script Setup
+	if ($AfterRebootScript) {
+		$AfterRebootTaskName = "Ambitions-AfterRebootScript"
+		# Unregister the task FIRST so that if the user's script triggers another reboot
+		# (e.g. Update-WindowsTo11), we don't end up in a reboot loop. Deleting a scheduled
+		# task does not interrupt the running process, so the loader and script still execute.
+		$encodedCmd = ConvertTo-EncodedCommand -ScriptBlock "Unregister-ScheduledTask -TaskName '$AfterRebootTaskName' -Confirm:`$false -ErrorAction SilentlyContinue; $LoaderCmd; $AfterRebootScript"
+		$Action    = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $encodedCmd"
+		$Trigger   = New-ScheduledTaskTrigger -AtStartup
+		$Settings  = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ExecutionTimeLimit (New-TimeSpan -Hours 4)
+		$Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+
+		try {
+			Register-ScheduledTask -TaskName $AfterRebootTaskName -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal -Description "One-time post-reboot script registered by Restart-ComputerSafely" -Force -ErrorAction Stop | Out-Null
+			Write-Host "[OK]    After-reboot script registered. Will run as SYSTEM on next startup." -ForegroundColor Green
+			Write-Host "[INFO]  Command: $AfterRebootScript" -ForegroundColor Cyan
+		} catch {
+			Write-Warning "Failed to register after-reboot script task: $_"
+			Write-Warning "Aborting restart to avoid running without the intended post-reboot action."
+			return
+		}
+	}
+	#endregion
+
+	Write-Host "Preparing safe restart with BitLocker handling..."
+
+	# Check if BitLocker is enabled
+	try {
+		$Volume = Get-BitLockerVolume -MountPoint C: -ErrorAction Stop
+	} catch {
+		Write-Host "BitLocker not available on this system. Skipping BitLocker handling."
+		$Volume = $null
+	}
+
+	# Remove any stale RunOnce entry from previous versions of this function
+	Remove-ItemProperty -Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'ResumeBitLocker' -ErrorAction SilentlyContinue
+
+	if ($Volume -and $Volume.ProtectionStatus -eq 'On') {
+		Write-Host "BitLocker is enabled. Suspending for 2 reboots..."
+
+		# Suspend BitLocker for 2 reboot only - the scheduled task will re-suspend if updates need more reboots
+		try {
+			Suspend-BitLocker -MountPoint C: -RebootCount 2 -ErrorAction Stop
+		} catch {
+			Write-Warning "Failed to suspend BitLocker: $_"
+			Write-Warning "Aborting restart to avoid BitLocker recovery prompt."
+			return
+		}
+
+		try {
+		# Log the suspension and reset the re-suspension counter for this new cycle
+		New-Item -Path 'HKLM:\SOFTWARE\Ambitions' -Force -ErrorAction Stop | Out-Null
+		Set-ItemProperty -Path 'HKLM:\SOFTWARE\Ambitions' -Name 'BitLockerSuspendedDate' -Value (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') -Force -ErrorAction Stop
+		Set-ItemProperty -Path 'HKLM:\SOFTWARE\Ambitions' -Name 'BitLockerResuspendCount' -Value 0 -Force -ErrorAction Stop
+
+		# Resolve paths now so the scheduled task uses an absolute path at runtime
+		$BaseFolder = "C:\Ambitions"
+		$LogFolder = "$BaseFolder\Logs"
+		$ScriptPath = "$BaseFolder\Scripts\ResumeBitLocker.ps1"
+
+		# Create the resume BitLocker script that checks for pending updates before resuming
+		$ResumeScript = @"
+`$LogPath = "$LogFolder\ResumeBitLocker.log"
+`$ScriptPath = "$ScriptPath"
+`$MaxResuspensions = 10
+`$RegPath = 'HKLM:\SOFTWARE\Ambitions'
+
+New-Item -Path (Split-Path `$LogPath) -ItemType Directory -Force -ErrorAction SilentlyContinue | Out-Null
+
+function Write-Log {
+    param([string]`$Message)
+    `$Entry = "`$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') - `$Message"
+    Add-Content -Path `$LogPath -Value `$Entry -ErrorAction SilentlyContinue
+}
+
+Write-Log "ResumeBitLocker task started. Waiting 60 seconds for services to stabilize..."
+Start-Sleep -Seconds 60
+
+try {
+
+# Track re-suspension count in the registry to prevent infinite loops
+`$CountValue = (Get-ItemProperty -Path `$RegPath -Name 'BitLockerResuspendCount' -ErrorAction SilentlyContinue).BitLockerResuspendCount
+if (`$null -eq `$CountValue) { `$CountValue = 0 }
+
+# Check if a reboot is still pending for Windows Update
+`$PendingReboot = `$false
+
+# Check Component-Based Servicing
+if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending') {
+    `$PendingReboot = `$true
+    Write-Log "Pending reboot detected: Component Based Servicing"
+}
+
+# Check Windows Update (classic AU agent)
+if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired') {
+    `$PendingReboot = `$true
+    Write-Log "Pending reboot detected: Windows Update"
+}
+
+# Check Windows Update Orchestrator (modern Windows 10/11)
+if (Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Orchestrator\RebootRequired') {
+    `$PendingReboot = `$true
+    Write-Log "Pending reboot detected: Windows Update Orchestrator"
+}
+
+`$Volume = Get-BitLockerVolume -MountPoint C: -ErrorAction Stop
+
+if (`$PendingReboot -and `$CountValue -lt `$MaxResuspensions) {
+    Write-Log "System still has pending reboots (resuspension `$CountValue of `$MaxResuspensions). Re-suspending BitLocker for 1 more reboot."
+    if (`$Volume.ProtectionStatus -eq 'On') {
+        Suspend-BitLocker -MountPoint C: -RebootCount 1 -ErrorAction Stop
+        Write-Log "BitLocker re-suspended for 1 reboot."
+    } else {
+        Write-Log "BitLocker already suspended, no action needed."
+    }
+    Set-ItemProperty -Path `$RegPath -Name 'BitLockerResuspendCount' -Value (`$CountValue + 1) -Force
+} else {
+    if (`$CountValue -ge `$MaxResuspensions) {
+        Write-Log "WARNING: Max re-suspension count (`$MaxResuspensions) reached. Resuming BitLocker regardless of pending reboots."
+    }
+    Write-Log "Resuming BitLocker."
+    if (`$Volume.ProtectionStatus -eq 'Off') {
+        Resume-BitLocker -MountPoint C: -ErrorAction Stop
+        Set-ItemProperty -Path `$RegPath -Name 'BitLockerResumedDate' -Value (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') -Force
+        Write-Log "BitLocker resumed successfully."
+    } else {
+        Write-Log "BitLocker already enabled, no action needed."
+    }
+    # Clean up: remove the scheduled task, script file, and counter
+    Unregister-ScheduledTask -TaskName 'Ambitions-ResumeBitLocker' -Confirm:`$false -ErrorAction SilentlyContinue
+    Remove-ItemProperty -Path `$RegPath -Name 'BitLockerResuspendCount' -ErrorAction SilentlyContinue
+    Remove-Item -Path `$ScriptPath -Force -ErrorAction SilentlyContinue
+    Write-Log "Scheduled task and script removed. Cleanup complete."
+}
+
+} catch {
+    Write-Log "ERROR: `$_"
+    # Increment a failure counter so we don't loop forever on persistent errors
+    `$FailCount = (Get-ItemProperty -Path `$RegPath -Name 'BitLockerResuspendCount' -ErrorAction SilentlyContinue).BitLockerResuspendCount
+    if (`$null -eq `$FailCount) { `$FailCount = 0 }
+    `$FailCount++
+    Set-ItemProperty -Path `$RegPath -Name 'BitLockerResuspendCount' -Value `$FailCount -Force -ErrorAction SilentlyContinue
+    if (`$FailCount -ge `$MaxResuspensions) {
+        Write-Log "ERROR: Max attempts (`$MaxResuspensions) reached with failures. Cleaning up task. BitLocker may need manual attention."
+        Unregister-ScheduledTask -TaskName 'Ambitions-ResumeBitLocker' -Confirm:`$false -ErrorAction SilentlyContinue
+        Remove-ItemProperty -Path `$RegPath -Name 'BitLockerResuspendCount' -ErrorAction SilentlyContinue
+        Remove-Item -Path `$ScriptPath -Force -ErrorAction SilentlyContinue
+    } else {
+        Write-Log "Will retry on next boot (attempt `$FailCount of `$MaxResuspensions)."
+    }
+}
+"@
+
+		# Write the resume script to C:\Ambitions\Scripts
+		New-Item -Path (Split-Path $ScriptPath) -ItemType Directory -Force -ErrorAction Stop | Out-Null
+		$ResumeScript | Out-File -FilePath $ScriptPath -Encoding UTF8 -Force -ErrorAction Stop
+
+		# Create a scheduled task that runs at startup (before logon) to check and resume BitLocker
+		$TaskAction = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File `"$ScriptPath`"" -ErrorAction Stop
+		$TaskTrigger = New-ScheduledTaskTrigger -AtStartup -ErrorAction Stop
+		$TaskPrincipal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -RunLevel Highest -ErrorAction Stop
+		$TaskSettings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -ErrorAction Stop
+
+		Register-ScheduledTask -TaskName 'Ambitions-ResumeBitLocker' -Action $TaskAction -Trigger $TaskTrigger -Principal $TaskPrincipal -Settings $TaskSettings -Description 'Resumes BitLocker after safe restart once all pending reboots are complete' -Force -ErrorAction Stop | Out-Null
+
+		Write-Host "BitLocker suspended. Scheduled task created to resume after all reboots complete."
+
+		} catch {
+			# Any failure after Suspend-BitLocker (registry, ACL, script write, task registration) — roll back
+			Write-Warning "Failed to set up BitLocker resume task: $_"
+			Write-Warning "Rolling back BitLocker suspension and aborting restart."
+			try {
+				Resume-BitLocker -MountPoint C: -ErrorAction Stop
+			} catch {
+				Write-Warning "CRITICAL: Failed to roll back BitLocker suspension: $_"
+				Write-Warning "BitLocker is suspended with no resume task. Run 'Resume-BitLocker -MountPoint C:' manually."
+			}
+			return
+		}
+	} elseif ($Volume) {
+		Write-Host "BitLocker is not enabled or already suspended."
+	}
+
+	# Send notification to users if there's a delay
+	if ($Delay -gt 0) {
+		$Message = "SYSTEM RESTART: This computer will restart in $Delay seconds. Please save your work immediately."
+		if (Get-Command msg -ErrorAction SilentlyContinue) {
+			msg * $Message 2>$null
+			Write-Host "User notification sent."
+		} else {
+			Write-Host "msg.exe not available on this system. User notification skipped."
+		}
+
+		Write-Host "Restarting in $Delay seconds..."
+		Start-Sleep -Seconds $Delay
+	}
+
+	try {
+		if ($Force) {
+			Restart-Computer -Force -ErrorAction Stop
+		} else {
+			Restart-Computer -ErrorAction Stop
+		}
+	} catch {
+		Write-Warning "Failed to restart computer: $_"
+		if ($Volume -and $Volume.ProtectionStatus -eq 'On') {
+			Write-Warning "BitLocker has been suspended and a resume task is registered."
+			Write-Warning "Either restart manually or run 'Resume-BitLocker -MountPoint C:' to re-enable protection."
+		}
+	}
+}
+
 # SIG # Begin signature block
 # MIIF0AYJKoZIhvcNAQcCoIIFwTCCBb0CAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
