@@ -821,7 +821,7 @@ Function Convert-ToSharedMailbox {
 					$ReplyTo = Get-EXOMailbox -Identity $ReplyTo
 					$ReplyToName = $ReplyTo.DisplayName
 					$ReplyToEmail = $ReplyTo.PrimarySmtpAddress
-					$NewSharedMailbox | Set-MailboxAutoReplyConfiguration –InternalMessage "$Name is no longer with the organization. Please direct communications to $ReplyToName at $ReplyToEmail" –ExternalMessage "$Name is no longer with the organization. Please direct communications to $ReplyToName at $ReplyToEmail" -Verbose
+					$NewSharedMailbox | Set-MailboxAutoReplyConfiguration -InternalMessage "$Name is no longer with the organization. Please direct communications to $ReplyToName at $ReplyToEmail" -ExternalMessage "$Name is no longer with the organization. Please direct communications to $ReplyToName at $ReplyToEmail" -Verbose
 					$NewSharedMailbox | Set-MailboxAutoReplyConfiguration -AutoReplyState enabled
 					$NewSharedMailbox | Get-MailboxAutoReplyConfiguration | Select-Object Identity, AutoReplyState, ExternalMessage | FL
 					Clear-Variable -Name ReplyTo -Force -ErrorAction SilentlyContinue

@@ -293,7 +293,7 @@ Function Set-DnsMadeEasyDDNS {
 
 	If (-not $ToFile) {
 		If (-Not $IPAddress) {
-			$IPAddress = (Invoke-WebRequest -Uri http://myip.dnsmadeeasy.com/ -UseBasicParsing).Content
+			$IPAddress = (Invoke-WebRequest -Uri https://myip.dnsmadeeasy.com/ -UseBasicParsing).Content
 		}
 		$FinalUrl = $FinalUrl + "&ip=" + $IpAddress
 

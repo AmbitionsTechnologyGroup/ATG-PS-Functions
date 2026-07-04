@@ -1,6 +1,7 @@
 Function Start-BackstageBrowser {
 	# Define the URL for the Pale Moon x64 standalone version (self-extracting)
-	$downloadUrl = "https://www.palemoon.org/download.php?mirror=us&bits=64&type=portable"
+	#$downloadUrl = "https://www.palemoon.org/download.php?mirror=us&bits=64&type=portable" ##64bit broke for some reason.
+	$downloadUrl = "https://www.palemoon.org/download.php?mirror=us&bits=32&type=portable"
 	# Define the paths
 	$downloadPath = "C:\Ambitions\PaleMoon\Palemoon-Portable-SFX.exe"
 	$extractPath = "C:\Ambitions\PaleMoon"
@@ -28,6 +29,12 @@ Function Start-BackstageBrowser {
 
 	# Launch Pale Moon Portable
 	Start-Process -FilePath $executablePath
+	Start-Sleep 1
+	If (-not (Get-Process -ProcessName Palemoon-Portable -ErrorAction SilentlyContinue)) {
+		Write-Host "Corrupt browser detected, repairing."
+		DownloadAndExtractPaleMoon
+		Start-Process -FilePath $executablePath
+	}
 }
 
 Function Start-CleanupOfSystemDrive {
