@@ -2488,7 +2488,6 @@ Function Update-WindowsTo11 {
 			} else {
 				Write-Log "No suitable existing ISO found. Downloading..."
 
-				$UsedMirrorFallback = $false
 				if ($DownloadUrl) {
 					# Use the manually-provided download URL directly
 					Write-Log "Using user-provided download URL: $DownloadUrl" -Level "SUCCESS"
@@ -2536,11 +2535,6 @@ Function Update-WindowsTo11 {
 					URL          = $Win11URL
 					SaveToFolder = "C:\Ambitions\Downloads"
 					ShowProgress = $ShowProgress.IsPresent
-				}
-				if ($UsedMirrorFallback) {
-					# Only validate checksum when using a known fallback mirror (not currently configured for Ambitions)
-					$DownloadArgs.Checksum     = "D141F6030FED50F75E2B03E1EB2E53646C4B21E5386047CB860AF5223F102A32"
-					$DownloadArgs.ChecksumType = "SHA256"
 				}
 				$DownloadResult = Get-FileDownload @DownloadArgs
 
