@@ -13,7 +13,7 @@ irm ps.acgs.io|iex
 **--OR--**
 
 ```powershell
-IEX(new-object net.webclient).downloadstring('https://git.io/atgPS')
+IEX(new-object net.webclient).downloadstring('https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Get-ATGPS.txt')
 
 # note that this may not work if SSL is not enabled in PowerShell.
 ```

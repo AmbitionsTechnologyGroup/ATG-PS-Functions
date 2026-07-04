@@ -505,21 +505,21 @@ Function Update-O365Apps {
 			} Else {
 			Function Get-Office365Version {
 				$O365CurrentVer = ""
-				$O365CurrentCdn = ""
+				$global:O365CurrentCdn = ""
 				$O365CurrentPol = ""
 				$O365CurrentVer = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration" -ErrorAction SilentlyContinue).VersionToReport
-				$O365CurrentCdn = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration" -ErrorAction SilentlyContinue).CDNBaseUrl
+				$global:O365CurrentCdn = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration" -ErrorAction SilentlyContinue).CDNBaseUrl
 				$O365CurrentPol = (Get-ItemProperty -Path "HKLM:\SOFTWARE\policies\microsoft\office\16.0\common\officeupdate" -ErrorAction SilentlyContinue).updatebranch
 				if ($O365CurrentVer.Length -eq 0) {
 					Write-Host "Office 365 (C2R) is not installed on this PC."
 				} else {
 					Write-Host "Office 365 (C2R) Current Version: "$O365CurrentVer
-					switch ($O365CurrentCdn) {
-						"http://officecdn.microsoft.com/pr/492350f6-3a01-4f97-b9c0-c7c6ddf67d60" {$O365CurrentCdn = "Monthly Channel"}
-						"http://officecdn.microsoft.com/pr/7ffbc6bf-bc32-4f92-8982-f9dd17fd3114" {$O365CurrentCdn = "Semi-Annual Channel"}
-						"http://officecdn.microsoft.com/pr/b8f9b850-328d-4355-9145-c59439a0c4cf" {$O365CurrentCdn = "Semi-Annual Channel (Targeted)"}
+					switch ($global:O365CurrentCdn) {
+						"http://officecdn.microsoft.com/pr/492350f6-3a01-4f97-b9c0-c7c6ddf67d60" {$global:O365CurrentCdn = "Monthly Channel"}
+						"http://officecdn.microsoft.com/pr/7ffbc6bf-bc32-4f92-8982-f9dd17fd3114" {$global:O365CurrentCdn = "Semi-Annual Channel"}
+						"http://officecdn.microsoft.com/pr/b8f9b850-328d-4355-9145-c59439a0c4cf" {$global:O365CurrentCdn = "Semi-Annual Channel (Targeted)"}
 					}
-					Write-Host "Office 365 Update Channel (Local Setting): "$O365CurrentCdn
+					Write-Host "Office 365 Update Channel (Local Setting): "$global:O365CurrentCdn
 					if ($O365CurrentPol.length -eq 0) {
 						$O365CurrentPol = "None"
 					} else {
@@ -580,7 +580,7 @@ Function Update-O365Apps {
 
 			Get-Office365Version
 
-			If (!($O365CurrentCdn -like "*monthlty*")) {
+			If (!($global:O365CurrentCdn -like "*monthly*")) {
 				Write-Host "Setting update channel to monthly"
 				& "C:\Program Files\Common Files\Microsoft Shared\ClickToRun\OfficeC2RClient.exe" /changesetting Channel=Current
 			}

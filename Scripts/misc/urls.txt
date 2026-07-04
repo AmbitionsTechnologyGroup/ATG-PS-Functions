@@ -1,5 +1,6 @@
-To create a shortened URL:
-  curl -i https://git.io -F "url=https://github.com/..." -F "code=abc123"
+git.io was retired by GitHub; these shortlinks no longer resolve. Kept here as a
+historical record of what they used to point to. Live code now references the
+raw.githubusercontent.com URLs directly instead of these shortlinks.
 
 https://git.io/JJh1R ->
 https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Chocolatey/installchoco.txt
