@@ -94,6 +94,20 @@ Commit after each work item with a message describing the function fixed and why
 - `ATG-PS-Start.txt`: `Start-BackstageBrowser` 32-bit Pale Moon + corrupt-install self-repair.
 - `ATG-PS-Convert.txt`: en-dashes → hyphens in `Convert-ToSharedMailbox`.
 - `ATG-PS-Set.txt`: `Set-DnsMadeEasyDDNS` http → https.
+- **BATCH A complete** (A1-A7, A9): Update-Windows, Update-DellServer, Update-DellPackages,
+  Update-PSWinGetPackages, Update-DnsServerRootHints, Update-ITS247Agent https,
+  Update-PowerShellModule NuGet pin, Uninstall-Application rewrite.
+  A8 (`*monthlty*` typo in Update-O365Apps) deliberately left for maintainer review —
+  the same typo exists in the fork, and fixing it changes runtime behavior.
+- **BATCH B complete** (B1-B5): Remove-PathForcefully, Remove-DuplicateFiles,
+  Remove-StaleObjects targeted fixes, Invoke-IPv4NetworkScan three fixes,
+  Invoke-WinGetInstall helper added (adoption in Install-NetExtender/Install-WinGetApps/
+  Update-Edge still open).
+- **BATCH C complete** (C1-C3): Connect-Wifi rewrite, Connect-O365AzureAD deprecation
+  warnings, Enable-SSL TLS hardening.
+
+Remaining open work: BATCH D (D1-D6), the decision-needed items, and optional new-function
+cherry-picks below.
 
 ---
 
