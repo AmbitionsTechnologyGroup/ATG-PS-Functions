@@ -177,50 +177,153 @@ Function Install-O2016STD([String] $MSPURL){
 		$Shortcut.Save()
 }
 
-Function Install-O365([String] $SiteCode = "Generic"){
+Function Install-O365 {
+	[CmdletBinding()]
+	param(
+		[String]$SiteCode = "Generic",
+		[String]$ConfigUrl,
+		[Switch]$SharedComputer
+	)
+
 	Write-Host "Downloading MS Office"
-		Enable-SSL
-		New-Item -ItemType Directory -Force -Path "C:\Ambitions\O365"
-		(New-Object System.Net.WebClient).DownloadFile('https://download.ambitionsgroup.com/O365/setup.exe', 'C:\Ambitions\O365\setup.exe')
-	Write-Host "Downloading MS Office config files"
-		$O365ConfigSource = "https://download.ambitionsgroup.com/Sites/" + $SiteCode + "/" + $SiteCode + "_O365_Config.xml"
-		$O365ConfigDest = "C:\Ambitions\O365\" + $SiteCode + "_O365_Config.xml"
-		(New-Object System.Net.WebClient).DownloadFile($O365ConfigSource, $O365ConfigDest)
-	Write-Host "Installing Office"
-		& C:\Ambitions\O365\setup.exe /configure $O365ConfigDest | Wait-Process
-	Write-Host "Placing Shortcuts"
-		If (Test-Path "C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE"){
-			$TargetFile = "C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE"
-		} ELSEIF (Test-Path "C:\Program Files (x86)\Microsoft Office\root\Office16\OUTLOOK.EXE"){
-			$TargetFile = "C:\Program Files (x86)\Microsoft Office\root\Office16\OUTLOOK.EXE"
+	Enable-SSL
+
+	function Get-ODTUri {
+		<#
+		.SYNOPSIS
+		Get Download URL of latest Office 365 Deployment Tool (ODT)
+		#>
+		[CmdletBinding()]
+		[OutputType([string])]
+		param ()
+
+		$url = "https://www.microsoft.com/en-us/download/details.aspx?id=49117"
+
+		try {
+			$response = Invoke-WebRequest -Uri $url -UseBasicParsing -ErrorAction Stop
 		}
+		catch {
+			throw "Failed to connect to ODT: $url with error $_."
+		}
+
+		$ODTUri = $response.Links | Where-Object {
+			$_.href -match "https://download\.microsoft\.com/download/.*/officedeploymenttool_.*\.exe"
+		}
+
+		if ($ODTUri) {
+			return $ODTUri.href
+		}
+		else {
+			throw "Could not find ODT download link on the page"
+		}
+	}
+
+	# Get the ODT Setup.exe URL
+	$downloadUrl = Get-ODTUri
+	Write-Host "ODT Download URL: $downloadUrl"
+
+	# Create the O365 folder if it doesn't exist
+	$O365Folder = "C:\Ambitions\O365"
+	if (-not (Test-Path $O365Folder)) {
+		New-Item -Path $O365Folder -ItemType Directory -Force | Out-Null
+		Write-Host "Created folder: $O365Folder"
+	}
+
+	# Download ODT
+	$odtPath = Join-Path $O365Folder "ODTSetup.exe"
+	(New-Object System.Net.WebClient).DownloadFile($downloadUrl, $odtPath)
+
+	# Extract silently to the same folder
+	Write-Host "Extracting ODT to: $O365Folder"
+	Start-Process -FilePath $odtPath -ArgumentList "/quiet /extract:`"$O365Folder`"" -Wait
+
+	Write-Host "ODT extracted successfully to $O365Folder"
+
+	# Determine config file source and destination
+	Write-Host "Downloading MS Office config files"
+	if ($ConfigUrl) {
+		# Use the provided URL directly
+		$O365ConfigSource = $ConfigUrl
+		$configFileName = Split-Path $ConfigUrl -Leaf
+		if (-not $configFileName.EndsWith('.xml')) {
+			$configFileName = "O365_Config.xml"
+		}
+		$O365ConfigDest = Join-Path $O365Folder $configFileName
+	}
+	else {
+		# Build URL from SiteCode using Ambitions site-config scheme
+		$O365ConfigSource = "https://download.ambitionsgroup.com/Sites/" + $SiteCode + "/" + $SiteCode + "_O365_Config.xml"
+		$O365ConfigDest = Join-Path $O365Folder ($SiteCode + "_O365_Config.xml")
+	}
+
+	# Download config file
+	(New-Object System.Net.WebClient).DownloadFile($O365ConfigSource, $O365ConfigDest)
+
+	# Modify config for SharedComputer if switch is enabled
+	if ($SharedComputer) {
+		Write-Host "Enabling SharedComputerLicensing in config file"
+		[xml]$configXml = Get-Content $O365ConfigDest
+
+		# Find and update SharedComputerLicensing property
+		$sharedComputerProperty = $configXml.SelectNodes("//Property[@Name='SharedComputerLicensing']")
+		foreach ($property in $sharedComputerProperty) {
+			$property.Value = "1"
+		}
+
+		# Save the modified config
+		$configXml.Save($O365ConfigDest)
+		Write-Host "SharedComputerLicensing enabled"
+	}
+
+	Write-Host "Installing Office"
+	& $O365Folder\setup.exe /configure $O365ConfigDest | Wait-Process
+
+	Write-Host "Placing Shortcuts"
+
+	# Outlook shortcut
+	$TargetFile = $null
+	If (Test-Path "C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE"){
+		$TargetFile = "C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE"
+	} ELSEIF (Test-Path "C:\Program Files (x86)\Microsoft Office\root\Office16\OUTLOOK.EXE"){
+		$TargetFile = "C:\Program Files (x86)\Microsoft Office\root\Office16\OUTLOOK.EXE"
+	}
+	if ($TargetFile) {
 		$ShortcutFile = "$env:Public\Desktop\Outlook.lnk"
 		$WScriptShell = New-Object -ComObject WScript.Shell
 		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
 		$Shortcut.TargetPath = $TargetFile
 		$Shortcut.Save()
+	}
 
-		If (Test-Path "C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE"){
-			$TargetFile = "C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE"
-		} ELSEIF (Test-Path "C:\Program Files (x86)\Microsoft Office\root\Office16\EXCEL.EXE"){
-			$TargetFile = "C:\Program Files (x86)\Microsoft Office\root\Office16\EXCEL.EXE"
-		}
+	# Excel shortcut
+	$TargetFile = $null
+	If (Test-Path "C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE"){
+		$TargetFile = "C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE"
+	} ELSEIF (Test-Path "C:\Program Files (x86)\Microsoft Office\root\Office16\EXCEL.EXE"){
+		$TargetFile = "C:\Program Files (x86)\Microsoft Office\root\Office16\EXCEL.EXE"
+	}
+	if ($TargetFile) {
 		$ShortcutFile = "$env:Public\Desktop\Excel.lnk"
 		$WScriptShell = New-Object -ComObject WScript.Shell
 		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
 		$Shortcut.TargetPath = $TargetFile
 		$Shortcut.Save()
+	}
 
-		If (Test-Path "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"){
-			$TargetFile = "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"
-		} ELSEIF (Test-Path "C:\Program Files (x86)\Microsoft Office\root\Office16\WINWORD.EXE"){
-			$TargetFile = "C:\Program Files (x86)\Microsoft Office\root\Office16\WINWORD.EXE"
-		}
+	# Word shortcut
+	$TargetFile = $null
+	If (Test-Path "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"){
+		$TargetFile = "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"
+	} ELSEIF (Test-Path "C:\Program Files (x86)\Microsoft Office\root\Office16\WINWORD.EXE"){
+		$TargetFile = "C:\Program Files (x86)\Microsoft Office\root\Office16\WINWORD.EXE"
+	}
+	if ($TargetFile) {
 		$ShortcutFile = "$env:Public\Desktop\Word.lnk"
 		$WScriptShell = New-Object -ComObject WScript.Shell
 		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
 		$Shortcut.TargetPath = $TargetFile
 		$Shortcut.Save()
+	}
 }
 
 Function Install-O365ProofPointConnectors {
