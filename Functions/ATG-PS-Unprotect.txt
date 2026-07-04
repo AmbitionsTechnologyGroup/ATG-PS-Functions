@@ -10,7 +10,7 @@ Function Unprotect-ConfigFile {
 
 	Expected format: Base64( salt[16] + iv[16] + hmac[32] + ciphertext )
 	.Parameter EncryptedContent
-	The Base64-encoded encrypted content (as downloaded from BinCache)
+	The Base64-encoded encrypted content (e.g. as downloaded from a config-file host)
 	.Parameter Password
 	The password that was used to encrypt the file via Protect-ConfigFile
 	#>
