@@ -66,6 +66,113 @@ Function Repair-Volumes {
 	}
 }
 
+Function Repair-ChocoDependency {
+<#
+	.SYNOPSIS
+		Repairs "unresolved package dependency constraints" errors that block Chocolatey installs and upgrades.
+	.DESCRIPTION
+		Chocolatey v2.x refuses to install or upgrade ANY package while one or more
+		already-installed packages declare a dependency that is not present in the
+		lib folder. The blocking error reads:
+
+			"One or more unresolved package dependency constraints detected in the
+			 Chocolatey lib folder. All dependency constraints must be resolved to
+			 add or update packages."
+
+		This commonly happens on machines where packages such as
+		dotnet-8.0-desktopruntime or dellcommandupdate were installed without their
+		chocolatey-core.extension and vcredist140 dependencies. Until those missing
+		dependencies are present, even unrelated operations (upgrading pwsh or
+		microsoft-edge, "choco upgrade all", etc.) fail.
+
+		This function installs the missing dependency packages in a single
+		"choco install" call so Chocolatey resolves them as a group. Installing them
+		one at a time can fail, because each pass still sees the others as unresolved
+		(for example "choco install chocolatey-core.extension" fails while vcredist140
+		is still missing). The well-known culprits (chocolatey-core.extension and
+		vcredist140) are always included, and any additional dependency names found in
+		supplied choco output are added to the repair set.
+	.PARAMETER ChocoOutput
+		Optional captured output from a failed "choco install" / "choco upgrade"
+		operation. Any package names referenced by the unresolved-dependency errors
+		are parsed out and added to the repair set.
+	.PARAMETER AdditionalPackage
+		Optional extra package id(s) to include in the repair install.
+	.EXAMPLE
+		Repair-ChocoDependency
+	.EXAMPLE
+		$Output = choco upgrade pwsh -y --force 2>&1
+		If ($Output -match 'Unable to resolve dependency') { Repair-ChocoDependency -ChocoOutput $Output }
+	.NOTES
+		Requires Chocolatey. If choco.exe is missing it is installed first via Install-Choco.
+#>
+	[CmdletBinding()]
+	Param(
+		[Parameter(ValueFromPipeline = $true)]
+		[string[]]$ChocoOutput,
+
+		[Parameter()]
+		[string[]]$AdditionalPackage
+	)
+
+	# Make sure choco is available before trying to repair anything.
+	If (!(Get-Command choco -ErrorAction SilentlyContinue)) {
+		Write-Host "Chocolatey not found. Installing it first." -ForegroundColor Yellow
+		Install-Choco
+	}
+	If (!(Get-Command choco -ErrorAction SilentlyContinue)) {
+		Write-Host "Chocolatey is still not available, cannot repair dependencies." -ForegroundColor Red
+		Return $false
+	}
+
+	# chocolatey-core.extension and vcredist140 are by far the most common missing
+	# constraints. vcredist140 itself depends on chocolatey-core.extension, so listing
+	# both in one install lets choco resolve the whole group at once.
+	$RepairSet = New-Object System.Collections.Generic.List[string]
+	ForEach ($Pkg in @('chocolatey-core.extension', 'vcredist140')) { $RepairSet.Add($Pkg) }
+
+	# Pull any other unresolved dependency names out of the choco output we were handed.
+	# The blocking errors look like:
+	#   Unable to resolve dependency 'vcredist140'.
+	#   Unable to find a version of 'chocolatey-core.extension' that is compatible...
+	If ($ChocoOutput) {
+		$Text = $ChocoOutput -join "`n"
+		$Patterns = @(
+			"Unable to resolve dependency '([^']+)'",
+			"Unable to find a version of '([^']+)'"
+		)
+		ForEach ($Pattern in $Patterns) {
+			ForEach ($Match in [regex]::Matches($Text, $Pattern)) {
+				$Name = $Match.Groups[1].Value.Trim()
+				If ($Name -and ($RepairSet -notcontains $Name)) { $RepairSet.Add($Name) }
+			}
+		}
+	}
+
+	# Caller-specified extras.
+	ForEach ($Pkg in $AdditionalPackage) {
+		If ($Pkg -and ($RepairSet -notcontains $Pkg)) { $RepairSet.Add($Pkg) }
+	}
+
+	Write-Host "Repairing Chocolatey dependency constraints by installing: $($RepairSet -join ', ')" -ForegroundColor Cyan
+
+	# Install the whole set in one call so choco resolves them together. Packages that
+	# are already present at a satisfying version are skipped, so this is a safe no-op
+	# when nothing is actually broken.
+	$ChocoArgs = @('install') + $RepairSet + @('-y')
+	$RepairOutput = & choco @ChocoArgs 2>&1
+	$RepairText = $RepairOutput | Out-String
+	Write-Host $RepairText
+
+	If ($RepairText -match 'packages failed') {
+		Write-Host "Dependency repair reported one or more failures. Review C:\ProgramData\chocolatey\logs\chocolatey.log." -ForegroundColor Red
+		Return $false
+	}
+
+	Write-Host "Chocolatey dependency constraints repaired." -ForegroundColor Green
+	Return $true
+}
+
 # SIG # Begin signature block
 # MIIF0AYJKoZIhvcNAQcCoIIFwTCCBb0CAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR

@@ -1107,10 +1107,32 @@ Function Update-PWSH {
 	Write-Host "Updating PWSH"
 	If (Get-Command winget -ErrorAction SilentlyContinue) {
 		winget source update
-		winget install --id Microsoft.PowerShell -e -h --accept-package-agreements --accept-source-agreements
+		Invoke-WinGetInstall -Id Microsoft.PowerShell
 	} Else {
 		If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
-		Choco upgrade pwsh -y -force
+
+		# Chocolatey v2.x refuses to install or upgrade ANY package while the lib folder
+		# has unresolved dependency constraints (for example dotnet-8.0-desktopruntime or
+		# dellcommandupdate declaring chocolatey-core.extension / vcredist140 without those
+		# dependencies being present). Capture the upgrade output so we can detect that
+		# state, heal it with Repair-ChocoDependency, and retry.
+		$MaxAttempts = 3
+		For ($Attempt = 1; $Attempt -le $MaxAttempts; $Attempt++) {
+			$ChocoOutput = choco upgrade pwsh -y --force 2>&1
+			$ChocoText = $ChocoOutput | Out-String
+			Write-Host $ChocoText
+
+			$DependencyBlocked = ($ChocoText -match 'packages failed') -and `
+				($ChocoText -match 'Unable to (resolve|find a version)')
+			If (-not $DependencyBlocked) { Break }
+
+			If ($Attempt -lt $MaxAttempts) {
+				Write-Host "PWSH upgrade blocked by unresolved Chocolatey dependencies. Repairing and retrying..." -ForegroundColor Yellow
+				Repair-ChocoDependency -ChocoOutput $ChocoOutput | Out-Null
+			} Else {
+				Write-Host "PWSH upgrade still failing after dependency repair. See C:\ProgramData\chocolatey\logs\chocolatey.log." -ForegroundColor Red
+			}
+		}
 	}
 	# Update the system PATH env to correct previous install logic.
 	$folderToSearch = "C:\Program Files\PowerShell\"
