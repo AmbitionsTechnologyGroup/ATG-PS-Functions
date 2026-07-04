@@ -59,20 +59,27 @@ numbers are approximate; locate functions by name (`grep -n "Function <Name>"`).
 # 1. No branding leakage (must print nothing):
 grep -n 'ITFolder\|mauletech\|MauleTech' Functions/<edited-file>
 
-# 2. Brace/paren balance did not change vs the committed version:
+# 2. Brace/paren balance did not change vs the committed version.
+#    Use the LINE-BASED checker below, not a multiline regex — multiline regex
+#    substitution for quoted strings gets confused by PowerShell here-strings
+#    (@' ... '@ / @" ... "@) that span many lines and produced false positives
+#    during Batch D. This line-based version strips comments/strings per line
+#    instead, which handles here-strings correctly in practice:
 python3 - <<'EOF'
 import re, subprocess
 f = "Functions/<edited-file>"
-def bal(src):
-    s = re.sub(r"<#.*?#>", "", src, flags=re.S)
-    s = re.sub(r"`.", "", s)
-    s = re.sub(r"'[^']*'", "''", s)
-    s = re.sub(r'"[^"]*"', '""', s)
-    s = re.sub(r"#.*", "", s)
-    return (s.count("{") - s.count("}"), s.count("(") - s.count(")"))
-new = bal(open(f, encoding="utf-8-sig").read())
-old = bal(subprocess.run(["git", "show", f"HEAD:{f}"], capture_output=True, text=True).stdout)
-print("old", old, "new", new)  # naive parser has false positives; the DELTA must be 0
+def depth(text):
+    d = 0
+    for l in text.splitlines():
+        l = re.sub(r"`.", "", l)
+        l = re.sub(r"'[^']*'", "''", l)
+        l = re.sub(r'"[^"]*"', '""', l)
+        l = re.sub(r"#.*", "", l)
+        d += l.count("{") - l.count("}")
+    return d
+new = depth(open(f, encoding="utf-8-sig").read())
+old = depth(subprocess.run(["git", "show", f"HEAD:{f}"], capture_output=True, text=True).stdout)
+print("old", old, "new", new, "DELTA", new - old)  # DELTA must be 0
 EOF
 ```
 
@@ -272,6 +279,20 @@ Keep the function's existing Write-Host messaging style.
 
 ## BATCH D — Larger adaptations (do after A-C; each needs judgment)
 
+**All of D1-D6 are complete.** Also completed since Batch D was written:
+- Retired the dead `git.io/ATGPS` and `git.io/atgPS` shortlinks (GitHub retired the
+  service) in `Scripts/Get-ATGPS.txt`, `Scripts/Deploy-ATGPSFunctions.txt`, and
+  `README.md` — now point directly at the `raw.githubusercontent.com` URLs those
+  shortlinks used to resolve to. `Scripts/misc/urls.txt` kept as an annotated
+  historical record.
+- Fixed `Update-O365Apps`'s channel check. It wasn't just the `*monthlty*` typo:
+  `Get-Office365Version` is a nested function whose unqualified `$O365CurrentCdn`
+  assignments created a local shadow variable instead of writing back to the
+  `$global:O365CurrentCdn` the outer function declared, so the check always read an
+  empty string and force-switched every machine to Monthly on every run regardless of
+  its actual channel (confirmed identical in the fork). Fixed by having the nested
+  function write `$global:O365CurrentCdn`, plus the spelling fix at the comparison site.
+
 ### D1. Set-DailyReboot / Set-WeeklyReboot BitLocker awareness (P2)
 Fork source: `PS-Set.psm1` (~lines 175-240 and 465-537). Before the scheduled restart:
 `Suspend-BitLocker -RebootCount 5` + a RunOnce resume script, preventing machines with
@@ -320,11 +341,8 @@ existing `Restart-Computer -Force`, insert:
 ## Decision-needed items (do NOT implement without maintainer approval)
 
 - **Invoke-NDDCScan webhook (P2, security):** original embeds a base64-obfuscated Ambitions
-  Teams webhook URL in this public repo (leaked secret; Microsoft has also retired
-  `*.webhook.office.com` connectors). Recommended: externalize to
-  `C:\Ambitions\Config\webhooks.json` with graceful degradation (fork pattern,
-  `PS-Invoke.psm1` ~1407-1425) and rotate/replace the webhook. Needs maintainer to
-  provision the new webhook and config file.
+  Teams webhook URL in this public repo. Maintainer decision: leave as-is for now — do NOT
+  externalize or rotate this without explicit sign-off.
 - **Invoke-ValidatedDownload infrastructure:** SHA256-manifest download validation
   (fork `PS-Invoke.psm1` ~1656+ plus `DownloadManifest.json`). Worthwhile hardening, but
   needs an Ambitions manifest and adaptation away from `$Global:PWSHFolder`.
@@ -332,11 +350,11 @@ existing `Restart-Computer -Force`, insert:
   SiteCode (predictable, plaintext in registry). Changing it breaks existing deploy flows.
 - **Update-PWSH choco-dependency retry:** depends on fork-only `Repair-ChocoDependency`
   (~2000 lines in `PS-Repair.psm1`). Pull both or skip.
-- **ps.acgs.io / git.io liveness:** `Scripts/Get-ATGPS.txt` bootstraps from `git.io/ATGPS`
-  — git.io was shut down by GitHub in 2022, so that script is dead as written. Verify
-  `ps.acgs.io` resolves and update or retire `Get-ATGPS`.
 - **Legacy root `ATG-PS-Functions.txt`:** stale single-file copy of ~73 functions that does
-  not receive these fixes. Confirm nothing still loads it, then update or retire it.
+  not receive these fixes. It's still the target of `Get-ATGPS`/`Deploy-ATGPSFunctions.txt`
+  (git.io shortlinks pointing at it were replaced with direct raw.githubusercontent.com URLs,
+  but the staleness itself is unresolved). Confirm nothing else still relies on it, then
+  either regenerate it from the individual `Functions/ATG-PS-*.txt` files or retire it.
 
 ## New fork functions worth cherry-picking later (P3, optional)
 
