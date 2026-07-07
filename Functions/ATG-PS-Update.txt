@@ -15,34 +15,117 @@ Function Update-DnsServerRootHints{
 	#>
 	If (Get-Service -DisplayName "DNS Server" -ErrorAction SilentlyContinue) {
 		$url = "https://www.internic.net/domain/named.root"
-		$hashtable = @{}
+		$latestRootHints = @{}
 
 		# Download the contents of the URL
+		Write-Host "Fetching latest root hints from www.internic.net..." -ForegroundColor Cyan
 		$content = Invoke-WebRequest -Uri $url
 
 		# Split the content into lines
-		$lines = $content.Content.Split("`r`n") | Where-Object {$_ -notmatch ";|NS|AAAA"}  # Use `"`r`n" for Windows-style newlines
+		$lines = $content.Content.Split("`r`n") | Where-Object {$_ -notmatch ";|NS|AAAA"}
 
-		# Process each line, ignoring lines starting with ;
+		# Process each line to extract root hints
 		foreach ($line in $lines) {
-			if (!($line -like ";*")) {
-				$values = $line.Split(" ")
-				$hashtable[$values[0]] = $values[-1]  # Store only the last string
+			if (!($line -like ";*") -and $line.Trim() -ne "") {
+				$values = $line.Split(" ", [System.StringSplitOptions]::RemoveEmptyEntries)
+				if ($values.Count -ge 2) {
+					$latestRootHints[$values[0]] = $values[-1]
+				}
 			}
 		}
-		#$hashtable = $($hashtable.GetEnumerator() | Sort Name | Select Name,Value | Format-Table)
-		Write-Host "Currently set DNS Root Hints:";$(Get-DNSServerRootHint)
-		# Display the hashtable (optional)
-		Write-Host "Latest root hints from www.internic.net :";$($hashtable.GetEnumerator() | Sort Name | Select Name,Value | Format-Table)
 
-		# Remove the old entries and add the updated entries. Does not check if old is still up to date.
-		Write-Host "Replacing current set with updates"
-		foreach ($entry in $($hashtable.GetEnumerator()| Sort Name)) {
-			Remove-DnsServerRootHint -Force -NameServer ($entry.Name).ToLower() -ErrorAction SilentlyContinue
-			Add-DnsServerRootHint -NameServer $entry.Name -IPAddress $entry.Value -Verbose
+		# Get current root hints
+		Write-Host "Retrieving current DNS root hints..." -ForegroundColor Cyan
+		$currentRootHints = @{}
+		$currentHints = Get-DNSServerRootHint
+		foreach ($hint in $currentHints) {
+			$nameServer = $hint.NameServer.RecordData.NameServer
+			# Look through IP addresses for IPv4 addresses
+			foreach ($ipRecord in $hint.IPAddress) {
+				if ($ipRecord.RecordData.IPv4Address) {
+					$ipAddress = $ipRecord.RecordData.IPv4Address.IPAddressToString
+					if ($ipAddress) {
+						$currentRootHints[$nameServer] = $ipAddress
+						break  # Use the first IPv4 address
+					}
+				}
+			}
 		}
-		Write-Host "DNS Root Hints are now set to:";$(Get-DNSServerRootHint)
-		
+
+		# Create comparison table
+		Write-Host "`nDNS Root Hints Comparison:" -ForegroundColor Yellow
+
+		$comparisonTable = @()
+		$changesNeeded = $false
+		$upToDate = @()
+		$needsUpdate = @()
+		$missing = @()
+
+		# Compare all root hints
+		foreach ($server in ($latestRootHints.Keys | Sort-Object)) {
+			$latestIP = $latestRootHints[$server]
+			$currentIP = $currentRootHints[$server]
+
+			$status = if ($currentIP -eq $latestIP) {
+				$upToDate += $server
+				"Up to date"
+			} elseif ($null -eq $currentIP) {
+				$changesNeeded = $true
+				$missing += $server
+				"Missing"
+			} else {
+				$changesNeeded = $true
+				$needsUpdate += $server
+				"Needs update"
+			}
+
+			$comparisonTable += [PSCustomObject]@{
+				NameServer = $server
+				CurrentIP = if ($currentIP) { $currentIP } else { "N/A" }
+				LatestIP = $latestIP
+				Status = $status
+			}
+		}
+
+		# Display the comparison table using Format-Table
+		$comparisonTable | Format-Table -AutoSize
+
+		# Display summary with color coding
+		Write-Host "Summary:" -ForegroundColor Yellow
+		if ($upToDate.Count -gt 0) {
+			Write-Host "  Up to date: $($upToDate.Count) root hint(s)" -ForegroundColor Green
+		}
+		if ($needsUpdate.Count -gt 0) {
+			Write-Host "  Needs update: $($needsUpdate.Count) root hint(s) - $($needsUpdate -join ', ')" -ForegroundColor Yellow
+		}
+		if ($missing.Count -gt 0) {
+			Write-Host "  Missing: $($missing.Count) root hint(s) - $($missing -join ', ')" -ForegroundColor Red
+		}
+
+		# Only make changes if needed
+		if ($changesNeeded) {
+			Write-Host "`nChanges detected. Updating DNS root hints..." -ForegroundColor Yellow
+			$updatedCount = 0
+
+			foreach ($entry in ($latestRootHints.GetEnumerator() | Sort-Object Name)) {
+				$currentIP = $currentRootHints[$entry.Name]
+
+				# Only update if different or missing
+				if ($currentIP -ne $entry.Value) {
+					# Remove old entry if it exists
+					Remove-DnsServerRootHint -Force -NameServer ($entry.Name).ToLower() -ErrorAction SilentlyContinue
+
+					# Add new entry
+					Add-DnsServerRootHint -NameServer $entry.Name -IPAddress $entry.Value -Verbose
+					$updatedCount++
+				}
+			}
+
+			Write-Host "`nSuccessfully updated $updatedCount root hint(s)." -ForegroundColor Green
+		} else {
+			Write-Host "`nAll DNS root hints are already up to date. No changes needed." -ForegroundColor Green
+		}
+
 	} Else {
 		Write-Warning "You can only run this command on a DNS server."
 	}
@@ -67,21 +150,41 @@ Function Update-DellPackages {
 				choco upgrade chocolatey -y
 			} Else { Install-Choco }
 
-						Stop-Process -Name DellCommandUpdate -Force -ErrorAction SilentlyContinue
+			Stop-Process -Name DellCommandUpdate -Force -ErrorAction SilentlyContinue
 			$DCUx86 = Join-Path -Path ${env:ProgramFiles(x86)} -ChildPath "Dell\CommandUpdate\dcu-cli.exe"
 			$DCUx64 = Join-Path -Path $Env:ProgramFiles -ChildPath "Dell\CommandUpdate\dcu-cli.exe"
+
+			# Decide the install source ONCE and reuse for both the available-version check
+			# and the actual install. Mixing sources (e.g. check via choco, install via winget)
+			# causes upgrade loops when the two catalogs disagree on the latest version.
+			$IsSystem      = $(whoami) -eq "nt authority\system"
+			$InstallSource = If (Get-Command winget -ErrorAction SilentlyContinue) { 'winget' } Else { 'choco' }
+			Write-Host "DCU package source for this run: $InstallSource" -ForegroundColor Cyan
 
 			Function Install-DCU {
 				#Starts the IPMI Service if needed
 				$IPMIService = (Get-Service -Name IPMIDRV -ErrorAction SilentlyContinue).Status
 				If ($IPMIService -and $IPMIService -ne "Running") {Start-Service -Name IPMIDRV}
-				#Install the latest
 				Stop-Process -Name DellCommandUpdate -Force -ErrorAction SilentlyContinue
-				If (Get-Command winget -ErrorAction SilentlyContinue) {
-					winget source update
-					winget install --id Dell.CommandUpdate -e -h --accept-package-agreements --accept-source-agreements
+
+				If ($InstallSource -eq 'winget') {
+					If (-not $IsSystem) {
+						Write-Host "Using winget to install Dell Command Update and dependencies." -ForegroundColor Cyan
+						winget source update
+						Invoke-WinGetInstall -Id Microsoft.DotNet.DesktopRuntime.8
+						Invoke-WinGetInstall -Id Dell.CommandUpdate
+					} Else {
+						Write-Host "Running as SYSTEM; invoking winget via Start-PSWinGet." -ForegroundColor Yellow
+						Try {
+							Start-PSWinGet -Command 'Update-PowerShellModule -ModuleName Microsoft.WinGet.Client ; Install-WinGetPackage "Microsoft.DotNet.DesktopRuntime.8" ; Install-WinGetPackage "Dell.CommandUpdate"'
+						} Catch {
+							Write-Warning "Start-PSWinGet failed: $_"
+						}
+					}
 				} Else {
-					Choco upgrade DellCommandUpdate --exact -y --force -i --ignorechecksums
+					Write-Host "Using Chocolatey to install Dell Command Update and dependencies." -ForegroundColor Cyan
+					choco upgrade dotnet-8.0-desktopruntime --exact -y --force --forcedependencies -i
+					choco upgrade DellCommandUpdate --exact -y --force --forcedependencies -i --ignorechecksums
 				}
 			}
 
@@ -89,9 +192,25 @@ Function Update-DellPackages {
 				Write-Host "Checking if 'Dell Command | Update' is current."
 				#Remove any Windows 10 "Apps"
 				Get-ProvisionedAppPackage -Online -ErrorAction SilentlyContinue | Where-Object {$_.DisplayName -like "*Dell*Update*"} | Remove-ProvisionedAppPackage -Online
-				Uninstall-Application -AppToUninstall "Dell*Update"
+
+				# Scan once to gate the uninstall calls below. Uninstall-Application's
+				# internal WMI scan is the expensive part; skipping it when no match
+				# exists is the whole point.
+				Write-Host "Scanning installed applications for conflicts..." -ForegroundColor Cyan
+				$InstalledApps = Get-InstalledApplication
+
+				$Conflicts = @(
+					@{ Pattern = 'Dell.*Update';                           App = 'Dell*Update' },
+					@{ Pattern = 'Alienware Update for Windows Universal'; App = 'Alienware Update for Windows Universal' }
+				)
+				ForEach ($c in $Conflicts) {
+					If ($InstalledApps.Name -match $c.Pattern) {
+						Uninstall-Application -AppToUninstall $c.App
+					} Else {
+						Write-Host -ForegroundColor Green "No '$($c.App)' found; skipping."
+					}
+				}
 				Get-Package "Dell*Windows 10" -ErrorAction SilentlyContinue | Uninstall-Package -AllVersions -Force
-				Uninstall-Application -AppToUninstall "Alienware Update for Windows Universal" -ErrorAction SilentlyContinue
 				If (Get-AppxPackage *Dell*Update*){
 					$apps = Get-ChildItem -Path HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall,HKLM:\SOFTWARE\Wow6432Node\Microsoft\Windows\CurrentVersion\Uninstall | Get-ItemProperty | Where-Object {$_.DisplayName -like "Dell*Update*" } | Select-Object -Property DisplayName, UninstallString
 					ForEach ($ver in $apps) {
@@ -103,40 +222,58 @@ Function Update-DellPackages {
 					}
 				}
 			}
-					#Compare version numbers of any remaining installed version.
-					$DCUInstalledVersion = (Get-Package -Provider Programs -IncludeWindowsInstaller -Name "Dell Command | Update" -ErrorAction SilentlyContinue).Version
-					If (-not $DCUInstalledVersion -and (Test-Path $DCUx86 -ErrorAction SilentlyContinue)) {$DCUInstalledVersion = (Get-Item $DCUx86).VersionInfo.ProductVersion}
-					If (-not $DCUInstalledVersion -and (Test-Path $DCUx64 -ErrorAction SilentlyContinue)) {$DCUInstalledVersion = (Get-Item $DCUx64).VersionInfo.ProductVersion}
-					If (Get-Command winget -ErrorAction SilentlyContinue) {
-						$DCUAvailableVersion = $(winget show --id Dell.CommandUpdate --accept-source-agreements | Select-String -SimpleMatch "Version:").Line.Replace("Version: ","")
+			#Compare version numbers of any remaining installed version.
+			$DCUInstalledVersion = (Get-Package -Provider Programs -IncludeWindowsInstaller -Name "Dell Command | Update" -ErrorAction SilentlyContinue).Version
+			If (-not $DCUInstalledVersion -and (Test-Path $DCUx86 -ErrorAction SilentlyContinue)) {$DCUInstalledVersion = (Get-Item $DCUx86).VersionInfo.ProductVersion}
+			If (-not $DCUInstalledVersion -and (Test-Path $DCUx64 -ErrorAction SilentlyContinue)) {$DCUInstalledVersion = (Get-Item $DCUx64).VersionInfo.ProductVersion}
+			# Query available version from the SAME source that will install it. If the
+			# query source and install source can disagree, the installed version will
+			# never match what the check reports and every run will trigger a needless
+			# uninstall + reinstall.
+			$DCUAvailableVersion = $null
+			Switch ($InstallSource) {
+				'winget' {
+					$wingetVersionLine = winget show --id Dell.CommandUpdate --accept-source-agreements | Select-String -SimpleMatch "Version:" | Select-Object -First 1
+					If ($wingetVersionLine) {
+						$DCUAvailableVersion = $wingetVersionLine.Line.Replace("Version: ","").Trim()
 					} Else {
-						$DCUAvailableVersion = choco search DellCommandUpdate --exact #Gets all results
-						$DCUAvailableVersion = ($DCUAvailableVersion | Select-String -Pattern "DellCommandUpdate " -SimpleMatch).Line #Isolates the desired result
-						$DCUAvailableVersion = $DCUAvailableVersion.split(" ",[System.StringSplitOptions]::RemoveEmptyEntries)[1] #Isolates the version number
+						Write-Host "winget could not determine available DCU version; will rely on installed version check only." -ForegroundColor Yellow
 					}
-
-				If (-not $DCUInstalledVersion) {
-					Write-Host "'Dell Command | Update' is not installed, installing now."
-					Install-DCU
-
-				}  ElseIf ($DCUAvailableVersion -notmatch $DCUInstalledVersion) {
-					Write-Host "'Dell Command | Update' is not current. Updating from version $DCUInstalledVersion to $DCUAvailableVersion."
-
-					#Remove any programs listed through "Add and remove programs"
-					Uninstall-Application -AppToUninstall "Dell Command | Update" -ErrorAction SilentlyContinue
-					Install-DCU
-
-				} ElseIf ($DCUInstalledVersion -eq $DCUAvailableVersion) {
-					Write-Host -ForegroundColor Green "'Dell Command | Update' is current."
 				}
+				'choco' {
+					$chocoVersionLine = choco search DellCommandUpdate --exact | Select-String -Pattern "DellCommandUpdate " -SimpleMatch | Select-Object -First 1
+					If ($chocoVersionLine) {
+						$DCUAvailableVersion = $chocoVersionLine.Line.split(" ",[System.StringSplitOptions]::RemoveEmptyEntries)[1]
+					} Else {
+						Write-Host "choco could not determine available DCU version; will rely on installed version check only." -ForegroundColor Yellow
+					}
+				}
+			}
+
+			If (-not $DCUInstalledVersion) {
+				Write-Host "'Dell Command | Update' is not installed, installing now."
+				Install-DCU
+
+			} ElseIf ($DCUAvailableVersion -and ([System.Version]$DCUInstalledVersion -lt [System.Version]$DCUAvailableVersion)) {
+				Write-Host "'Dell Command | Update' is not current. Updating from version $DCUInstalledVersion to $DCUAvailableVersion."
+
+				#Remove any programs listed through "Add and remove programs"
+				Uninstall-Application -AppToUninstall "Dell Command | Update" -ErrorAction SilentlyContinue
+				Install-DCU
+
+			} Else {
+				Write-Host -ForegroundColor Green "'Dell Command | Update' is current (version $DCUInstalledVersion)."
+			}
 
 			#Configure and run Dell Command Update
 			If (Test-Path $DCUx86) {
-				& $DCUx86 /configure -autoSuspendBitLocker=enable
-				& $DCUx86 /applyUpdates -reboot=disable
+				& $DCUx86 /configure -autoSuspendBitLocker=enable -advancedDriverRestore=enable -maxretry=3 -delayDays=14 -scheduleAuto -updatesNotification=disable -scheduleAction=DownloadInstallAndNotify -installationDeferral=disable
+
+				& $DCUx86 /applyUpdates -reboot=disable -forceupdate=enable
 			} ElseIf (Test-Path $DCUx64) {
-				& $DCUx64 /configure -autoSuspendBitLocker=enable
-				& $DCUx64 /applyUpdates -reboot=disable
+				& $DCUx64 /configure -autoSuspendBitLocker=enable -advancedDriverRestore=enable -maxretry=3 -delayDays=14 -scheduleAuto -updatesNotification=disable -scheduleAction=DownloadInstallAndNotify -installationDeferral=disable
+
+				& $DCUx64 /applyUpdates -reboot=disable -forceupdate=enable
 			} Else { Write-Error "Dell Command Update CLI not found."}
 
 		} Else { Write-Host "This is not a Dell Computer" }
@@ -156,20 +293,17 @@ Function Update-DellServer {
 	}
 	$delay = $null
 
-	$URL = "https://dl.dell.com/FOLDER12418375M/1/Systems-Management_Application_03GC8_WN64_2.1.1.0_A00.EXE"
-	$File = "C:\Ambitions\Dell System Update 2.0.1.exe"
-	$Hash = 'dc3d740bcdbf89d0a8dcbf8b57e21d6369455e2efe5313fc73233aeefa381cd5'
+	$URL = "https://dl.dell.com/FOLDER14217017M/1/Systems-Management_Application_RXKJ5_WN64_2.2.0.1_A00.EXE"
+	$File = "C:\Ambitions\Dell System Update 2.2.0.1_A00.exe"
 	Function Get-DSUInstall {
 		Write-Host "Dell System Update is not installed, attempting to install."
 		Write-Host "Download the installer to $File"
 		(New-Object System.Net.WebClient).DownloadFile($URL,$File) #Download the URL to the File.
-				Write-Host "Download is complete, checking the integrity."
-	}
-
-	Function Test-DSUInstall {IF ((Get-FileHash -Path $File -Algorithm SHA256).Hash -eq $Hash) {
-			Write-Host "It's a match!"
+		Write-Host "Download is complete, checking basic sanity."
+		If ((Test-Path $File -ErrorAction SilentlyContinue) -and (Get-Item $File).Length -gt 0) {
+			Write-Host "File exists and is not empty."
 		} Else {
-			Write-Host "Uh oh, there were issues downloading a non-corrupt file. Please attempt manually."
+			Write-Host "Download may have failed or corrupted file. Please verify manually."
 			Write-Host "Download is available at https://downloads.dell.com/omimswac/dsu/"
 			Pause
 			Exit
@@ -196,10 +330,9 @@ Function Update-DellServer {
 			Exit
 		} Else {
 			Write-Host "Checkin if DSU is installed"
-			If ((Get-WmiObject win32_product | Where-Object -Property Name -Like "*Dell System Update*").Version -NotLike "2.0.1.0*") {
-				Write-Host "Dell System Update is either not installed or not version 2.0.1.0"
+			If ((Get-WmiObject win32_product | Where-Object -Property Name -Like "*Dell System Update*").Version -NotLike "2.2.0.1*") {
+				Write-Host "Dell System Update is either not installed or not version 2.2.0.1"
 				Get-DSUInstall
-				Test-DSUInstall
 				Install-DSU
 			} Else {
 				Write-Host "DSU is already installed."
@@ -245,6 +378,7 @@ Function Update-Everything {
 	Update-NiniteApps
 	Update-PWSH
 	Update-PSWinGetPackages
+	If ((Get-BitLockerVolume -MountPoint $env:SystemDrive -ErrorAction SilentlyContinue).ProtectionStatus -eq 'On') { Suspend-BitLocker -MountPoint $env:SystemDrive -RebootCount 1 }
 	Restart-Computer -Force
 }
 
@@ -258,7 +392,7 @@ Function Update-ITS247Agent {
 		 $SaveFolder = 'C:\Ambitions'
 		 New-Item -ItemType Directory -Force -Path $SaveFolder
 		 $PatchPath = $SaveFolder + '\DPMAPatch' + $AvailableVersion + '.exe'
-		 (New-Object System.Net.WebClient).DownloadFile('http://update.itsupport247.net/agtupdt/DPMAPatch.exe', $PatchPath)
+		 (New-Object System.Net.WebClient).DownloadFile('https://update.itsupport247.net/agtupdt/DPMAPatch.exe', $PatchPath)
 		 & $PatchPath | Wait-Process
 		 $DisplayVersion = (Get-ItemProperty -Path Registry::HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\SAAZOD).DisplayVersion
 	 WRITE-HOST "Agent is now version $DisplayVersion"
@@ -290,66 +424,433 @@ Function Update-NiniteApps {
 	Write-Host "End of Install Ninite Apps"
 }
 
+function Get-NTPOffset {
+	<#
+	.SYNOPSIS
+		Queries an NTP server and returns time offset information without modifying the system clock.
+	.DESCRIPTION
+		Connects to an NTP server via UDP port 123, sends an NTP request, and calculates
+		the time offset between the local system and the server. Returns a structured object
+		with offset metrics. Does not call Set-Date.
+	.PARAMETER Server
+		The NTP server hostname or IP address to query.
+	.PARAMETER TimeoutMs
+		Socket send/receive timeout in milliseconds. Defaults to 5000.
+	.EXAMPLE
+		$result = Get-NTPOffset -Server 'north-america.pool.ntp.org'
+		if ($result.Success) { Write-Host "Offset: $($result.OffsetMs)ms" }
+	#>
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory)]
+		[ValidateNotNullOrEmpty()]
+		[string]$Server,
+
+		[ValidateRange(500, 30000)]
+		[int]$TimeoutMs = 5000
+	)
+
+	$Result = [PSCustomObject]@{
+		Server     = $Server
+		OffsetMs   = [double]0
+		NTPTimeUtc = [datetime]::MinValue
+		Success    = $false
+		Error      = $null
+	}
+
+	$Socket = $null
+	try {
+		$StartOfEpoch = New-Object DateTime(1900,1,1,0,0,0,[DateTimeKind]::Utc)
+		[Byte[]]$NtpData = ,0 * 48
+		$NtpData[0] = 0x1B
+
+		$Socket = New-Object Net.Sockets.Socket(
+			[Net.Sockets.AddressFamily]::InterNetwork,
+			[Net.Sockets.SocketType]::Dgram,
+			[Net.Sockets.ProtocolType]::Udp)
+		$Socket.SendTimeout    = $TimeoutMs
+		$Socket.ReceiveTimeout = $TimeoutMs
+		$Socket.Connect($Server, 123)
+
+		$t1 = Get-Date
+		[Void]$Socket.Send($NtpData)
+		[Void]$Socket.Receive($NtpData)
+		$t4 = Get-Date
+
+		$IntPart  = [BitConverter]::ToUInt32($NtpData[43..40], 0)
+		$FracPart = [BitConverter]::ToUInt32($NtpData[47..44], 0)
+		$t3ms = $IntPart * 1000 + ($FracPart * 1000 / 0x100000000)
+
+		$IntPart  = [BitConverter]::ToUInt32($NtpData[35..32], 0)
+		$FracPart = [BitConverter]::ToUInt32($NtpData[39..36], 0)
+		$t2ms = $IntPart * 1000 + ($FracPart * 1000 / 0x100000000)
+
+		$t1ms = ([TimeZoneInfo]::ConvertTimeToUtc($t1) - $StartOfEpoch).TotalMilliseconds
+		$t4ms = ([TimeZoneInfo]::ConvertTimeToUtc($t4) - $StartOfEpoch).TotalMilliseconds
+
+		$Offset = (($t2ms - $t1ms) + ($t3ms - $t4ms)) / 2
+
+		$Result.OffsetMs   = $Offset
+		$Result.NTPTimeUtc = $StartOfEpoch.AddMilliseconds($t4ms + $Offset)
+		$Result.Success    = $true
+	} catch {
+		$Result.Error = $_.Exception.Message
+	} finally {
+		if ($Socket) { try { $Socket.Dispose() } catch {} }
+	}
+
+	return $Result
+}
+
 Function Update-NTPDateTime {
 	<#
 	.SYNOPSIS
-		Immediately updates the clock based on the time received from a Network Time Provider. 'north-america.pool.ntp.org' is used by default.
+		Updates the system clock from an NTP server with sync diagnostics and optional scheduled task.
+	.DESCRIPTION
+		Queries a Network Time Protocol server to get the current accurate time and sets the
+		local system clock. Before updating, performs a diagnostic comparison between the
+		machine's currently configured Windows Time source and the specified NTP server to
+		detect sync discrepancies (e.g., a domain controller that has drifted from the
+		internet NTP pool).
+
+		Optionally registers a self-contained Windows scheduled task for persistent,
+		recurring NTP synchronization without requiring external dependencies.
+	.PARAMETER NTPServer
+		The NTP server to query. Defaults to 'north-america.pool.ntp.org'.
+	.PARAMETER RegisterScheduledTask
+		Creates a Windows scheduled task ('Ambitions-NTPSync') that runs the NTP sync at
+		boot and on a recurring interval. The task is self-contained and does not require
+		external dependencies.
+	.PARAMETER UnregisterScheduledTask
+		Removes the Ambitions-NTPSync scheduled task if it exists.
+	.PARAMETER SyncIntervalHours
+		The interval in hours between NTP syncs when using -RegisterScheduledTask.
+		Defaults to 12. Valid range: 1-168 (one week).
+	.PARAMETER SkipDiagnostics
+		Skip the Windows Time source comparison diagnostic step.
+	.EXAMPLE
+		Update-NTPDateTime
+		Syncs the clock with the default NTP server and shows diagnostics.
+	.EXAMPLE
+		Update-NTPDateTime -NTPServer 'time.nist.gov'
+		Syncs the clock with a specific NTP server.
+	.EXAMPLE
+		Update-NTPDateTime -RegisterScheduledTask
+		Creates a scheduled task that syncs NTP at boot and every 12 hours.
+	.EXAMPLE
+		Update-NTPDateTime -RegisterScheduledTask -SyncIntervalHours 6 -NTPServer 'time.nist.gov'
+		Creates a scheduled task with a custom interval and NTP server.
+	.EXAMPLE
+		Update-NTPDateTime -UnregisterScheduledTask
+		Removes the Ambitions-NTPSync scheduled task.
+	.EXAMPLE
+		Update-NTPDateTime -SkipDiagnostics
+		Syncs the clock without comparing against the configured Windows Time source.
+	.NOTES
+		Requires Administrator privileges to set the system clock or manage scheduled tasks.
 	#>
-	param
-	(
-		[Parameter(Mandatory=$False)]
-		[string]$sNTPServer = 'north-america.pool.ntp.org'
+	[CmdletBinding(DefaultParameterSetName = 'Sync')]
+	param(
+		[Parameter(ParameterSetName = 'Sync')]
+		[Parameter(ParameterSetName = 'Register')]
+		[ValidateNotNullOrEmpty()]
+		[string]$NTPServer = 'north-america.pool.ntp.org',
+
+		[Parameter(Mandatory, ParameterSetName = 'Register')]
+		[switch]$RegisterScheduledTask,
+
+		[Parameter(Mandatory, ParameterSetName = 'Unregister')]
+		[switch]$UnregisterScheduledTask,
+
+		[Parameter(ParameterSetName = 'Register')]
+		[ValidateRange(1, 168)]
+		[int]$SyncIntervalHours = 12,
+
+		[Parameter(ParameterSetName = 'Sync')]
+		[switch]$SkipDiagnostics
 	)
-	
-	# Displays the current system date and time
-	Write-Host "Current system date/time is:"
-	$(Get-Date).DateTime
-	
-	# Pre-emptively writes the output label for the new time, so it won't interupt the calculations.
-	Write-Host -NoNewLine "`nSystem date/time has been set to: "
-	
-	# Creates a DateTime object representing the start of the epoch
-	$StartOfEpoch=New-Object DateTime(1900,1,1,0,0,0,[DateTimeKind]::Utc)   
-	# Creates a byte array of length 48 and initializes all elements to 0
-	[Byte[]]$NtpData = ,0 * 48
-	# Sets the first byte of the byte array to 0x1B, which is the NTP request header
-	$NtpData[0] = 0x1B
-	# Creates a new socket object for sending and receiving data over the network
-	$Socket = New-Object Net.Sockets.Socket([Net.Sockets.AddressFamily]::InterNetwork, [Net.Sockets.SocketType]::Dgram, [Net.Sockets.ProtocolType]::Udp)
-	# Connects the socket to the specified NTP server and port number
-	$Socket.Connect($sNTPServer,123)
-	 
-	# Sends an NTP request to the server and receives an NTP response
-	$t1 = Get-Date    # Start of transaction... the clock is ticking...
-	[Void]$Socket.Send($NtpData)
-	[Void]$Socket.Receive($NtpData)  
-	$t4 = Get-Date    # End of transaction time
-	$Socket.Close()
-	
-	# Calculates the offset between the local system time and the NTP server time
-	$IntPart = [BitConverter]::ToUInt32($NtpData[43..40],0)   # t3
-	$FracPart = [BitConverter]::ToUInt32($NtpData[47..44],0)
-	$t3ms = $IntPart * 1000 + ($FracPart * 1000 / 0x100000000)
- 
-	$IntPart = [BitConverter]::ToUInt32($NtpData[35..32],0)   # t2
-	$FracPart = [BitConverter]::ToUInt32($NtpData[39..36],0)
-	$t2ms = $IntPart * 1000 + ($FracPart * 1000 / 0x100000000)
- 
-	$t1ms = ([TimeZoneInfo]::ConvertTimeToUtc($t1) - $StartOfEpoch).TotalMilliseconds
-	$t4ms = ([TimeZoneInfo]::ConvertTimeToUtc($t4) - $StartOfEpoch).TotalMilliseconds
-  
-	$Offset = (($t2ms - $t1ms) + ($t3ms-$t4ms))/2
-	
-	# Sets the local system time to the NTP server time
-	[String]$NTPDateTime = $StartOfEpoch.AddMilliseconds($t4ms + $Offset).ToLocalTime() 
-	Set-Date $NTPDateTime
-	
-	# Checks if the offset is greater than 10 seconds and prints a message accordingly
-	If ([Math]::Abs($Offset) -gt 10000) {
-	Write-Host "There was an offset of $($Offset / 1000) seconds."
-	} Else {
-		Write-Host "The offset was negligible."
+
+	$TaskName = 'Ambitions-NTPSync'
+
+	# All parameter sets require admin (Set-Date, Register-ScheduledTask, Unregister-ScheduledTask)
+	$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+		[Security.Principal.WindowsBuiltInRole]::Administrator)
+	if (-not $isAdmin) {
+		Write-Host "Administrator privileges are required." -ForegroundColor Red
+		return
 	}
+
+	#region Unregister Scheduled Task
+	if ($PSCmdlet.ParameterSetName -eq 'Unregister') {
+		$existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+		if ($existingTask) {
+			try {
+				Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction Stop
+				Write-Host "Scheduled task '$TaskName' has been removed." -ForegroundColor Green
+			} catch {
+				Write-Host "Failed to remove scheduled task: $($_.Exception.Message)" -ForegroundColor Red
+			}
+		} else {
+			Write-Host "Scheduled task '$TaskName' does not exist." -ForegroundColor Yellow
+		}
+		return
+	}
+	#endregion
+
+	#region Register Scheduled Task
+	if ($PSCmdlet.ParameterSetName -eq 'Register') {
+		# Validate NTP server name to prevent injection in the encoded command
+		if ($NTPServer -notmatch '^[a-zA-Z0-9._-]+$') {
+			Write-Host "Invalid NTP server name: $NTPServer" -ForegroundColor Red
+			return
+		}
+
+		# Build self-contained NTP sync script (no external dependencies)
+		# NTPServer was already validated against ^[a-zA-Z0-9._-]+$ above
+		$SyncScript = "`$Server = '$NTPServer'" + "`n" +
+			'$StartOfEpoch = New-Object DateTime(1900,1,1,0,0,0,[DateTimeKind]::Utc)' + "`n" +
+			'[Byte[]]$NtpData = ,0 * 48' + "`n" +
+			'$NtpData[0] = 0x1B' + "`n" +
+			'$Socket = $null' + "`n" +
+			'try {' + "`n" +
+			'    $Socket = New-Object Net.Sockets.Socket(' + "`n" +
+			'        [Net.Sockets.AddressFamily]::InterNetwork,' + "`n" +
+			'        [Net.Sockets.SocketType]::Dgram,' + "`n" +
+			'        [Net.Sockets.ProtocolType]::Udp)' + "`n" +
+			'    $Socket.SendTimeout    = 10000' + "`n" +
+			'    $Socket.ReceiveTimeout = 10000' + "`n" +
+			'    $Socket.Connect($Server, 123)' + "`n" +
+			'    $t1 = Get-Date' + "`n" +
+			'    [Void]$Socket.Send($NtpData)' + "`n" +
+			'    [Void]$Socket.Receive($NtpData)' + "`n" +
+			'    $t4 = Get-Date' + "`n" +
+			'    $IntPart  = [BitConverter]::ToUInt32($NtpData[43..40], 0)' + "`n" +
+			'    $FracPart = [BitConverter]::ToUInt32($NtpData[47..44], 0)' + "`n" +
+			'    $t3ms = $IntPart * 1000 + ($FracPart * 1000 / 0x100000000)' + "`n" +
+			'    $IntPart  = [BitConverter]::ToUInt32($NtpData[35..32], 0)' + "`n" +
+			'    $FracPart = [BitConverter]::ToUInt32($NtpData[39..36], 0)' + "`n" +
+			'    $t2ms = $IntPart * 1000 + ($FracPart * 1000 / 0x100000000)' + "`n" +
+			'    $t1ms = ([TimeZoneInfo]::ConvertTimeToUtc($t1) - $StartOfEpoch).TotalMilliseconds' + "`n" +
+			'    $t4ms = ([TimeZoneInfo]::ConvertTimeToUtc($t4) - $StartOfEpoch).TotalMilliseconds' + "`n" +
+			'    $Offset = (($t2ms - $t1ms) + ($t3ms - $t4ms)) / 2' + "`n" +
+			'    if ([Math]::Abs($Offset) -gt 1000) {' + "`n" +
+			'        Set-Date ($StartOfEpoch.AddMilliseconds($t4ms + $Offset).ToLocalTime())' + "`n" +
+			'    }' + "`n" +
+			'} catch {' + "`n" +
+			'} finally {' + "`n" +
+			'    if ($Socket) { try { $Socket.Dispose() } catch {} }' + "`n" +
+			'}'
+
+		# Check for existing task
+		$existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+		if ($existingTask) {
+			Write-Host "Scheduled task '$TaskName' already exists -- replacing it." -ForegroundColor Yellow
+			try {
+				Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction Stop
+			} catch {
+				Write-Host "Failed to remove existing task: $($_.Exception.Message)" -ForegroundColor Red
+				return
+			}
+		}
+
+		$encodedCmd = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($SyncScript))
+		$Action = New-ScheduledTaskAction -Execute 'powershell.exe' `
+			-Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -EncodedCommand $encodedCmd"
+
+		# Two triggers: at startup and repeating every N hours
+		$TriggerBoot   = New-ScheduledTaskTrigger -AtStartup
+		$TriggerRepeat = New-ScheduledTaskTrigger -Once -At (Get-Date) `
+			-RepetitionInterval (New-TimeSpan -Hours $SyncIntervalHours)
+
+		$Settings = New-ScheduledTaskSettingsSet `
+			-AllowStartIfOnBatteries `
+			-DontStopIfGoingOnBatteries `
+			-StartWhenAvailable `
+			-ExecutionTimeLimit (New-TimeSpan -Minutes 5)
+		$Principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+
+		try {
+			Register-ScheduledTask -TaskName $TaskName `
+				-Action $Action `
+				-Trigger @($TriggerBoot, $TriggerRepeat) `
+				-Settings $Settings `
+				-Principal $Principal `
+				-Description "Ambitions NTP time sync -- syncs clock with $NTPServer" `
+				-ErrorAction Stop | Out-Null
+
+			# Set repetition duration to indefinite (cannot be done via New-ScheduledTaskTrigger)
+			$task = Get-ScheduledTask -TaskName $TaskName
+			$task.Triggers[1].Repetition.Duration = ''
+			$task | Set-ScheduledTask | Out-Null
+
+			Write-Host "Scheduled task '$TaskName' created successfully." -ForegroundColor Green
+			Write-Host "  NTP Server: $NTPServer" -ForegroundColor Cyan
+			Write-Host "  Triggers:   At startup + every $SyncIntervalHours hour(s)" -ForegroundColor Cyan
+			Write-Host "  To remove:  Update-NTPDateTime -UnregisterScheduledTask" -ForegroundColor Cyan
+		} catch {
+			Write-Host "Failed to create scheduled task: $($_.Exception.Message)" -ForegroundColor Red
+		}
+		return
+	}
+	#endregion
+
+	#region Sync -- NTP Diagnostics
+	$ntpQuery = $null
+	$SyncThresholdMs = 2000
+
+	if (-not $SkipDiagnostics) {
+		$ConfiguredSource = $null
+		try {
+			$w32tmOutput = & w32tm /query /source 2>&1
+			if ($LASTEXITCODE -eq 0 -and "$w32tmOutput" -notmatch 'error') {
+				$ConfiguredSource = ("$w32tmOutput").Trim()
+			}
+		} catch {}
+
+		# Detect domain membership and VM status
+		$computerSystem = $null
+		try { $computerSystem = Get-WmiObject Win32_ComputerSystem -ErrorAction Stop } catch {}
+		$isDomainJoined = $computerSystem -and $computerSystem.PartOfDomain
+		$domainName     = if ($isDomainJoined) { $computerSystem.Domain } else { $null }
+		$vmicRunning    = (Get-Service 'vmictimesync' -ErrorAction SilentlyContinue).Status -eq 'Running'
+
+		# Cache PDC and NTP results so each is queried at most once
+		$pdcHost = $null
+		if ($isDomainJoined) {
+			try {
+				$pdcHost = ([System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()).PdcRoleOwner.Name
+			} catch {}
+		}
+		$ntpQuery  = Get-NTPOffset -Server $NTPServer -TimeoutMs 5000
+		$pdcResult = if ($pdcHost) { Get-NTPOffset -Server $pdcHost -TimeoutMs 5000 } else { $null }
+
+		# Helper: compare two NTP results and write output
+		function Write-NTPComparison {
+			param($ResultA, $NameA, $ResultB, $NameB, [string]$DriftWarning)
+			if ($ResultA.Success -and $ResultB.Success) {
+				$discrepancyMs  = [Math]::Abs(($ResultA.NTPTimeUtc - $ResultB.NTPTimeUtc).TotalMilliseconds)
+				$discrepancySec = [Math]::Round($discrepancyMs / 1000, 2)
+				if ($discrepancyMs -gt $SyncThresholdMs) {
+					Write-Host "WARNING: '$NameA' is $discrepancySec seconds out of sync with '$NameB'." -ForegroundColor Yellow
+					if ($DriftWarning) { Write-Host $DriftWarning -ForegroundColor Yellow }
+				} else {
+					Write-Host "'$NameA' is in sync with '$NameB' (discrepancy: ${discrepancySec}s)." -ForegroundColor Green
+				}
+			} else {
+				if (-not $ResultA.Success) {
+					Write-Host "Could not query '$NameA': $($ResultA.Error)" -ForegroundColor Yellow
+				}
+				if (-not $ResultB.Success) {
+					Write-Host "Could not query '$NameB': $($ResultB.Error)" -ForegroundColor Yellow
+				}
+			}
+		}
+
+		Write-Host "`n=== NTP Sync Diagnostics ===" -ForegroundColor Cyan
+
+		if ($isDomainJoined) {
+			Write-Host "Machine is domain-joined: $domainName" -ForegroundColor Cyan
+		}
+		if ($vmicRunning) {
+			Write-Host "Hyper-V Time Synchronization service is running (VM guest)." -ForegroundColor Cyan
+		}
+
+		if (-not $ConfiguredSource) {
+			Write-Host "Could not query Windows Time source (W32Time service may not be running)." -ForegroundColor Yellow
+			if ($isDomainJoined) {
+				Write-Host "This machine is domain-joined but W32Time is not responding." -ForegroundColor Yellow
+				Write-Host "It should be syncing time from a domain controller." -ForegroundColor Yellow
+				if ($pdcHost) {
+					Write-Host "PDC emulator: $pdcHost" -ForegroundColor Cyan
+					Write-NTPComparison $pdcResult $pdcHost $ntpQuery $NTPServer `
+						'The domain controller itself appears to have drifted.'
+				}
+			}
+		} elseif ($ConfiguredSource -eq 'VM IC Time Synchronization Provider') {
+			Write-Host "Windows Time source: $ConfiguredSource" -ForegroundColor Cyan
+			Write-Host "This machine is syncing time from its Hyper-V host." -ForegroundColor Cyan
+
+			Write-Host "Comparing system time against '$NTPServer' to check for host drift..." -ForegroundColor Cyan
+			if ($ntpQuery.Success) {
+				$driftMs  = [Math]::Abs($ntpQuery.OffsetMs)
+				$driftSec = [Math]::Round($driftMs / 1000, 2)
+				if ($driftMs -gt $SyncThresholdMs) {
+					Write-Host "WARNING: System clock is $driftSec seconds offset from '$NTPServer'." -ForegroundColor Yellow
+					Write-Host "The Hyper-V host may be providing inaccurate time." -ForegroundColor Yellow
+				} else {
+					Write-Host "System clock is in sync with '$NTPServer' (offset: ${driftSec}s)." -ForegroundColor Green
+				}
+			} else {
+				Write-Host "Could not query NTP server '$NTPServer': $($ntpQuery.Error)" -ForegroundColor Yellow
+			}
+
+			if ($pdcHost -and $pdcResult -and $ntpQuery.Success) {
+				Write-NTPComparison $pdcResult $pdcHost $ntpQuery $NTPServer
+			}
+		} elseif ($ConfiguredSource -match '^(Local CMOS Clock|Free-running System Clock)$') {
+			Write-Host "Windows Time source: $ConfiguredSource" -ForegroundColor Cyan
+
+			if ($isDomainJoined) {
+				Write-Host "WARNING: This machine is domain-joined ($domainName) but is NOT syncing time from a domain controller." -ForegroundColor Yellow
+				Write-Host "The Windows Time service may not be configured correctly." -ForegroundColor Yellow
+
+				if ($pdcHost) {
+					Write-Host "PDC emulator: $pdcHost" -ForegroundColor Cyan
+					Write-NTPComparison $pdcResult $pdcHost $ntpQuery $NTPServer `
+						'The domain controller itself appears to have drifted.'
+					if ($pdcResult.Success -and $ntpQuery.Success) {
+						$discrepancyMs = [Math]::Abs(($pdcResult.NTPTimeUtc - $ntpQuery.NTPTimeUtc).TotalMilliseconds)
+						if ($discrepancyMs -le $SyncThresholdMs) {
+							Write-Host "The issue is that this machine is not configured to sync from the DC." -ForegroundColor Yellow
+						}
+					}
+				} else {
+					Write-Host "Could not discover the PDC emulator for $domainName." -ForegroundColor Yellow
+				}
+			} elseif ($vmicRunning) {
+				Write-Host "Hyper-V Time Sync service is running but W32Time is using Local CMOS Clock." -ForegroundColor Yellow
+				Write-Host "VM may be configured to not sync time from the host." -ForegroundColor Yellow
+			} else {
+				Write-Host "No network time source is configured -- this machine is not using NTP." -ForegroundColor Yellow
+			}
+		} elseif ($ConfiguredSource -eq $NTPServer -or $ConfiguredSource -match "^$([regex]::Escape($NTPServer)),") {
+			Write-Host "Windows Time source: $ConfiguredSource" -ForegroundColor Cyan
+			Write-Host "Configured source matches the specified NTP server." -ForegroundColor Green
+		} else {
+			Write-Host "Configured Windows Time source: $ConfiguredSource" -ForegroundColor Cyan
+			Write-Host "Specified NTP server:           $NTPServer" -ForegroundColor Cyan
+
+			$sourceResult = Get-NTPOffset -Server $ConfiguredSource -TimeoutMs 5000
+			Write-NTPComparison $sourceResult $ConfiguredSource $ntpQuery $NTPServer `
+				'This may indicate your time source (e.g., a domain controller) has drifted.'
+		}
+		Write-Host ""
+	}
+	#endregion
+
+	#region Sync -- Set Clock
+	Write-Host "Current system date/time is:"
+	Write-Host (Get-Date).DateTime
+
+	# Reuse the NTP query from diagnostics if available, otherwise query now
+	if (-not $ntpQuery) {
+		$ntpQuery = Get-NTPOffset -Server $NTPServer -TimeoutMs 5000
+	}
+	if (-not $ntpQuery.Success) {
+		Write-Host "Failed to query NTP server '$NTPServer': $($ntpQuery.Error)" -ForegroundColor Red
+		return
+	}
+
+	[String]$NTPDateTime = $ntpQuery.NTPTimeUtc.ToLocalTime()
+	$newTime = Set-Date $NTPDateTime
+	Write-Host "`nSystem date/time has been set to: $($newTime.DateTime)"
+
+	if ([Math]::Abs($ntpQuery.OffsetMs) -gt 10000) {
+		Write-Host "There was an offset of $([Math]::Round($ntpQuery.OffsetMs / 1000, 2)) seconds." -ForegroundColor Yellow
+	} else {
+		Write-Host "The offset was negligible." -ForegroundColor Green
+	}
+	#endregion
 }
 
 Function Update-O365Apps {
@@ -372,21 +873,21 @@ Function Update-O365Apps {
 			} Else {
 			Function Get-Office365Version {
 				$O365CurrentVer = ""
-				$O365CurrentCdn = ""
+				$global:O365CurrentCdn = ""
 				$O365CurrentPol = ""
 				$O365CurrentVer = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration" -ErrorAction SilentlyContinue).VersionToReport
-				$O365CurrentCdn = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration" -ErrorAction SilentlyContinue).CDNBaseUrl
+				$global:O365CurrentCdn = (Get-ItemProperty -Path "HKLM:\SOFTWARE\Microsoft\Office\ClickToRun\Configuration" -ErrorAction SilentlyContinue).CDNBaseUrl
 				$O365CurrentPol = (Get-ItemProperty -Path "HKLM:\SOFTWARE\policies\microsoft\office\16.0\common\officeupdate" -ErrorAction SilentlyContinue).updatebranch
 				if ($O365CurrentVer.Length -eq 0) {
 					Write-Host "Office 365 (C2R) is not installed on this PC."
 				} else {
 					Write-Host "Office 365 (C2R) Current Version: "$O365CurrentVer
-					switch ($O365CurrentCdn) {
-						"http://officecdn.microsoft.com/pr/492350f6-3a01-4f97-b9c0-c7c6ddf67d60" {$O365CurrentCdn = "Monthly Channel"}
-						"http://officecdn.microsoft.com/pr/7ffbc6bf-bc32-4f92-8982-f9dd17fd3114" {$O365CurrentCdn = "Semi-Annual Channel"}
-						"http://officecdn.microsoft.com/pr/b8f9b850-328d-4355-9145-c59439a0c4cf" {$O365CurrentCdn = "Semi-Annual Channel (Targeted)"}
+					switch ($global:O365CurrentCdn) {
+						"http://officecdn.microsoft.com/pr/492350f6-3a01-4f97-b9c0-c7c6ddf67d60" {$global:O365CurrentCdn = "Monthly Channel"}
+						"http://officecdn.microsoft.com/pr/7ffbc6bf-bc32-4f92-8982-f9dd17fd3114" {$global:O365CurrentCdn = "Semi-Annual Channel"}
+						"http://officecdn.microsoft.com/pr/b8f9b850-328d-4355-9145-c59439a0c4cf" {$global:O365CurrentCdn = "Semi-Annual Channel (Targeted)"}
 					}
-					Write-Host "Office 365 Update Channel (Local Setting): "$O365CurrentCdn
+					Write-Host "Office 365 Update Channel (Local Setting): "$global:O365CurrentCdn
 					if ($O365CurrentPol.length -eq 0) {
 						$O365CurrentPol = "None"
 					} else {
@@ -447,7 +948,7 @@ Function Update-O365Apps {
 
 			Get-Office365Version
 
-			If (!($O365CurrentCdn -like "*monthlty*")) {
+			If (!($global:O365CurrentCdn -like "*monthly*")) {
 				Write-Host "Setting update channel to monthly"
 				& "C:\Program Files\Common Files\Microsoft Shared\ClickToRun\OfficeC2RClient.exe" /changesetting Channel=Current
 			}
@@ -496,7 +997,7 @@ Function Update-PowerShellModule {
 
                 # Ensure NuGet package provider is installed
                 if (!(Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
-                    Install-PackageProvider -Name NuGet -Force -Scope CurrentUser
+                    Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser
                 }
 
                 # Remove the module from current session if loaded
@@ -551,7 +1052,7 @@ Function Update-PowerShellModule {
 
         # Ensure NuGet package provider is installed
         if (!(Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
-            Install-PackageProvider -Name NuGet -Force -Scope CurrentUser
+            Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -Scope CurrentUser
         }
 
         # Install the module
@@ -606,10 +1107,32 @@ Function Update-PWSH {
 	Write-Host "Updating PWSH"
 	If (Get-Command winget -ErrorAction SilentlyContinue) {
 		winget source update
-		winget install --id Microsoft.PowerShell -e -h --accept-package-agreements --accept-source-agreements
+		Invoke-WinGetInstall -Id Microsoft.PowerShell
 	} Else {
 		If (!(Get-Command choco -ErrorAction SilentlyContinue)) {Install-Choco}
-		Choco upgrade pwsh -y -force
+
+		# Chocolatey v2.x refuses to install or upgrade ANY package while the lib folder
+		# has unresolved dependency constraints (for example dotnet-8.0-desktopruntime or
+		# dellcommandupdate declaring chocolatey-core.extension / vcredist140 without those
+		# dependencies being present). Capture the upgrade output so we can detect that
+		# state, heal it with Repair-ChocoDependency, and retry.
+		$MaxAttempts = 3
+		For ($Attempt = 1; $Attempt -le $MaxAttempts; $Attempt++) {
+			$ChocoOutput = choco upgrade pwsh -y --force 2>&1
+			$ChocoText = $ChocoOutput | Out-String
+			Write-Host $ChocoText
+
+			$DependencyBlocked = ($ChocoText -match 'packages failed') -and `
+				($ChocoText -match 'Unable to (resolve|find a version)')
+			If (-not $DependencyBlocked) { Break }
+
+			If ($Attempt -lt $MaxAttempts) {
+				Write-Host "PWSH upgrade blocked by unresolved Chocolatey dependencies. Repairing and retrying..." -ForegroundColor Yellow
+				Repair-ChocoDependency -ChocoOutput $ChocoOutput | Out-Null
+			} Else {
+				Write-Host "PWSH upgrade still failing after dependency repair. See C:\ProgramData\chocolatey\logs\chocolatey.log." -ForegroundColor Red
+			}
+		}
 	}
 	# Update the system PATH env to correct previous install logic.
 	$folderToSearch = "C:\Program Files\PowerShell\"
@@ -647,7 +1170,11 @@ Function Update-PWSH {
 }
 
 Function Update-PSWinGetPackages {
-	Start-PSWinGet -Command 'Get-WinGetPackage | Where {$_.IsUpdateAvailable -eq $True} | Update-WinGetPackage -Mode Silent -Verbose'
+	If (Get-Command -Name "winget.exe" -ErrorAction SilentlyContinue) {
+		& winget.exe update --all --silent --accept-package-agreements --accept-source-agreements --source winget --include-unknown --force --disable-interactivity
+	} Else {
+		Start-PSWinGet -Command 'Get-WinGetPackage | Where {$_.IsUpdateAvailable -eq $True} | Update-WinGetPackage -Mode Silent -Verbose'
+	}
 }
 
 Function Update-Windows {
@@ -669,16 +1196,13 @@ Function Update-Windows {
 			Add-WUServiceManager -ServiceID 7971f918-a847-4430-9279-4a52d1efe18d -Confirm:$false
 		}
 	}
-	
-	Write-Host "Checking Chocolatey Installation"
-	If (-NOT (Test-Path "C:\ProgramData\chocolatey\bin\choco.exe")) {
-		Write-Host "Choco is not installed. Installing Choco."
-		Install-Choco
-	}
-	
-	Write-Host "Choco is installed. Checking for powershell version."
+	Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.208 -Force -ErrorAction SilentlyContinue
+	Install-PackageProvider -Name NuGet -MinimumVersion 3.0.0.1 -Force -ErrorAction SilentlyContinue
+
+
 	If ($PSVersionTable.PSVersion.Major -lt "5") {
 		Write-Host "Powershell needs an update, installing now"
+		If (!(Test-Path "C:\ProgramData\chocolatey\bin\choco.exe" -ErrorAction SilentlyContinue) ){Install-Choco}
 		& "C:\ProgramData\chocolatey\bin\choco.exe" install dotnet4.5.2 -y
 		& "C:\ProgramData\chocolatey\bin\choco.exe" install powershell -y
 		Write-Host "Reboot computer and run script again"
@@ -690,32 +1214,51 @@ Function Update-Windows {
 			Remove-Module $Module.Name
 			Remove-Item $Module.ModuleBase -Recurse -Force
 		}
-	
+
 		If (-Not (((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Major -ge "2") -and ((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Minor -ge "1"))) {
-			Write-Host "Attempting automatic installation of PSWUI 2.2.0.3"
+			Write-Host "Attempting automatic installation of PSWUI 2.2.1.5"
+			Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.208 -Force -ErrorAction SilentlyContinue
 			Install-PackageProvider -Name NuGet -MinimumVersion 3.0.0.1 -Force -ErrorAction SilentlyContinue
-			Install-Module -Name PSWindowsUpdate -MinimumVersion 2.2.0.3 -Force -ErrorAction SilentlyContinue
+			Install-Module -Name PSWindowsUpdate -MinimumVersion 2.2.1.5 -Force -ErrorAction SilentlyContinue
+			Import-Module PSWindowsUpdate
 			RegMU
 			If (-Not (((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Major -ge "2") -and ((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Minor -ge "1"))) {
-				Write-Host "Auto install Failed, Attempting Manual installation of PSWUI 2.2.0.3"
+				Write-Host "Attempting Manual installation of PSWUI 2.2.1.5"
 				New-Item -ItemType Directory -Force -Path 'C:\Ambitions' -ErrorAction Stop
-				(New-Object System.Net.WebClient).DownloadFile('https://psg-prod-eastus.azureedge.net/packages/pswindowsupdate.2.2.0.3.nupkg', 'C:\Ambitions\pswindowsupdate.2.2.0.3.zip')
-				New-Item -ItemType Directory -Force -Path 'C:\Windows\System32\WindowsPowerShell\v1.0\Modules\PSWindowsUpdate\2.2.0.3' -ErrorAction Stop
-				Expand-Archive -LiteralPath 'C:\Ambitions\pswindowsupdate.2.2.0.3.zip' -DestinationPath 'C:\Windows\System32\WindowsPowerShell\v1.0\Modules\PSWindowsUpdate\2.2.0.3' -ErrorAction Stop
+				(New-Object System.Net.WebClient).DownloadFile('https://cdn.powershellgallery.com/packages/pswindowsupdate.2.2.1.5.nupkg', 'C:\Ambitions\pswindowsupdate.2.2.1.5.zip')
+				New-Item -ItemType Directory -Force -Path 'C:\Windows\System32\WindowsPowerShell\v1.0\Modules\PSWindowsUpdate\2.2.1.5' -ErrorAction Stop
+				Expand-Archive -LiteralPath 'C:\Ambitions\pswindowsupdate.2.2.1.5.zip' -DestinationPath 'C:\Windows\System32\WindowsPowerShell\v1.0\Modules\PSWindowsUpdate\2.2.1.5' -ErrorAction Stop
 				Import-Module PSWindowsUpdate -ErrorAction Stop
 				RegMU
 			}
 		}
-	
+
 		If (((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Major -ge "2") -and ((Get-Command Get-WUInstall -ErrorAction SilentlyContinue).Version.Minor -ge "1")) {
 			Write-Host "PSWindowsUpdate is installed! Attempting Updates"
 			If ($NoDrivers -ne $True) {
 				Write-Host "Checking for DRIVER Updates..."
-				Get-WUInstall -MicrosoftUpdate -AcceptAll -Install -UpdateType Driver -IgnoreReboot -ErrorAction SilentlyContinue -Verbose
+				try {
+					Get-WUInstall -MicrosoftUpdate -AcceptAll -Install -UpdateType Driver -IgnoreReboot -ErrorAction Stop -Verbose
+				}
+				catch {
+					Write-Warning "Driver update check failed. Running Reset-WUComponents..."
+					Reset-WUComponents
+					Write-Host "Retrying DRIVER Updates..."
+					Get-WUInstall -MicrosoftUpdate -AcceptAll -Install -UpdateType Driver -IgnoreReboot -ErrorAction Stop -Verbose
+				}
 			}
+
 			If ($NoSoftware -ne $True) {
 				Write-Host "Checking for SOFTWARE Updates..."
-				Get-WUInstall -MicrosoftUpdate -AcceptAll -Install -UpdateType Software -IgnoreReboot -ErrorAction SilentlyContinue -Verbose
+				try {
+					Get-WUInstall -MicrosoftUpdate -AcceptAll -Install -UpdateType Software -IgnoreReboot -ErrorAction Stop -Verbose
+				}
+				catch {
+					Write-Warning "Software update check failed. Running Reset-WUComponents..."
+					Reset-WUComponents
+					Write-Host "Retrying SOFTWARE Updates..."
+					Get-WUInstall -MicrosoftUpdate -AcceptAll -Install -UpdateType Software -IgnoreReboot -ErrorAction Stop -Verbose
+				}
 			}
 		} Else {
 			Write-Host "PSWindowsUpdate is failing to install, please investigate"
@@ -735,6 +1278,1370 @@ Function Update-WindowsApps {
 Function Update-WindowTitle ([String] $PassNumber) {
 	Write-Host "Changing window title"
 		$host.ui.RawUI.WindowTitle = "$SiteCode Provisioning | $env:computername | Pass $PassNumber | Please Wait"
+}
+
+function Update-ClaudeCode {
+	<#
+	.SYNOPSIS
+		Updates Claude Code to the latest version.
+	.DESCRIPTION
+		Checks for updates and reinstalls Claude Code if a newer version is available.
+		Requires Administrator privileges for system-wide install.
+	.PARAMETER Force
+		Update even if already on latest version.
+	.PARAMETER Quiet
+		Suppress output, return $true/$false only.
+	.EXAMPLE
+		Update-ClaudeCode
+	.EXAMPLE
+		Update-ClaudeCode -Force
+	.NOTES
+		Requires: Administrator privileges for system-wide update
+	#>
+	[CmdletBinding()]
+	param(
+		[switch]$Force,
+		[switch]$Quiet
+	)
+
+	# Paths
+	$ClaudeFolder = "C:\Ambitions\ClaudeCode"
+	$ClaudeExe = "$ClaudeFolder\claude.exe"
+
+	# Check if installed
+	if (-not (Test-Path $ClaudeExe)) {
+		if (-not $Quiet) {
+			Write-Host "[!] Claude Code is not installed." -ForegroundColor Red
+			Write-Host "    Run Install-ClaudeCode first." -ForegroundColor Yellow
+		}
+		return $false
+	}
+
+	# Ensure in PATH
+	if ($env:Path -notlike "*$ClaudeFolder*") { $env:Path = "$env:Path;$ClaudeFolder" }
+
+	# Get current version
+	$CurrentVersion = $null
+	try {
+		$CurrentVersion = (& $ClaudeExe --version 2>$null).Trim()
+	} catch { }
+
+	# Get latest version
+	$LatestVersion = $null
+	try {
+		[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+		$npmInfo = Invoke-RestMethod -Uri "https://registry.npmjs.org/@anthropic-ai/claude-code/latest" -UseBasicParsing -ErrorAction SilentlyContinue
+		if ($npmInfo.version) { $LatestVersion = $npmInfo.version }
+	} catch {
+		if (-not $Quiet) {
+			Write-Host "[!] Could not check for updates." -ForegroundColor Yellow
+		}
+	}
+
+	# Compare versions
+	$NeedsUpdate = $false
+	if ($Force) {
+		$NeedsUpdate = $true
+	} elseif ($CurrentVersion -and $LatestVersion) {
+		if ($CurrentVersion -ne $LatestVersion) {
+			$NeedsUpdate = $true
+		}
+	} elseif (-not $CurrentVersion) {
+		# Can't determine version, offer update
+		$NeedsUpdate = $true
+	}
+
+	if (-not $NeedsUpdate) {
+		if (-not $Quiet) {
+			Write-Host "[OK] Claude Code is up to date ($CurrentVersion)" -ForegroundColor Green
+		}
+		return $true
+	}
+
+	if (-not $Quiet) {
+		Write-Host "`n=== Updating Claude Code ===" -ForegroundColor Cyan
+		if ($CurrentVersion) { Write-Host "Current version: $CurrentVersion" -ForegroundColor Gray }
+		if ($LatestVersion) { Write-Host "Latest version:  $LatestVersion" -ForegroundColor Gray }
+	}
+
+	# Check admin for system-wide update
+	$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+	$principal = New-Object Security.Principal.WindowsPrincipal($identity)
+	if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+		if (-not $Quiet) {
+			Write-Host "[!] Administrator privileges required for update." -ForegroundColor Red
+			Write-Host "    Run PowerShell as Administrator and try again." -ForegroundColor Yellow
+		}
+		return $false
+	}
+
+	# Run install with force to update
+	$result = Install-ClaudeCode -Force
+
+	if ($result -and -not $Quiet) {
+		# Get new version
+		try {
+			$NewVersion = (& $ClaudeExe --version 2>$null).Trim()
+			Write-Host "Updated to version: $NewVersion" -ForegroundColor Green
+		} catch { }
+	}
+
+	return $result
+}
+
+Function Update-OEMDrivers {
+	<#
+	.SYNOPSIS
+		Detects computer manufacturer and runs appropriate driver/firmware/BIOS update utility.
+	.DESCRIPTION
+		Automatically detects the computer manufacturer and runs the appropriate update utility:
+		- Dell/Alienware: Uses Update-DellPackages (Dell Command Update)
+		- HP: Uses OSD module's Invoke-HPIA (HP Image Assistant)
+		- Lenovo: Uses OSD module's Lenovo System Updater
+		Attempts to suppress reboots where possible.
+	.PARAMETER NoReboot
+		Suppress automatic reboots after updates (where supported by the utility). This parameter is for future use; current implementation already suppresses reboots.
+	.EXAMPLE
+		Update-OEMDrivers
+		Detects manufacturer and updates drivers/firmware/BIOS
+	.EXAMPLE
+		Update-OEMDrivers -NoReboot
+		Updates drivers/firmware/BIOS without rebooting
+	.LINK
+		https://github.com/OSDeploy/OSD
+	.NOTES
+		Requires: Administrator privileges, Internet access
+	#>
+	[CmdletBinding()]
+	Param(
+		[Parameter()]
+		[switch]$NoReboot
+	)
+
+	Write-Host "`n=== OEM Driver/Firmware/BIOS Update ===" -ForegroundColor Cyan
+
+	# Detect manufacturer
+	$Manufacturer = (Get-CimInstance -Class Win32_ComputerSystem).Manufacturer
+	Write-Host "Detected Manufacturer: $Manufacturer" -ForegroundColor Yellow
+
+	# Dell/Alienware Detection
+	If ($Manufacturer -match "Dell" -or $Manufacturer -match "Alienware") {
+		Write-Host "`nUsing Dell Command Update via Update-DellPackages..." -ForegroundColor Green
+		Update-DellPackages
+		Write-Host "`nDell updates completed." -ForegroundColor Green
+		return
+	}
+
+	# For non-Dell manufacturers, use OSD module
+	Write-Host "`nUsing OSD module for manufacturer-specific updates..." -ForegroundColor Yellow
+
+	# Check if OSD module is installed
+	If (-not (Get-Module -ListAvailable -Name OSD)) {
+		Write-Host "OSD module not found. Installing from PowerShell Gallery..." -ForegroundColor Yellow
+		Try {
+			Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.201 -Force -ErrorAction SilentlyContinue
+			Set-PSRepository -Name PSGallery -InstallationPolicy Trusted -ErrorAction SilentlyContinue
+			Install-Module -Name OSD -Force -AllowClobber -Scope CurrentUser
+			Write-Host "OSD module installed successfully." -ForegroundColor Green
+		} Catch {
+			Write-Error "Failed to install OSD module: $_"
+			Write-Host "Please install manually: Install-Module -Name OSD" -ForegroundColor Red
+			return
+		}
+	}
+
+	# Import OSD module
+	Try {
+		Import-Module OSD -Force -ErrorAction Stop
+		Write-Host "OSD module loaded successfully." -ForegroundColor Green
+	} Catch {
+		Write-Error "Failed to import OSD module: $_"
+		return
+	}
+
+	# HP Detection
+	If ($Manufacturer -match "HP" -or $Manufacturer -match "Hewlett") {
+		Write-Host "`nHP system detected. Running HP Image Assistant..." -ForegroundColor Green
+		Try {
+			# Check if HP device is supported
+			If (Get-Command Test-HPIASupport -ErrorAction SilentlyContinue) {
+				$HPSupported = Test-HPIASupport
+				If (-not $HPSupported) {
+					Write-Warning "This HP device may not be fully supported by HP Image Assistant."
+				}
+			}
+
+			# Run HPIA for drivers, firmware, and BIOS
+			# Operation: DownloadSoftPaqs to download and install
+			# Category: Drivers, Firmware, BIOS
+			# Action: Install to apply updates
+			# SilentMode: Suppress UI prompts
+			Write-Host "Installing HP Image Assistant and scanning for updates..." -ForegroundColor Cyan
+			Write-Host "This may take several minutes..." -ForegroundColor Yellow
+
+			Invoke-HPIA -Operation DownloadSoftPaqs `
+						-Category @("Drivers", "Firmware", "BIOS") `
+						-Selection All `
+						-Action Install `
+						-SilentMode `
+						-NoninteractiveMode
+
+			Write-Host "`nHP updates completed." -ForegroundColor Green
+
+			# Note: HPIA sets script-level variables for reboot status
+			# But since we're in a function, we'll just inform the user
+			Write-Host "Note: Some updates may require a system reboot to complete." -ForegroundColor Yellow
+
+		} Catch {
+			Write-Error "HP Image Assistant failed: $_"
+			Write-Host "You may need to run Windows Update manually or use HP Support Assistant." -ForegroundColor Yellow
+		}
+		return
+	}
+
+	# Lenovo Detection
+	If ($Manufacturer -match "Lenovo") {
+		Write-Host "`nLenovo system detected. Running Lenovo System Updater..." -ForegroundColor Green
+		Try {
+			# Install Lenovo System Updater if not present
+			Write-Host "Checking for Lenovo System Updater..." -ForegroundColor Cyan
+
+			If (Get-Command Install-LenovoSystemUpdater -ErrorAction SilentlyContinue) {
+				Install-LenovoSystemUpdater
+			}
+
+			# Run Lenovo System Updater (includes -noreboot flag)
+			Write-Host "Running Lenovo System Updater..." -ForegroundColor Cyan
+			Write-Host "This may take several minutes..." -ForegroundColor Yellow
+
+			If (Get-Command Invoke-LenovoSystemUpdater -ErrorAction SilentlyContinue) {
+				Invoke-LenovoSystemUpdater
+			} Else {
+				Write-Warning "Invoke-LenovoSystemUpdater command not found in OSD module."
+				Write-Host "Attempting alternative Lenovo update method..." -ForegroundColor Yellow
+
+				# Try using Install-LenovoApps as fallback
+				If (Get-Command Install-LenovoApps -ErrorAction SilentlyContinue) {
+					Install-LenovoApps
+				} Else {
+					Throw "No Lenovo update functions available in OSD module."
+				}
+			}
+
+			Write-Host "`nLenovo updates completed." -ForegroundColor Green
+			Write-Host "Note: Some updates may require a system reboot to complete." -ForegroundColor Yellow
+
+		} Catch {
+			Write-Error "Lenovo System Updater failed: $_"
+			Write-Host "You may need to run Windows Update manually or use Lenovo Vantage." -ForegroundColor Yellow
+		}
+		return
+	}
+
+	# Unsupported manufacturer
+	Write-Warning "`nManufacturer '$Manufacturer' is not currently supported by this function."
+	Write-Host "Supported manufacturers:" -ForegroundColor Yellow
+	Write-Host "  - Dell / Alienware" -ForegroundColor Cyan
+	Write-Host "  - HP / Hewlett-Packard" -ForegroundColor Cyan
+	Write-Host "  - Lenovo" -ForegroundColor Cyan
+	Write-Host "`nFor other manufacturers, please use:" -ForegroundColor Yellow
+	Write-Host "  - Windows Update (Update-Windows)" -ForegroundColor Cyan
+	Write-Host "  - Manufacturer-specific update tools" -ForegroundColor Cyan
+}
+
+Function Update-WindowsTo11 {
+	<#
+	.SYNOPSIS
+	Upgrade Windows 10 to Windows 11 via network share or ISO download.
+
+	.DESCRIPTION
+	Checks eligibility (TPM, Secure Boot, RAM, disk space), detects policy blockers,
+	then attempts the upgrade from a network share first, falling back to ISO download.
+	Bypasses hardware requirement checks via registry for unsupported machines.
+
+	.PARAMETER LogPath
+	Path for structured log file. Defaults to C:\Ambitions\Logs with timestamped filename.
+
+	.PARAMETER Force
+	Force the upgrade even if the system appears to already be running Windows 11 25H2+.
+
+	.PARAMETER DownloadOnly
+	Only download the Windows 11 ISO without installing. Saved to C:\Ambitions\Downloads.
+
+	.PARAMETER ShowProgress
+	Run setup.exe with visible progress UI instead of quiet mode (/quiet flag omitted).
+
+	.PARAMETER NoDllSeeding
+	Forcefully disable all DLL seeding. By default, when setup.exe fails with a DLL
+	version-mismatch exit code (0x8007007F / 0xC06D007F) or an unknown exit code, the
+	function seeds the Win11 wdscore.dll and wimgapi.dll from the install media into
+	System32 (backing up the originals to .win10bak) and retries. With this switch
+	set, that seeding step is skipped entirely: System32 is never modified and no
+	services or processes are stopped to release locked DLLs.
+
+	.PARAMETER DownloadUrl
+	A manually-provided direct download URL for the Windows 11 ISO. When specified,
+	the Fido URL-generation step is skipped entirely and this URL is used instead.
+	Useful when auto-generation via Fido fails.
+
+	.PARAMETER ScheduleAt
+	Schedule the upgrade to run at a future date/time instead of immediately.
+	Accepts any valid [datetime] value. Creates a one-time Windows Scheduled Task
+	that runs as SYSTEM with highest privileges, surviving logoffs and reboots.
+	All other parameters (Force, ShowProgress, etc.) are forwarded to the scheduled run.
+	The task is registered with WakeToRun and the active power plan's AC "Allow
+	wake timers" setting is enabled, so a sleeping or hibernating machine wakes
+	to run it. It starts on AC power only, but is not stopped once it is running.
+
+	Examples:
+	  -ScheduleAt "11:00 PM"           # Tonight (or tomorrow if past 11pm)
+	  -ScheduleAt "3/28/2026 8:00 PM"  # Specific date and time
+
+	.PARAMETER ScheduledTaskName
+	Name for the scheduled task. Defaults to "Ambitions-UpdateWindowsTo11".
+	Use to customize the task name or avoid conflicts with existing tasks.
+
+	.PARAMETER NetworkPaths
+	Array of UNC paths to check for setup.exe in priority order. The default value
+	is a placeholder -- Ambitions does not currently host a Windows 11 setup.exe on
+	a network share, so pass real UNC path(s) explicitly if one becomes available.
+
+	.EXAMPLE
+	Update-WindowsTo11 -ScheduleAt "11:00 PM"
+	Schedule the upgrade for tonight at 11 PM (or tomorrow if 11 PM has passed).
+
+	.EXAMPLE
+	Update-WindowsTo11 -ScheduleAt "3/28/2026 8:00 PM" -ShowProgress
+	Schedule the upgrade for a specific date with visible progress UI.
+
+	.EXAMPLE
+	Update-WindowsTo11 -ScheduleAt "2:00 AM" -ScheduledTaskName "Win11-Upgrade-PC42"
+	Schedule with a custom task name for easier identification.
+
+	.NOTES
+	Requires: PowerShell as Administrator, Internet access or WSUS/network share.
+	Dependencies: ATG-PS-Functions (loaded via irm ps.acgs.io | iex).
+	#>
+
+	[CmdletBinding()]
+	param(
+		[string]$LogPath,
+		[switch]$Force,
+		[switch]$DownloadOnly,
+		[switch]$ShowProgress,
+		[switch]$NoDllSeeding,
+		[string]$DownloadUrl,
+		[datetime]$ScheduleAt,
+		[string]$ScheduledTaskName = "Ambitions-UpdateWindowsTo11",
+		# TODO: Ambitions needs to configure its own network share(s) hosting the
+		# Windows 11 setup.exe here, if one is set up. Until then this is a
+		# placeholder path and the function will fall back to ISO download.
+		[string[]]$NetworkPaths = @(
+			"\\fileserver\Win11Install$\setup.exe"
+		)
+	)
+
+	#region Helpers
+	# Known setup.exe exit codes and whether they are retryable
+	$SetupExitCodes = @{
+		[int]0x00000000 = @{ Message = "Success";                                                    Retryable = $false }
+		[int]0xC1900210 = @{ Message = "No compatibility issues found";                              Retryable = $false }
+		[int]0xC1900208 = @{ Message = "Compatibility issues found (actionable)";                    Retryable = $false }
+		[int]0xC1900204 = @{ Message = "Migration choice not available";                             Retryable = $false }
+		[int]0xC1900200 = @{ Message = "Machine does not meet minimum requirements";                 Retryable = $false }
+		[int]0xC190020E = @{ Message = "Machine does not meet minimum requirements (disk space)";    Retryable = $false }
+		[int]0x80070005 = @{ Message = "Access denied -- insufficient privileges";                   Retryable = $false }
+		[int]0x80070070 = @{ Message = "Not enough disk space";                                      Retryable = $false }
+		[int]0x80070002 = @{ Message = "File not found";                                             Retryable = $false }
+		[int]0x8007007F = @{ Message = "ERROR_PROC_NOT_FOUND -- DLL version mismatch (wdscore.dll / wimgapi.dll)"; Retryable = $true  }
+		[int]0xC06D007F = @{ Message = "Delay-load DLL failure (ERROR_PROC_NOT_FOUND) -- wimgapi.dll version mismatch"; Retryable = $true  }
+		[int]0x80070490 = @{ Message = "Element not found";                                          Retryable = $false }
+		[int]0x800704DD = @{ Message = "User cancelled the operation";                               Retryable = $false }
+		[int]0xC1900101 = @{ Message = "SAFE_OS phase error -- driver or hardware issue";            Retryable = $false }
+		[int]0xC1420127 = @{ Message = "Disk space error during installation";                       Retryable = $false }
+	}
+
+	function Write-Log {
+		param(
+			[Parameter(Mandatory)]
+			[string]$Message,
+			[ValidateSet("INFO", "WARNING", "ERROR", "SUCCESS")]
+			[string]$Level = "INFO"
+		)
+		$LogEntry = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss') [$Level] $Message"
+		Add-Content -Path $script:LogFile -Value $LogEntry -ErrorAction SilentlyContinue
+
+		switch ($Level) {
+			"ERROR"   { Write-Host "[ERROR]   $Message" -ForegroundColor Red }
+			"WARNING" { Write-Host "[WARN]    $Message" -ForegroundColor Yellow }
+			"SUCCESS" { Write-Host "[OK]      $Message" -ForegroundColor Green }
+			default   { Write-Host "[INFO]    $Message" -ForegroundColor Cyan }
+		}
+	}
+
+	function Get-SetupExitInfo {
+		param([int]$ExitCode)
+		# Hashtable keys were built with [int]0x... casts (same Int32 bit pattern), so look up
+		# directly with the Int32 value. Converting through uint32 then back to [int] overflows
+		# for codes > 0x7FFFFFFF (e.g. 0x8007007F -> uint32 2147942527 > Int32.MaxValue).
+		$info = $SetupExitCodes[$ExitCode]
+		if ($info) { return $info }
+		# Unknown code -- assume not retryable
+		$UnsignedCode = [uint32]("0x{0:X8}" -f $ExitCode)
+		return @{ Message = "Unknown exit code: 0x$("{0:X8}" -f $UnsignedCode)"; Retryable = $false }
+	}
+
+	function Start-Win11Setup {
+		<#
+		.DESCRIPTION
+		Runs setup.exe with registry bypasses and returns a result object
+		with .Success (bool) and .BitLockerSuspended (bool).
+
+		First attempt runs setup.exe untouched -- no DLL injection, no staging.
+		If it fails with a DLL-related code (0x8007007F, 0xC06D007F) or an unknown
+		exit code, wdscore.dll and wimgapi.dll are seeded from the install media
+		sources into System32 and the upgrade is retried. If the seeded retry still
+		fails, the original Win10 DLLs are restored from .win10bak backups.
+
+		When -NoDllSeeding is set, the seeding step is skipped entirely and System32
+		is never modified, even on DLL-related exit codes.
+		#>
+		param(
+			[Parameter(Mandatory)]
+			[string]$SetupPath,
+			[switch]$ShowProgress,
+			[switch]$NoDllSeeding
+		)
+
+		$Result = [PSCustomObject]@{
+			Success            = $false
+			BitLockerSuspended = $false
+		}
+
+		# Reset DLL seeding state for this invocation
+		$script:WdscoreSeeded     = $false
+		$script:WimgapiSeeded     = $false
+		$script:WdscoreBackupPath = $null
+		$script:WimgapiBackupPath = $null
+
+		Write-Log "Attempting Windows 11 setup with path: $SetupPath"
+
+		if (-not (Test-Path $SetupPath)) {
+			Write-Log "setup.exe not found at $SetupPath" -Level "ERROR"
+			return $Result
+		}
+
+		# Verify Authenticode signature before execution
+		$sig = Get-AuthenticodeSignature -FilePath $SetupPath -ErrorAction SilentlyContinue
+		if (-not $sig -or $sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
+			Write-Log "setup.exe Authenticode signature validation failed (Status: $($sig.Status)). Aborting." -Level "ERROR"
+			return $Result
+		}
+		Write-Log "Authenticode signature verified: $($sig.SignerCertificate.Subject)"
+
+		# Helper: take ownership of a System32 file and copy with lock-handling.
+		# Used both for seeding Win11 DLLs and for restoring Win10 backups on revert.
+		function Copy-DllWithLockHandling {
+			param(
+				[Parameter(Mandatory)][string]$Source,
+				[Parameter(Mandatory)][string]$Destination,
+				[Parameter(Mandatory)][string]$DisplayName
+			)
+
+			& takeown /f $Destination 2>&1 | Out-Null
+			& icacls $Destination /grant "administrators:F" 2>&1 | Out-Null
+
+			try {
+				Copy-Item $Source $Destination -Force -ErrorAction Stop
+			} catch {
+				Write-Log "Copy of $DisplayName failed (file likely locked): $($_.Exception.Message) -- attempting to release lock" -Level "WARNING"
+
+				# Stop services holding the file before killing host processes -- avoids
+				# tearing down unrelated services that share the same svchost instance.
+				$DstNorm = [System.IO.Path]::GetFullPath($Destination)
+				$lockers = Get-Process | Where-Object {
+					try {
+						$_.Modules -and ($_.Modules | Where-Object {
+							[System.IO.Path]::GetFullPath($_.FileName) -eq $DstNorm
+						})
+					} catch { $false }
+				}
+
+				$stoppedServices = @()
+				foreach ($proc in $lockers) {
+					$svc = Get-CimInstance Win32_Service -Filter "ProcessId = $($proc.Id)" -ErrorAction SilentlyContinue |
+						Where-Object { $_.State -eq 'Running' }
+					if ($svc) {
+						foreach ($s in $svc) {
+							Write-Log "Stopping service '$($s.Name)' (PID $($proc.Id)) to release $DisplayName" -Level "WARNING"
+							Stop-Service -Name $s.Name -Force -ErrorAction SilentlyContinue
+							$stoppedServices += $s.Name
+						}
+					} else {
+						Write-Log "Stopping process $($proc.Name) (PID $($proc.Id)) to release $DisplayName" -Level "WARNING"
+						Stop-Process -Id $proc.Id -Force -ErrorAction SilentlyContinue
+					}
+				}
+
+				if (-not $lockers) {
+					Write-Log "No process found with $DisplayName loaded as a module -- lock may be held by a file handle (AV, indexer, etc.)" -Level "WARNING"
+				}
+
+				Start-Sleep -Seconds 2
+				Copy-Item $Source $Destination -Force -ErrorAction Stop
+
+				foreach ($svcName in $stoppedServices) {
+					Start-Service -Name $svcName -ErrorAction SilentlyContinue
+				}
+			}
+		}
+
+		# Helper: seed Win11 wdscore.dll and wimgapi.dll into System32 from the
+		# install media sources directory. Sets $script:Wdscore/WimgapiSeeded and
+		# backup paths on success. Only the existing System32 copy is replaced;
+		# the prior version is preserved at .win10bak so it can be restored.
+		function Invoke-DllSeed {
+			$SourcesDir = Join-Path (Split-Path $SetupPath -Parent) "sources"
+
+			# wdscore.dll: CAutomationManager init failure -> 0x8007007F if version differs
+			$WdsSrc = Join-Path $SourcesDir "wdscore.dll"
+			$WdsDst = "$env:SystemRoot\System32\wdscore.dll"
+			if (Test-Path $WdsSrc) {
+				$srcVer = (Get-Item $WdsSrc).VersionInfo.FileVersion
+				$dstVer = (Get-Item $WdsDst -ErrorAction SilentlyContinue).VersionInfo.FileVersion
+				Write-Log "wdscore.dll: sources=$srcVer, System32=$dstVer"
+
+				if ($srcVer -ne $dstVer) {
+					try {
+						if (Test-Path $WdsDst) {
+							$script:WdscoreBackupPath = "$env:SystemRoot\System32\wdscore.dll.win10bak"
+							Copy-Item $WdsDst $script:WdscoreBackupPath -Force -ErrorAction SilentlyContinue
+						}
+						Copy-DllWithLockHandling -Source $WdsSrc -Destination $WdsDst -DisplayName "wdscore.dll"
+						$script:WdscoreSeeded = $true
+						Write-Log "Win11 wdscore.dll ($srcVer) seeded into System32" -Level "SUCCESS"
+					} catch {
+						Write-Log "Failed to seed wdscore.dll into System32: $($_.Exception.Message)." -Level "WARNING"
+					}
+				} else {
+					Write-Log "wdscore.dll already matches sources version -- no seeding needed"
+				}
+			} else {
+				Write-Log "wdscore.dll not found at $WdsSrc -- seeding skipped" -Level "WARNING"
+			}
+
+			# wimgapi.dll: SetupPlatform.dll delay-load failure -> 0xC06D007F if too old
+			$WimSrc = Join-Path $SourcesDir "wimgapi.dll"
+			$WimDst = "$env:SystemRoot\System32\wimgapi.dll"
+			if (Test-Path $WimSrc) {
+				$wimSrcVer = (Get-Item $WimSrc).VersionInfo.FileVersion
+				$wimDstVer = (Get-Item $WimDst -ErrorAction SilentlyContinue).VersionInfo.FileVersion
+				Write-Log "wimgapi.dll: sources=$wimSrcVer, System32=$wimDstVer"
+
+				if ($wimSrcVer -ne $wimDstVer) {
+					try {
+						if (Test-Path $WimDst) {
+							$script:WimgapiBackupPath = "$env:SystemRoot\System32\wimgapi.dll.win10bak"
+							Copy-Item $WimDst $script:WimgapiBackupPath -Force -ErrorAction SilentlyContinue
+						}
+						Copy-DllWithLockHandling -Source $WimSrc -Destination $WimDst -DisplayName "wimgapi.dll"
+						$script:WimgapiSeeded = $true
+						Write-Log "Win11 wimgapi.dll ($wimSrcVer) seeded into System32" -Level "SUCCESS"
+					} catch {
+						Write-Log "Failed to seed wimgapi.dll into System32: $($_.Exception.Message)." -Level "WARNING"
+					}
+				} else {
+					Write-Log "wimgapi.dll already matches sources version -- no seeding needed"
+				}
+			} else {
+				Write-Log "wimgapi.dll not found at $WimSrc -- seeding skipped" -Level "WARNING"
+			}
+		}
+
+		# Helper: restore Win10 DLLs from .win10bak backups when seeded retries fail.
+		# Leaves the system in the same state as before Start-Win11Setup ran.
+		function Restore-SeededDlls {
+			if ($script:WdscoreSeeded -and $script:WdscoreBackupPath -and (Test-Path $script:WdscoreBackupPath)) {
+				try {
+					Copy-DllWithLockHandling -Source $script:WdscoreBackupPath -Destination "$env:SystemRoot\System32\wdscore.dll" -DisplayName "wdscore.dll (revert)"
+					Remove-Item $script:WdscoreBackupPath -Force -ErrorAction SilentlyContinue
+					$script:WdscoreSeeded = $false
+					Write-Log "wdscore.dll reverted to original Win10 version" -Level "SUCCESS"
+				} catch {
+					Write-Log "Failed to revert wdscore.dll: $($_.Exception.Message). Backup remains at $($script:WdscoreBackupPath)" -Level "ERROR"
+				}
+			}
+
+			if ($script:WimgapiSeeded -and $script:WimgapiBackupPath -and (Test-Path $script:WimgapiBackupPath)) {
+				try {
+					Copy-DllWithLockHandling -Source $script:WimgapiBackupPath -Destination "$env:SystemRoot\System32\wimgapi.dll" -DisplayName "wimgapi.dll (revert)"
+					Remove-Item $script:WimgapiBackupPath -Force -ErrorAction SilentlyContinue
+					$script:WimgapiSeeded = $false
+					Write-Log "wimgapi.dll reverted to original Win10 version" -Level "SUCCESS"
+				} catch {
+					Write-Log "Failed to revert wimgapi.dll: $($_.Exception.Message). Backup remains at $($script:WimgapiBackupPath)" -Level "ERROR"
+				}
+			}
+		}
+
+		# Helper: clear C:\$WINDOWS.~BT so setup doesn't reuse stale DLLs from a
+		# prior failed run. Called before the first attempt and again before any
+		# retry that follows DLL seeding.
+		function Clear-WindowsBT {
+			$BtPath = 'C:\$WINDOWS.~BT'
+			if (Test-Path -LiteralPath $BtPath) {
+				Write-Log "Removing stale $BtPath to prevent DLL version conflicts..." -Level "WARNING"
+				& takeown /f $BtPath /a /r /d y 2>&1 | Out-Null
+				& icacls $BtPath /grant "administrators:F" /t /q 2>&1 | Out-Null
+				& icacls $BtPath /grant "SYSTEM:F" /t /q 2>&1 | Out-Null
+				Remove-Item -LiteralPath $BtPath -Recurse -Force -ErrorAction SilentlyContinue
+				if (Test-Path -LiteralPath $BtPath) {
+					Write-Log "$BtPath could not be fully removed (locked files may remain). Setup may reuse stale DLLs." -Level "WARNING"
+				} else {
+					Write-Log "Stale upgrade cache cleared" -Level "SUCCESS"
+				}
+			}
+		}
+
+		try {
+			Clear-WindowsBT
+
+			# Suspend BitLocker if active
+			Write-Log "Checking BitLocker status..."
+			$BitLockerVolume = Get-BitLockerVolume -MountPoint "C:" -ErrorAction SilentlyContinue
+			if ($BitLockerVolume -and $BitLockerVolume.ProtectionStatus -eq 'On') {
+				Write-Log "BitLocker active -- suspending for 5 reboots..." -Level "WARNING"
+				try {
+					Suspend-BitLocker -MountPoint "C:" -RebootCount 5 -ErrorAction Stop | Out-Null
+					$Result.BitLockerSuspended = $true
+					Write-Log "BitLocker suspended successfully" -Level "SUCCESS"
+				} catch {
+					Write-Log "Failed to suspend BitLocker: $($_.Exception.Message). Manual intervention may be needed." -Level "WARNING"
+				}
+			} else {
+				Write-Log "BitLocker not active or not found"
+			}
+
+			# Set registry keys to bypass hardware requirement checks
+			$AppCompatBase = "HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\AppCompatFlags"
+			Remove-Item -Path "$AppCompatBase\CompatMarkers" -Recurse -Force -ErrorAction SilentlyContinue
+			Remove-Item -Path "$AppCompatBase\Shared" -Recurse -Force -ErrorAction SilentlyContinue
+			Remove-Item -Path "$AppCompatBase\TargetVersionUpgradeExperienceIndicators" -Recurse -Force -ErrorAction SilentlyContinue
+
+			$HwReqChkPath = "$AppCompatBase\HwReqChk"
+			if (-not (Test-Path $HwReqChkPath)) {
+				New-Item -Path $HwReqChkPath -Force | Out-Null
+			}
+			Set-ItemProperty -Path $HwReqChkPath -Name "HwReqChkVars" -Type MultiString -Force -Value @(
+				"SQ_SecureBootCapable=TRUE",
+				"SQ_SecureBootEnabled=TRUE",
+				"SQ_TpmVersion=2",
+				"SQ_RamMB=8192"
+			)
+
+			$MoSetupPath = "HKLM:\SYSTEM\Setup\MoSetup"
+			if (-not (Test-Path $MoSetupPath)) {
+				New-Item -Path $MoSetupPath -Force | Out-Null
+			}
+			Set-ItemProperty -Path $MoSetupPath -Name "AllowUpgradesWithUnsupportedTPMOrCPU" -Value 1 -Type DWord -Force
+
+			Write-Log "Hardware bypass registry keys applied" -Level "SUCCESS"
+
+			# Build setup arguments. /product server is an undocumented best-effort
+			# workaround that lowers minimum-requirements gating to Windows Server
+			# thresholds. Microsoft has been patching it (blocked in newer 24H2/25H2
+			# builds), so the registry bypass applied above is what reliably does the
+			# work; /product server is kept only as a harmless extra nudge.
+			$SetupArgs = [System.Collections.ArrayList]@("/auto", "Upgrade")
+			if (-not $ShowProgress) {
+				$SetupArgs.Add("/quiet") | Out-Null
+			}
+			$SetupArgs.AddRange(@(
+				"/product", "server",
+				"/DynamicUpdate", "Disable",
+				"/ShowOOBE", "None",
+				"/Telemetry", "Disable",
+				"/MigrateDrivers", "All",
+				"/Compat", "IgnoreWarning",
+				"/copylogs", "C:\Ambitions",
+				"/EULA", "Accept"
+			))
+
+			# Fallback args drop switches some builds reject (used as a last-ditch retry).
+			$FallbackArgs = [System.Collections.ArrayList]@("/auto", "Upgrade")
+			if (-not $ShowProgress) {
+				$FallbackArgs.Add("/quiet") | Out-Null
+			}
+			$FallbackArgs.AddRange(@(
+				"/DynamicUpdate", "Disable",
+				"/ShowOOBE", "None",
+				"/Compat", "IgnoreWarning",
+				"/copylogs", "C:\Ambitions",
+				"/EULA", "Accept"
+			))
+
+			# Attempt 1: run setup.exe untouched. No DLL injection on the first try
+			# so a clean install path stays unbroken when DLLs are not actually the issue.
+			Write-Log "Starting Windows 11 upgrade..."
+			Write-Log "Setup arguments: $($SetupArgs -join ' ')"
+			$SetupProcess = Start-Process -FilePath $SetupPath -ArgumentList $SetupArgs -Wait -PassThru
+			$ExitInfo = Get-SetupExitInfo -ExitCode $SetupProcess.ExitCode
+
+			if ($SetupProcess.ExitCode -eq 0) {
+				Write-Log "Setup completed successfully" -Level "SUCCESS"
+				$Result.Success = $true
+				return $Result
+			}
+
+			Write-Log "Setup exited with code 0x$("{0:X8}" -f $SetupProcess.ExitCode): $($ExitInfo.Message)" -Level "WARNING"
+
+			$IsKnownDllError = ($SetupProcess.ExitCode -eq [int]0x8007007F) -or ($SetupProcess.ExitCode -eq [int]0xC06D007F)
+			$IsUnknownCode   = -not $SetupExitCodes.ContainsKey($SetupProcess.ExitCode)
+			$IsDllOrUnknown  = $IsKnownDllError -or $IsUnknownCode
+
+			if ($IsDllOrUnknown -and -not $NoDllSeeding) {
+				if ($IsKnownDllError) {
+					Write-Log "Exit code matches a known DLL version mismatch -- attempting DLL seeding retry." -Level "WARNING"
+				} else {
+					Write-Log "Unknown exit code -- attempting DLL seeding retry as a precaution." -Level "WARNING"
+				}
+
+				Invoke-DllSeed
+
+				if ($script:WdscoreSeeded -or $script:WimgapiSeeded) {
+					# Drop stale $WINDOWS.~BT cache so setup picks up the seeded DLLs.
+					Clear-WindowsBT
+
+					# Attempt 2: same args, with seeded DLLs
+					Write-Log "Retrying setup with seeded DLLs..."
+					$SetupProcess = Start-Process -FilePath $SetupPath -ArgumentList $SetupArgs -Wait -PassThru
+					$ExitInfo = Get-SetupExitInfo -ExitCode $SetupProcess.ExitCode
+
+					if ($SetupProcess.ExitCode -eq 0) {
+						Write-Log "Setup completed successfully (after DLL seeding)" -Level "SUCCESS"
+						$Result.Success = $true
+						return $Result
+					}
+
+					Write-Log "Setup exited with code 0x$("{0:X8}" -f $SetupProcess.ExitCode): $($ExitInfo.Message)" -Level "WARNING"
+
+					# Attempt 3: fallback args, still with seeded DLLs
+					Write-Log "Retrying with minimal arguments..." -Level "WARNING"
+					Write-Log "Fallback setup arguments: $($FallbackArgs -join ' ')"
+					$SetupProcess = Start-Process -FilePath $SetupPath -ArgumentList $FallbackArgs -Wait -PassThru
+					$ExitInfo = Get-SetupExitInfo -ExitCode $SetupProcess.ExitCode
+
+					if ($SetupProcess.ExitCode -eq 0) {
+						Write-Log "Setup completed successfully (fallback arguments)" -Level "SUCCESS"
+						$Result.Success = $true
+						return $Result
+					}
+
+					Write-Log "Setup failed with code 0x$("{0:X8}" -f $SetupProcess.ExitCode): $($ExitInfo.Message)" -Level "ERROR"
+					Write-Log "DLL seeding retries failed -- reverting Win10 DLLs from backup." -Level "WARNING"
+					Restore-SeededDlls
+				} else {
+					Write-Log "No DLLs were seeded (sources missing or already matching) -- skipping retry." -Level "WARNING"
+				}
+			} elseif ($IsDllOrUnknown) {
+				# Reached only when -NoDllSeeding suppressed the seeding branch above.
+				Write-Log "Exit code suggests a DLL version mismatch, but -NoDllSeeding was specified -- skipping DLL seeding and System32 modification." -Level "WARNING"
+			} elseif ($ExitInfo.Retryable) {
+				# Retryable but not DLL-related: retry with fallback args, no seeding.
+				Write-Log "Retrying with minimal arguments..." -Level "WARNING"
+				Write-Log "Fallback setup arguments: $($FallbackArgs -join ' ')"
+				$SetupProcess = Start-Process -FilePath $SetupPath -ArgumentList $FallbackArgs -Wait -PassThru
+				$ExitInfo = Get-SetupExitInfo -ExitCode $SetupProcess.ExitCode
+
+				if ($SetupProcess.ExitCode -eq 0) {
+					Write-Log "Setup completed successfully (fallback arguments)" -Level "SUCCESS"
+					$Result.Success = $true
+					return $Result
+				}
+
+				Write-Log "Setup failed with code 0x$("{0:X8}" -f $SetupProcess.ExitCode): $($ExitInfo.Message)" -Level "ERROR"
+			} else {
+				Write-Log "Exit code is terminal -- skipping retry." -Level "ERROR"
+			}
+
+			# Surface setup error log lines to help identify the specific failing DLL/function
+			$setuperrPaths = @(
+				"C:\Ambitions\Sources\Panther\setuperr.log",
+				"C:\Ambitions\setuperr.log"
+			)
+			foreach ($ErrLogPath in $setuperrPaths) {
+				if (Test-Path $ErrLogPath) {
+					$hits = Select-String -Path $ErrLogPath -Pattern "0x8007007F|GetProcAddress|ERROR_PROC_NOT_FOUND|\.dll" -ErrorAction SilentlyContinue |
+						Select-Object -Last 8
+					if ($hits) {
+						Write-Log "Setup error log excerpts ($ErrLogPath):" -Level "WARNING"
+						foreach ($hit in $hits) { Write-Log "  $($hit.Line.Trim())" -Level "WARNING" }
+					}
+					break
+				}
+			}
+
+			return $Result
+		} catch {
+			Write-Log "Setup execution failed: $($_.Exception.Message)" -Level "ERROR"
+			if ($script:WdscoreSeeded -or $script:WimgapiSeeded) {
+				Restore-SeededDlls
+			}
+			return $Result
+		}
+	}
+	#endregion
+
+	#region Pre-flight
+	# Check for admin privileges
+	if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+		[Security.Principal.WindowsBuiltInRole]"Administrator")) {
+		Write-Host "[ERROR]   This function requires administrative privileges." -ForegroundColor Red
+		return
+	}
+
+	# Set up log file for structured logging
+	$LogFolder = Join-Path "C:\Ambitions" "Logs"
+	if (-not (Test-Path $LogFolder)) {
+		New-Item -Path $LogFolder -ItemType Directory -Force | Out-Null
+	}
+	if (-not $LogPath) {
+		$LogPath = Join-Path $LogFolder "Win11Setup_$(Get-Date -Format 'yyyyMMdd_HHmmss').log"
+	}
+	$script:LogFile = $LogPath
+
+	Write-Log "Starting Update-WindowsTo11"
+	Write-Log "Log file: $($script:LogFile)"
+	#endregion
+
+	#region Version Check
+	$os = Get-CimInstance Win32_OperatingSystem
+	$buildNumber = [int]$os.BuildNumber
+	$osCaption = $os.Caption
+
+	if (-not $Force -and $osCaption -match 'Windows 11' -and $buildNumber -ge 26200) {
+		Write-Log "Already running Windows 11 25H2+ (Build $buildNumber) -- no upgrade needed." -Level "SUCCESS"
+		return
+	}
+
+	if ($Force) {
+		Write-Log "Force specified -- skipping version check. Current: $osCaption (Build $buildNumber)" -Level "WARNING"
+	}
+	#endregion
+
+	#region Scheduled Execution
+	if ($PSBoundParameters.ContainsKey('ScheduleAt')) {
+		# Capture current time once to avoid TOCTOU issues at midnight
+		$now = Get-Date
+
+		# If only a time was given and it's already past, assume tomorrow
+		if ($ScheduleAt -le $now) {
+			if ($ScheduleAt.Date -eq $now.Date) {
+				$ScheduleAt = $ScheduleAt.AddDays(1)
+				Write-Log "Specified time already passed today -- scheduling for tomorrow: $($ScheduleAt.ToString('g'))" -Level "WARNING"
+			} else {
+				Write-Log "ScheduleAt value '$($ScheduleAt.ToString('g'))' is in the past." -Level "ERROR"
+				return
+			}
+		}
+
+		# Build forwarded parameters from $PSBoundParameters (escape single quotes for safety)
+		$ExcludeParams = @('ScheduleAt', 'ScheduledTaskName')
+		$ForwardedParams = @()
+		foreach ($key in $PSBoundParameters.Keys) {
+			if ($key -in $ExcludeParams) { continue }
+			$val = $PSBoundParameters[$key]
+			# A bound switch is a [switch] (SwitchParameter), not a [bool], in $PSBoundParameters;
+			# emit the bare -Name only -- "-Name 'True'" would misbind as a positional value.
+			if ($val -is [switch] -or $val -is [bool]) {
+				if ($val) { $ForwardedParams += "-$key" }
+			} elseif ($val -is [array]) {
+				$escaped = ($val | ForEach-Object { "'$($_ -replace "'", "''")'" }) -join ','
+				$ForwardedParams += "-$key @($escaped)"
+			} else {
+				$escaped = "$val" -replace "'", "''"
+				$ForwardedParams += "-$key '$escaped'"
+			}
+		}
+		$ParamString = $ForwardedParams -join ' '
+
+		# Self-clean by unregistering first so the task does not linger in Task Scheduler.
+		# Deleting a scheduled task does not interrupt the running process, so the loader
+		# and Update-WindowsTo11 call still execute as normal.
+		$TaskCommand = "Unregister-ScheduledTask -TaskName '$ScheduledTaskName' -Confirm:`$false -ErrorAction SilentlyContinue; irm ps.acgs.io | iex; Update-WindowsTo11 $ParamString"
+
+		# Check for existing task with the same name
+		$existingTask = Get-ScheduledTask -TaskName $ScheduledTaskName -ErrorAction SilentlyContinue
+		if ($existingTask) {
+			Write-Log "Scheduled task '$ScheduledTaskName' already exists -- replacing it." -Level "WARNING"
+			Unregister-ScheduledTask -TaskName $ScheduledTaskName -Confirm:$false -ErrorAction Stop
+		}
+
+		# Use -EncodedCommand to avoid all quoting/injection issues in the scheduled task
+		$encodedCmd = [Convert]::ToBase64String([System.Text.Encoding]::Unicode.GetBytes($TaskCommand))
+		$Action  = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-NoProfile -ExecutionPolicy Bypass -EncodedCommand $encodedCmd"
+		$Trigger = New-ScheduledTaskTrigger -Once -At $ScheduleAt
+		# WakeToRun wakes the machine from sleep/hibernate at the scheduled time. The
+		# task starts on AC power only (DisallowStartIfOnBatteries stays True, since
+		# -AllowStartIfOnBatteries is not passed), but -DontStopIfGoingOnBatteries keeps
+		# a long upgrade running once started even if the machine is later unplugged.
+		# 10-hour ExecutionTimeLimit is a safety cap. WakeToRun needs the active power
+		# plan's "Allow wake timers" enabled to fire, and cannot power on a shut-down PC.
+		$Settings = New-ScheduledTaskSettingsSet -WakeToRun -DontStopIfGoingOnBatteries -ExecutionTimeLimit (New-TimeSpan -Hours 10)
+		$Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+
+		try {
+			Register-ScheduledTask -TaskName $ScheduledTaskName -Action $Action -Trigger $Trigger -Settings $Settings -Principal $Principal -ErrorAction Stop | Out-Null
+			Write-Log "Windows 11 upgrade scheduled for $($ScheduleAt.ToString('f'))" -Level "SUCCESS"
+			Write-Log "Task name: $ScheduledTaskName -- visible in Task Scheduler"
+			Write-Log "To cancel: Unregister-ScheduledTask -TaskName '$ScheduledTaskName' -Confirm:`$false"
+			# WakeToRun only fires if the active power plan allows wake timers, so ensure
+			# the AC (plugged-in) "Allow wake timers" value is Enabled (1). "Important Wake
+			# Timers Only" (2) does NOT wake the machine for a normal scheduled task. The
+			# task starts on AC only, so set just the AC value and leave DC untouched.
+			try {
+				$WakeTimerGuid = 'bd3b718a-0680-4d9d-8ab2-e1d2b4ac806d'  # Allow wake timers (under SUB_SLEEP)
+				$WakeAcIndex = $null
+				$WtAcLine = (& powercfg /query SCHEME_CURRENT SUB_SLEEP $WakeTimerGuid 2>$null) |
+					Where-Object { $_ -match 'Current AC Power Setting Index' } | Select-Object -First 1
+				if ($WtAcLine -and ($WtAcLine -match '0x([0-9a-fA-F]+)')) {
+					$WakeAcIndex = [Convert]::ToInt32($Matches[1], 16)
+				}
+				if ($WakeAcIndex -eq 1) {
+					Write-Log "Allow wake timers already enabled (AC); the machine can wake for this task."
+				} else {
+					if ($null -eq $WakeAcIndex) { $WtState = 'unreadable' }
+					elseif ($WakeAcIndex -eq 0) { $WtState = 'Disabled' }
+					elseif ($WakeAcIndex -eq 2) { $WtState = 'Important Wake Timers Only' }
+					else { $WtState = "index $WakeAcIndex" }
+					Write-Log "Allow wake timers is '$WtState' on AC; enabling it so the task can wake the machine." -Level "WARNING"
+					& powercfg /setacvalueindex SCHEME_CURRENT SUB_SLEEP $WakeTimerGuid 1 2>$null
+					$WtScheme = ((& powercfg /getactivescheme 2>$null) -join ' ')
+					if ($WtScheme -match '([0-9a-fA-F]{8}-(?:[0-9a-fA-F]{4}-){3}[0-9a-fA-F]{12})') {
+						& powercfg /setactive $Matches[1] 2>$null
+					}
+					Write-Log "Allow wake timers enabled on AC power for the active plan." -Level "SUCCESS"
+				}
+				Write-Log "Reminder: the BIOS/UEFI must also permit wake timers; check pending wakes with 'powercfg /waketimers'."
+			} catch {
+				Write-Log "Could not verify or enable wake timers: $($_.Exception.Message). The task may not wake the machine from sleep." -Level "WARNING"
+			}
+			return
+		} catch {
+			Write-Log "Failed to create scheduled task: $($_.Exception.Message)" -Level "ERROR"
+			return
+		}
+	}
+	#endregion
+
+	#region Eligibility Checks
+	$cs = Get-CimInstance Win32_ComputerSystem
+	$elig = [ordered]@{
+		OS              = $osCaption
+		OSVersion       = $os.Version
+		Architecture    = $os.OSArchitecture
+		Manufacturer    = $cs.Manufacturer
+		RAM_GB          = [math]::Round($cs.TotalPhysicalMemory / 1GB, 1)
+		FreeSysDrive_GB = [math]::Round((Get-PSDrive -Name $env:SystemDrive.TrimEnd(':')).Free / 1GB, 1)
+		TPM_Present     = $false
+		TPM_Ready       = $false
+		TPM_VersionOK   = $false
+		SecureBoot      = $false
+	}
+
+	# TPM detection. Win32_Tpm.SpecVersion is the authoritative source for the
+	# TPM 1.2 vs 2.0 distinction (Microsoft's PC Health Check and tpm.msc both
+	# read this field). Get-Tpm.ManufacturerVersion returns the chip *firmware*
+	# version (e.g. "7.85.4555.5" for AMD fTPM, "404.04.0.0" for Intel PTT),
+	# not the spec version, so checking it against ^2\. is unreliable.
+	try {
+		$win32Tpm = Get-CimInstance -Namespace 'root\cimv2\security\microsofttpm' -ClassName Win32_Tpm -ErrorAction Stop
+		if ($win32Tpm) {
+			$elig.TPM_Present = $true
+			if ($win32Tpm.SpecVersion) {
+				# SpecVersion is comma-separated, e.g. "2.0, 0, 1.59" -- first token is the TCG spec
+				$specToken = ($win32Tpm.SpecVersion -split ',')[0].Trim()
+				$elig.TPM_VersionOK = $specToken -match '^2\.'
+			}
+		}
+	} catch {
+		# Win32_Tpm namespace not available -- TPM driver may not be loaded.
+		# Fall through to Get-Tpm below.
+	}
+
+	# Layer Get-Tpm on top for TpmReady status, and as a presence fallback when
+	# the Win32_Tpm WMI query fails.
+	try {
+		$tpm = Get-Tpm -ErrorAction Stop
+		if ($tpm) {
+			if (-not $elig.TPM_Present) { $elig.TPM_Present = [bool]$tpm.TpmPresent }
+			$elig.TPM_Ready = [bool]$tpm.TpmReady
+		}
+	} catch {}
+
+	# Secure Boot detection
+	try {
+		$elig.SecureBoot = [bool](Confirm-SecureBootUEFI -ErrorAction Stop)
+	} catch {}
+
+	Write-Log "Eligibility snapshot:"
+	$elig.GetEnumerator() | ForEach-Object {
+		Write-Host ("   - {0}: {1}" -f $_.Key, $_.Value)
+		Add-Content -Path $script:LogFile -Value ("   {0}: {1}" -f $_.Key, $_.Value) -ErrorAction SilentlyContinue
+	}
+
+	# Warnings (non-blocking)
+	if ($elig.OS -notmatch 'Windows 10' -and $elig.OS -notmatch 'Windows 11') {
+		Write-Log "This script is intended for Windows 10/11 upgrades. Current OS: $($elig.OS)" -Level "WARNING"
+	}
+	if ($elig.RAM_GB -lt 4) {
+		Write-Log "RAM under 4 GB may block the upgrade." -Level "WARNING"
+	}
+
+	# Disk space check with auto-cleanup
+	if ($elig.FreeSysDrive_GB -lt 32) {
+		Write-Log "Low free space ($($elig.FreeSysDrive_GB) GB). Attempting cleanup..." -Level "WARNING"
+		try {
+			if (Get-Command Start-CleanupOfSystemDrive -ErrorAction SilentlyContinue) {
+				Start-CleanupOfSystemDrive
+				$elig.FreeSysDrive_GB = [math]::Round((Get-PSDrive -Name $env:SystemDrive.TrimEnd(':')).Free / 1GB, 1)
+				Write-Log "Free space after cleanup: $($elig.FreeSysDrive_GB) GB"
+			} else {
+				Write-Log "Start-CleanupOfSystemDrive not available. Ensure sufficient space manually." -Level "WARNING"
+			}
+		} catch {
+			Write-Log "Cleanup failed: $($_.Exception.Message)" -Level "WARNING"
+		}
+	}
+
+	# Dell BIOS remediation: when TPM and/or Secure Boot are missing on Dell hardware,
+	# try to flip them in BIOS via DellBIOSProvider. Both Set-Item calls only queue the
+	# change; the kernel won't reflect it until reboot, so we reboot ONCE after attempting
+	# both and resume the upgrade via AfterRebootScript.
+	$NeedsTpmFix        = (-not $elig.TPM_Present -or -not $elig.TPM_VersionOK)
+	$NeedsSecureBootFix = (-not $elig.SecureBoot)
+	$IsDellHardware     = $elig.Manufacturer -match 'Dell|Alienware'
+
+	if (($NeedsTpmFix -or $NeedsSecureBootFix) -and $IsDellHardware) {
+		$DellBiosChanged = $false
+
+		# TPM remediation
+		if ($NeedsTpmFix -and (Get-Command Enable-DellTPM -ErrorAction SilentlyContinue)) {
+			Write-Log "TPM 2.0 not detected on Dell hardware ($($elig.Manufacturer)). Attempting Enable-DellTPM..." -Level "WARNING"
+			try {
+				Enable-DellTPM
+				# Re-check kernel TPM state. The BIOS change may not take effect until reboot.
+				try {
+					$tpm = Get-Tpm -ErrorAction Stop
+					if ($tpm) {
+						$elig.TPM_Present = [bool]$tpm.TpmPresent
+						$elig.TPM_Ready   = [bool]$tpm.TpmReady
+					}
+					$w32 = Get-CimInstance -Namespace 'root\cimv2\security\microsofttpm' -ClassName Win32_Tpm -ErrorAction Stop
+					if ($w32 -and $w32.SpecVersion) {
+						$specToken = ($w32.SpecVersion -split ',')[0].Trim()
+						$elig.TPM_VersionOK = $specToken -match '^2\.'
+					}
+				} catch {}
+
+				# If still not detected by the kernel, check whether the BIOS-level setting
+				# is now Enabled (queued for next boot). Try discrete TPM first, then PTT.
+				if (-not $elig.TPM_Present -or -not $elig.TPM_VersionOK) {
+					$DellTpm = Get-Item -Path DellSmbios:\TpmSecurity\Tpm -ErrorAction SilentlyContinue
+					if (-not $DellTpm) {
+						$DellTpm = Get-Item -Path DellSmbios:\AdvancedBootOptions\PttSwitch -ErrorAction SilentlyContinue
+					}
+					if ($DellTpm -and ($DellTpm.CurrentValue -eq 'Enabled' -or $DellTpm.CurrentValue -eq 'On')) {
+						$DellBiosChanged = $true
+					}
+				}
+			} catch {
+				Write-Log "Enable-DellTPM failed: $($_.Exception.Message)." -Level "WARNING"
+			}
+
+			if ($elig.TPM_Present -and $elig.TPM_VersionOK) {
+				Write-Log "TPM 2.0 is now detected." -Level "SUCCESS"
+			}
+		}
+
+		# Secure Boot remediation
+		if ($NeedsSecureBootFix -and (Get-Command Enable-DellSecureBoot -ErrorAction SilentlyContinue)) {
+			Write-Log "Secure Boot disabled on Dell hardware ($($elig.Manufacturer)). Attempting Enable-DellSecureBoot..." -Level "WARNING"
+			try {
+				Enable-DellSecureBoot
+				try {
+					$elig.SecureBoot = [bool](Confirm-SecureBootUEFI -ErrorAction Stop)
+				} catch {}
+				if (-not $elig.SecureBoot) {
+					$DellSb = Get-Item -Path DellSmbios:\SecureBoot\SecureBoot -ErrorAction SilentlyContinue
+					if ($DellSb -and $DellSb.CurrentValue -eq 'Enabled') {
+						$DellBiosChanged = $true
+					}
+				}
+			} catch {
+				Write-Log "Enable-DellSecureBoot failed: $($_.Exception.Message)." -Level "WARNING"
+			}
+
+			if ($elig.SecureBoot) {
+				Write-Log "Secure Boot is now enabled." -Level "SUCCESS"
+			}
+		}
+
+		# Single reboot if either BIOS setting was flipped and a reboot is needed.
+		if ($DellBiosChanged) {
+			if (Get-Command Restart-ComputerSafely -ErrorAction SilentlyContinue) {
+				Write-Log "Dell BIOS prerequisites updated; rebooting to apply and resuming Update-WindowsTo11 after restart." -Level "WARNING"
+				$ResumeArgs = "-Force -ShowProgress -Verbose"
+				if ($NoDllSeeding) { $ResumeArgs += " -NoDllSeeding" }
+				Restart-ComputerSafely -Force -AfterRebootScript "Update-WindowsTo11 $ResumeArgs"
+				return
+			} else {
+				Write-Log "Restart-ComputerSafely not available -- please reboot manually and re-run Update-WindowsTo11. Bypass will be attempted via registry for now." -Level "WARNING"
+			}
+		}
+	}
+
+	# Fallback warnings: log only what is still missing after any remediation attempt.
+	if (-not $elig.TPM_Present -or -not $elig.TPM_VersionOK) {
+		Write-Log "TPM 2.0 not detected. Bypass will be attempted via registry." -Level "WARNING"
+	}
+	if (-not $elig.SecureBoot) {
+		Write-Log "Secure Boot not detected. Bypass will be attempted via registry." -Level "WARNING"
+	}
+	#endregion
+
+	#region Policy Blocker Detection
+	$wuPolicy = 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate'
+	$auPolicy = Join-Path $wuPolicy 'AU'
+
+	try {
+		$wsus = Get-ItemProperty -Path $wuPolicy -Name WUServer -ErrorAction SilentlyContinue
+		if ($wsus) {
+			Write-Log "WSUS detected: $($wsus.WUServer)"
+		}
+
+		$trlv = Get-ItemProperty -Path $wuPolicy -Name TargetReleaseVersion -ErrorAction SilentlyContinue
+		$trlvInfo = Get-ItemProperty -Path $wuPolicy -Name TargetReleaseVersionInfo -ErrorAction SilentlyContinue
+		if ($trlv -and $trlv.TargetReleaseVersion -eq 1) {
+			Write-Log "TargetReleaseVersion pin is set (Value: '$($trlvInfo.TargetReleaseVersionInfo)'). This can block feature upgrades." -Level "WARNING"
+		}
+
+		$defer = Get-ItemProperty -Path $auPolicy -Name DeferFeatureUpdatesPeriodInDays -ErrorAction SilentlyContinue
+		if ($defer) {
+			Write-Log "Feature update deferral set to $($defer.DeferFeatureUpdatesPeriodInDays) days." -Level "WARNING"
+		}
+	} catch {}
+	#endregion
+
+	#region Main Upgrade Logic
+	$SetupSuccessful = $false
+	$BitLockerWasSuspended = $false
+	$IsoPath = $null
+	$TempFidoScript = $null
+	$ExistingISO = $null
+	$MountedIsoPath = $null
+
+	try {
+		# --- Attempt 1: Network share (skipped when -DownloadUrl is provided) ---
+		$NetworkSetupPath = $null
+		if (-not $DownloadUrl) {
+			foreach ($Path in $NetworkPaths) {
+				Write-Log "Checking network path: $Path"
+				if (Test-Path $Path -ErrorAction SilentlyContinue) {
+					$NetworkSetupPath = $Path
+					Write-Log "Found network setup: $NetworkSetupPath" -Level "SUCCESS"
+					break
+				}
+			}
+
+			if ($NetworkSetupPath -and -not $DownloadOnly) {
+				Write-Log "Using network installation" -Level "SUCCESS"
+				$SetupResult = Start-Win11Setup -SetupPath $NetworkSetupPath -ShowProgress:$ShowProgress -NoDllSeeding:$NoDllSeeding
+				$SetupSuccessful = $SetupResult.Success
+				if ($SetupResult.BitLockerSuspended) { $BitLockerWasSuspended = $true }
+			}
+		}
+
+		# --- Attempt 2: ISO download (fallback or DownloadOnly or DownloadUrl) ---
+		if (-not $SetupSuccessful -or $DownloadOnly) {
+			if ($DownloadOnly) {
+				Write-Log "DownloadOnly mode -- proceeding with ISO download" -Level "SUCCESS"
+			} elseif ($DownloadUrl) {
+				Write-Log "Using provided download URL for ISO..." -Level "SUCCESS"
+			} elseif ($NetworkSetupPath) {
+				Write-Log "Network setup failed. Falling back to ISO download..." -Level "WARNING"
+			} else {
+				Write-Log "No usable network path found. Falling back to ISO download..." -Level "WARNING"
+			}
+
+			# Check for an existing ISO first
+			Write-Log "Checking for existing Windows 11 ISO in C:\Ambitions\Downloads..."
+			$ExistingISO = Get-ChildItem -Path "C:\Ambitions\Downloads" -Filter "Win11*.iso" -ErrorAction SilentlyContinue |
+				Where-Object { $_.Length -gt 4GB } |
+				Sort-Object LastWriteTime -Descending |
+				Select-Object -First 1
+
+			if ($ExistingISO) {
+				$IsoPath = $ExistingISO.FullName
+				$IsoSizeGB = [math]::Round($ExistingISO.Length / 1GB, 2)
+				Write-Log "Found existing ISO: $IsoPath ($IsoSizeGB GB) -- skipping download" -Level "SUCCESS"
+			} else {
+				Write-Log "No suitable existing ISO found. Downloading..."
+
+				if ($DownloadUrl) {
+					# Use the manually-provided download URL directly
+					Write-Log "Using user-provided download URL: $DownloadUrl" -Level "SUCCESS"
+					$Win11URL = $DownloadUrl
+				} else {
+					# Get download URL via Fido
+					$TempFidoScript = Join-Path $env:TEMP "Fido_$(Get-Date -Format 'yyyyMMddHHmmss').ps1"
+					$FidoUrl = "https://github.com/pbatard/Fido/raw/refs/heads/master/Fido.ps1"
+
+					Write-Log "Downloading Fido script for ISO URL generation..."
+					$null = Get-FileDownload -URL $FidoUrl -SaveToFolder (Split-Path $TempFidoScript -Parent) -ShowProgress:$ShowProgress
+					# Rename to our temp name if needed
+					$DownloadedFido = Join-Path (Split-Path $TempFidoScript -Parent) "Fido.ps1"
+					if (Test-Path $DownloadedFido) {
+						if ($DownloadedFido -ne $TempFidoScript) {
+							Move-Item -Path $DownloadedFido -Destination $TempFidoScript -Force
+						}
+					} else {
+						throw "Failed to download Fido script"
+					}
+
+					Write-Log "Generating Windows 11 download URL via Fido..."
+					# Wrap Fido so any failure (param binding, network, GitHub layout change)
+					# falls through to the mirror below instead of aborting the whole upgrade.
+					$Win11URL = $null
+					try {
+						$FidoOutput = & $TempFidoScript -Win "Windows 11" -Rel "25H2" -Ed "Pro" -Lang "English" -Arch "x64" -PlatformArch "x64" -GetUrl -Locale "en-US"
+						# Fido may emit multiple lines; extract the last one as the URL
+						$Win11URL = if ($FidoOutput -is [array]) { $FidoOutput[-1] } else { $FidoOutput }
+					} catch {
+						Write-Log "Fido invocation failed: $($_.Exception.Message)" -Level "WARNING"
+					}
+
+					if (-not $Win11URL) {
+						# TODO: Ambitions needs to host its own copy of this file at a URL configured here.
+						# The upstream fork fell back to a self-hosted mirror at this point; Ambitions
+						# has no equivalent mirror yet, so a manually-provided -DownloadUrl is required.
+						Write-Log "Fido failed to generate a download URL and no Ambitions-hosted fallback mirror is configured." -Level "ERROR"
+						throw "Unable to determine a Windows 11 ISO download URL. Re-run with -DownloadUrl <url> to specify one manually."
+					}
+				}
+
+				Write-Log "Downloading Windows 11 ISO (this may take a while)..."
+				$DownloadArgs = @{
+					URL          = $Win11URL
+					SaveToFolder = "C:\Ambitions\Downloads"
+					ShowProgress = $ShowProgress.IsPresent
+				}
+				$DownloadResult = Get-FileDownload @DownloadArgs
+
+				# Get-FileDownload returns the path(s) -- grab the last element
+				if ($DownloadResult -is [array]) {
+					$IsoPath = $DownloadResult[-1]
+				} else {
+					$IsoPath = $DownloadResult
+				}
+
+				if (-not $IsoPath -or -not (Test-Path $IsoPath)) {
+					throw "ISO download failed or file not found"
+				}
+
+				Write-Log "ISO downloaded: $IsoPath" -Level "SUCCESS"
+			}
+
+			# DownloadOnly stops here
+			if ($DownloadOnly) {
+				Write-Log "DownloadOnly complete. ISO location: $IsoPath" -Level "SUCCESS"
+				$SetupSuccessful = $true
+			} else {
+				# Mount and run setup from ISO
+				Write-Log "Mounting ISO..."
+				$MountResult = Mount-DiskImage -ImagePath $IsoPath -PassThru -ErrorAction Stop
+				$MountedIsoPath = $IsoPath
+				# Brief delay to allow volume registration after mount
+				Start-Sleep -Seconds 3
+				$DriveLetter = ($MountResult | Get-Volume).DriveLetter
+				# Fallback query in case piped Get-Volume returns null
+				if (-not $DriveLetter) {
+					$DriveLetter = (Get-DiskImage -ImagePath $IsoPath | Get-Volume).DriveLetter
+				}
+
+				if (-not $DriveLetter) {
+					throw "Failed to get drive letter for mounted ISO"
+				}
+
+				Write-Log "ISO mounted to ${DriveLetter}:" -Level "SUCCESS"
+				$SetupPath = "${DriveLetter}:\setup.exe"
+
+				$SetupResult = Start-Win11Setup -SetupPath $SetupPath -ShowProgress:$ShowProgress -NoDllSeeding:$NoDllSeeding
+				$SetupSuccessful = $SetupResult.Success
+				if ($SetupResult.BitLockerSuspended) { $BitLockerWasSuspended = $true }
+
+				Write-Log "Dismounting ISO..."
+				try {
+					Dismount-DiskImage -ImagePath $IsoPath -ErrorAction Stop
+					$MountedIsoPath = $null
+					Write-Log "ISO dismounted" -Level "SUCCESS"
+				} catch {
+					Write-Log "Failed to dismount ISO: $($_.Exception.Message)" -Level "WARNING"
+				}
+			}
+		}
+	} catch {
+		Write-Log "Critical error: $($_.Exception.Message)" -Level "ERROR"
+	} finally {
+		# Dismount ISO if still mounted (exception safety)
+		if ($MountedIsoPath) {
+			try {
+				Dismount-DiskImage -ImagePath $MountedIsoPath -ErrorAction SilentlyContinue
+				Write-Log "ISO dismounted during cleanup" -Level "WARNING"
+			} catch {}
+		}
+
+		# Restore BitLocker if it was suspended and the upgrade failed
+		if ($BitLockerWasSuspended -and -not $SetupSuccessful) {
+			try {
+				Resume-BitLocker -MountPoint "C:" -ErrorAction Stop
+				Write-Log "BitLocker re-enabled after failed upgrade" -Level "SUCCESS"
+			} catch {
+				Write-Log "Failed to re-enable BitLocker: $($_.Exception.Message)" -Level "WARNING"
+			}
+		}
+
+		# Cleanup temp Fido script (both the renamed and original copies)
+		if ($TempFidoScript -and (Test-Path $TempFidoScript)) {
+			Remove-Item $TempFidoScript -Force -ErrorAction SilentlyContinue
+		}
+		$OriginalFido = Join-Path $env:TEMP "Fido.ps1"
+		if (Test-Path $OriginalFido) {
+			Remove-Item $OriginalFido -Force -ErrorAction SilentlyContinue
+		}
+
+		# Cleanup ISO only on success (preserve on failure for retry); never cleanup in DownloadOnly mode
+		if ($SetupSuccessful -and (-not $DownloadOnly) -and $IsoPath -and ($null -eq $ExistingISO)) {
+			if (Test-Path $IsoPath) {
+				Write-Log "Cleaning up downloaded ISO..."
+				Remove-Item $IsoPath -Force -ErrorAction SilentlyContinue
+			}
+		} elseif (-not $SetupSuccessful -and $IsoPath -and (Test-Path $IsoPath)) {
+			Write-Log "Preserving ISO for retry: $IsoPath" -Level "WARNING"
+		}
+
+		# Final summary
+		if ($SetupSuccessful -and $DownloadOnly) {
+			Write-Log "ISO download completed successfully! Location: $IsoPath" -Level "SUCCESS"
+		} elseif ($SetupSuccessful) {
+			Write-Log "Windows 11 upgrade process completed successfully!" -Level "SUCCESS"
+			Write-Log "A restart may be required to finish the upgrade."
+		} else {
+			Write-Log "Windows 11 upgrade process failed or completed with warnings." -Level "ERROR"
+			Write-Log "Check setup logs in C:\Ambitions and log file: $($script:LogFile)"
+		}
+	}
+	#endregion
 }
 
 If (Get-Module -Name ATGPS -ErrorAction SilentlyContinue){

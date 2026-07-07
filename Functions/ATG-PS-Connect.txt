@@ -1,4 +1,25 @@
 Function Connect-O365AzureAD {
+	<#
+	.SYNOPSIS
+		[DEPRECATED] Initiates an Office 365 Azure AD connection using the legacy AzureAD module.
+	.DESCRIPTION
+		This function is DEPRECATED. The AzureAD PowerShell module is retired as of March 30, 2024.
+		Microsoft recommends migrating to Microsoft Graph PowerShell SDK.
+		Use Connect-MgGraph from the Microsoft.Graph module instead.
+		See: https://learn.microsoft.com/en-us/powershell/azure/active-directory/migration-faq
+	.LINK
+		https://docs.microsoft.com/en-us/microsoft-365/enterprise/connect-to-microsoft-365-powershell?view=o365-worldwide
+	.EXAMPLE
+		Connect-O365AzureAD
+		Connects using the deprecated AzureAD module.
+	.EXAMPLE
+		# Recommended replacement:
+		# Install-Module Microsoft.Graph -Scope CurrentUser
+		# Connect-MgGraph -Scopes "User.Read.All","Group.Read.All"
+	#>
+	Write-Warning "DEPRECATED: The AzureAD module is retired. Please migrate to Microsoft.Graph module."
+	Write-Warning "Use 'Connect-MgGraph' instead. See: https://learn.microsoft.com/en-us/powershell/microsoftgraph/migration-steps"
+
 	If (-not (Get-Command Connect-AzureAD -ErrorAction SilentlyContinue)) {
 		Write-Host "Installing the Azure AD module"
 		Set-PSRepository -Name PSGallery -InstallationPolicy Trusted
@@ -35,7 +56,6 @@ Function Connect-O365AzureAD {
 
 	Connect-AzureAD
 
-
 	Write-Host -ForegroundColor White -BackgroundColor DarkRed @"
 		Be sure to disconnect the remote PowerShell session when you're finished.
 		If you close the Windows PowerShell window without disconnecting the session,
@@ -45,18 +65,6 @@ Function Connect-O365AzureAD {
 
 		Disconnect-AzureAD
 "@
-
-	<#
-	.SYNOPSIS
-		Initiates an Office 365 Azure AD connection.
-
-	.LINK
-		https://docs.microsoft.com/en-us/microsoft-365/enterprise/connect-to-microsoft-365-powershell?view=o365-worldwide
-
-	.EXAMPLE
-		Connect-O365AzureAD
-		Yup, that's it!
-#>
 }
 
 Function Connect-NetExtender {
@@ -375,77 +383,206 @@ Function Connect-O365SharepointPNP {
 }
 
 Function Connect-Wifi {
+	<#
+	.SYNOPSIS
+		Connects to a WiFi network or stores the profile for automatic connection when the network is available.
+	.DESCRIPTION
+		Creates a Windows WLAN profile for the specified network with the given credentials and security settings.
+		If the network is currently visible, attempts to connect immediately.
+		If the network is not visible, the profile is stored so Windows will automatically connect when the network becomes available.
+		This function supports WPA/WPA2/WPA3 Personal (PSK) networks. Enterprise (802.1X) networks are not supported.
+	.PARAMETER NetworkSSID
+		The SSID (name) of the WiFi network to connect to. This parameter is required.
+	.PARAMETER NetworkPassword
+		The password/passphrase for the WiFi network. Required for secured networks, optional for Open networks.
+	.PARAMETER Authentication
+		The authentication method. Valid values: WPA2PSK (default), WPA3SAE, WPAPSK, Open.
+		- WPA2PSK: WPA2-Personal, the most common for home/business networks
+		- WPA3SAE: WPA3-Personal, newer and more secure
+		- WPAPSK: Legacy WPA-Personal (not recommended)
+		- Open: No authentication (public networks)
+	.PARAMETER Encryption
+		The encryption type. Valid values: AES (default), TKIP, None.
+		- AES: Required for WPA2/WPA3, recommended for all secured networks
+		- TKIP: Legacy encryption for older WPA networks (not recommended)
+		- None: No encryption (only valid with Open authentication)
+	.EXAMPLE
+		Connect-Wifi -NetworkSSID "MyHomeNetwork" -NetworkPassword "MySecurePassword123"
+		Connects to "MyHomeNetwork" using WPA2-PSK with AES encryption (defaults).
+	.EXAMPLE
+		Connect-Wifi -NetworkSSID "OfficeWifi" -NetworkPassword "WorkPassword" -Authentication WPA3SAE
+		Connects to "OfficeWifi" using WPA3-Personal authentication.
+	.EXAMPLE
+		Connect-Wifi -NetworkSSID "LegacyNetwork" -NetworkPassword "OldPassword" -Authentication WPAPSK -Encryption TKIP
+		Connects to an older network using WPA-PSK with TKIP encryption.
+	.EXAMPLE
+		Connect-Wifi -NetworkSSID "CoffeeShopFreeWifi" -Authentication Open
+		Connects to an open (unsecured) public WiFi network.
+	.NOTES
+		Requires administrative privileges to add WiFi profiles.
+		The profile is configured for automatic connection when the network is in range.
+	#>
 	param
 	(
-		[Parameter(Mandatory = $False)]
+		[Parameter(Mandatory = $true)]
+		[ValidateNotNullOrEmpty()]
 		[string]$NetworkSSID,
 
-		[Parameter(Mandatory = $true)]
+		[Parameter(Mandatory = $false)]
 		[string]$NetworkPassword,
 
-		[ValidateSet('WEP', 'WPA', 'WPA2', 'WPA2PSK')]
-		[Parameter(Mandatory = $False)]
+		[ValidateSet('Open', 'WPAPSK', 'WPA2PSK', 'WPA3SAE')]
+		[Parameter(Mandatory = $false)]
 		[string]$Authentication = 'WPA2PSK',
 
-		[ValidateSet('AES', 'TKIP')]
-		[Parameter(Mandatory = $False)]
+		[ValidateSet('AES', 'TKIP', 'None')]
+		[Parameter(Mandatory = $false)]
 		[string]$Encryption = 'AES'
 	)
 
-	# Create the WiFi profile, set the profile to auto connect
-	$WirelessProfile = @'
-<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
-	<name>{0}</name>
-	<SSIDConfig>
-		<SSID>
-			<name>{0}</name>
-		</SSID>
-	</SSIDConfig>
-	<connectionType>ESS</connectionType>
-	<connectionMode>auto</connectionMode>
-	<MSM>
+	# Validate password is provided for secured networks
+	If ($Authentication -ne 'Open' -and [string]::IsNullOrEmpty($NetworkPassword)) {
+		Write-Error "NetworkPassword is required for $Authentication authentication."
+		return
+	}
+
+	# Validate encryption compatibility with authentication
+	If ($Authentication -eq 'WPA3SAE' -and $Encryption -ne 'AES') {
+		Write-Warning "WPA3 requires AES encryption. Overriding encryption setting to AES."
+		$Encryption = 'AES'
+	}
+	If ($Authentication -eq 'WPA2PSK' -and $Encryption -eq 'TKIP') {
+		Write-Warning "WPA2 with TKIP is deprecated and less secure. Consider using AES encryption."
+	}
+	If ($Authentication -eq 'WPAPSK' -and $Encryption -eq 'AES') {
+		Write-Warning "WPA with AES is an unusual combination. Standard WPA uses TKIP. Proceeding anyway."
+	}
+	If ($Authentication -eq 'Open') {
+		If (-not [string]::IsNullOrEmpty($NetworkPassword)) {
+			Write-Warning "Password is ignored for Open authentication."
+		}
+		If ($Encryption -ne 'None') {
+			Write-Warning "Open authentication uses no encryption. Setting encryption to None."
+			$Encryption = 'None'
+		}
+	}
+
+	# Escape XML special characters in SSID and password to prevent malformed XML
+	$XmlEscapedSSID = [System.Security.SecurityElement]::Escape($NetworkSSID)
+	$XmlEscapedPassword = if ($NetworkPassword) { [System.Security.SecurityElement]::Escape($NetworkPassword) } else { "" }
+
+	# Build the security section based on authentication type
+	If ($Authentication -eq 'Open') {
+		$SecurityXml = @"
 		<security>
 			<authEncryption>
-				<authentication>{2}</authentication>
-				<encryption>{3}</encryption>
+				<authentication>open</authentication>
+				<encryption>none</encryption>
+				<useOneX>false</useOneX>
+			</authEncryption>
+		</security>
+"@
+	} Else {
+		$SecurityXml = @"
+		<security>
+			<authEncryption>
+				<authentication>$Authentication</authentication>
+				<encryption>$Encryption</encryption>
 				<useOneX>false</useOneX>
 			</authEncryption>
 			<sharedKey>
 				<keyType>passPhrase</keyType>
 				<protected>false</protected>
-				<keyMaterial>{1}</keyMaterial>
+				<keyMaterial>$XmlEscapedPassword</keyMaterial>
 			</sharedKey>
 		</security>
+"@
+	}
+
+	# Create the WiFi profile XML with auto-connect enabled
+	$WirelessProfile = @"
+<?xml version="1.0"?>
+<WLANProfile xmlns="http://www.microsoft.com/networking/WLAN/profile/v1">
+	<name>$XmlEscapedSSID</name>
+	<SSIDConfig>
+		<SSID>
+			<name>$XmlEscapedSSID</name>
+		</SSID>
+	</SSIDConfig>
+	<connectionType>ESS</connectionType>
+	<connectionMode>auto</connectionMode>
+	<MSM>
+$SecurityXml
 	</MSM>
 </WLANProfile>
-'@ -f $NetworkSSID, $NetworkPassword, $Authentication, $Encryption
+"@
 
-	# Create the XML file locally
+	# Create a temporary XML file for the profile
 	$random = Get-Random -Minimum 1111 -Maximum 99999999
-	$tempProfileXML = "$env:TEMP\tempProfile$random.xml"
-	$WirelessProfile | Out-File $tempProfileXML
+	$tempProfileXML = Join-Path -Path $env:TEMP -ChildPath "tempProfile$random.xml"
 
-	# Add the WiFi profile and connect
-	Start-Process netsh ('wlan add profile filename={0}' -f $tempProfileXML)
+	Try {
+		# Write the profile XML to the temp file using UTF-8 without BOM for netsh compatibility
+		# PowerShell 5.1's -Encoding UTF8 includes BOM which can cause issues
+		$Utf8NoBom = New-Object System.Text.UTF8Encoding $false
+		[System.IO.File]::WriteAllText($tempProfileXML, $WirelessProfile, $Utf8NoBom)
 
-	# Connect to the WiFi network - only if you need to
-	$WifiNetworks = (netsh wlan show network)
-	$NetworkSSIDSearch = '*' + $NetworkSSID + '*'
-	If ($WifiNetworks -like $NetworkSSIDSearch) {
-		Try {
-			Write-Host "Found SSID: $NetworkSSID `nAttempting to connect"
-			Start-Process netsh ('wlan connect name="{0}"' -f $NetworkSSID)
-			Start-Sleep 5
-			netsh interface show interface
+		# Add the WiFi profile using netsh (run synchronously to ensure completion)
+		# Use user=all to make profile available to all users on this computer
+		Write-Host "Adding WiFi profile for SSID: $NetworkSSID"
+		$addResult = & netsh wlan add profile filename="$tempProfileXML" user=all 2>&1
+		$addResultString = $addResult | Out-String
+
+		# Check both exit code and output for errors (netsh exit codes can be unreliable)
+		If ($LASTEXITCODE -ne 0 -or $addResultString -match "is not valid|error|failed") {
+			Write-Error "Failed to add WiFi profile: $addResultString"
+			return
 		}
-		Catch {
-			Remove-Item -Force $tempProfileXML
+		Write-Host "WiFi profile added successfully." -ForegroundColor Green
+
+		# Check if the network is currently visible
+		$WifiNetworks = & netsh wlan show networks 2>&1
+		If ($WifiNetworks -match [regex]::Escape($NetworkSSID)) {
+			Write-Host "Found SSID: $NetworkSSID - Attempting to connect..."
+
+			$connectResult = & netsh wlan connect name="$NetworkSSID" 2>&1
+			$connectResultString = $connectResult | Out-String
+
+			# Check both exit code and output for errors
+			If ($LASTEXITCODE -ne 0 -or $connectResultString -match "error|failed") {
+				Write-Error "Failed to connect to WiFi network: $connectResultString"
+				return
+			}
+
+			# Wait for connection to establish
+			Write-Host "Waiting for connection to establish..."
+			Start-Sleep -Seconds 5
+
+			# Verify connection status
+			$interfaceStatus = & netsh wlan show interfaces 2>&1
+			$escapedSSID = [regex]::Escape($NetworkSSID)
+			If ($interfaceStatus -match "State\s*:\s*connected" -and $interfaceStatus -match $escapedSSID) {
+				Write-Host "Successfully connected to $NetworkSSID" -ForegroundColor Green
+			} Else {
+				Write-Warning "Connection command sent, but connection state is uncertain. Check your network status."
+			}
+
+			# Display interface information
+			& netsh interface show interface
+		} Else {
+			Write-Host "SSID '$NetworkSSID' is not currently visible." -ForegroundColor Yellow
+			Write-Host "The WiFi profile has been stored. Windows will automatically connect when the network is in range." -ForegroundColor Cyan
 		}
 	}
- Else {
-		Write-Host "Did not find SSID: $NetworkSSID `nConnection profile stored for later use."
+	Catch {
+		Write-Error "An error occurred: $_"
 	}
-	Remove-Item -Force $tempProfileXML
+	Finally {
+		# Clean up the temporary XML file
+		If (Test-Path -Path $tempProfileXML) {
+			Remove-Item -Path $tempProfileXML -Force -ErrorAction SilentlyContinue
+		}
+	}
 }
 
 

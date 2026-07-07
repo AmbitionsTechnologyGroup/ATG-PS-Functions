@@ -14,7 +14,10 @@ ATG-PS-Import,https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-
 ATG-PS-Install,https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-Install.txt
 ATG-PS-Invoke,https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-Invoke.txt
 ATG-PS-Join,https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-Join.txt
+ATG-PS-New,https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-New.txt
 ATG-PS-Optimize,https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-Optimize.txt
+ATG-PS-Protect,https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-Protect.txt
+ATG-PS-Receive,https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-Receive.txt
 ATG-PS-Remove,https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-Remove.txt
 ATG-PS-Rename,https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-Rename.txt
 ATG-PS-Repair,https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-Repair.txt
@@ -23,5 +26,7 @@ ATG-PS-Restore,https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS
 ATG-PS-Send,https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-Send.txt
 ATG-PS-Set,https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-Set.txt
 ATG-PS-Start,https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-Start.txt
+ATG-PS-Stop,https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-Stop.txt
 ATG-PS-Uninstall,https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-Uninstall.txt
+ATG-PS-Unprotect,https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-Unprotect.txt
 ATG-PS-Update,https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/ATG-PS-Update.txt

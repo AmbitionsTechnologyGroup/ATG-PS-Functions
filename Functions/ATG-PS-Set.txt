@@ -12,6 +12,95 @@ Function Set-AutoLogon ([String] $SiteCode) {
 	Write-Host "End of Set autologon"
 }
 
+function Set-ChocolateySources {
+	# Check if Chocolatey is installed
+	if (-not (Get-Command choco.exe -ErrorAction SilentlyContinue)) {
+		Write-Warning "Chocolatey is not installed"
+		return
+	}
+
+	# Define desired sources
+	$desiredSources = @(
+		@{
+			Name     = 'chocolatey'
+			Source   = 'https://community.chocolatey.org/api/v2/'
+			Priority = 100
+			Disabled = $false
+		}
+		@{
+			Name     = 'MauleCache'
+			Source   = 'https://cache.mauletech.com/nuget/choco/'
+			Priority = 0
+			Disabled = $false
+		}
+	)
+
+	Write-Host "Setting Chocolatey sources to desired state..." -ForegroundColor Cyan
+
+	# Get current sources
+	$currentSources = choco source list --limit-output | ForEach-Object {
+		$parts = $_ -split '\|'
+
+		# Try to find priority - it should be a numeric value
+		$priority = 0
+		for ($i = 0; $i -lt $parts.Count; $i++) {
+			if ($parts[$i] -match '^\d+$') {
+				$priority = [int]$parts[$i]
+				break
+			}
+		}
+
+		[PSCustomObject]@{
+			Name     = $parts[0]
+			Source   = $parts[1]
+			Disabled = $parts[2] -eq 'True'
+			Priority = $priority
+		}
+	}
+
+	# Remove sources not in desired state (cleans up retired servers such as ACG-Choco / choco.ambitionsgroup.com)
+	$currentSources | Where-Object { $_.Name -notin $desiredSources.Name } | ForEach-Object {
+		Write-Host "  Removing source: $($_.Name)" -ForegroundColor Yellow
+		choco source remove --name="$($_.Name)" | Out-Null
+	}
+
+	# Add or update desired sources
+	foreach ($desired in $desiredSources) {
+		$existing = $currentSources | Where-Object Name -eq $desired.Name
+
+		if ($existing) {
+			# Check if update needed
+			if ($existing.Source -ne $desired.Source -or
+				$existing.Disabled -ne $desired.Disabled -or
+				$existing.Priority -ne $desired.Priority) {
+
+				Write-Host "  Updating source: $($desired.Name)" -ForegroundColor Yellow
+				choco source remove --name="$($desired.Name)" | Out-Null
+				choco source add --name="$($desired.Name)" --source="$($desired.Source)" --priority=$($desired.Priority) | Out-Null
+
+				if ($desired.Disabled) {
+					choco source disable --name="$($desired.Name)" | Out-Null
+				} else {
+					choco source enable --name="$($desired.Name)" | Out-Null
+				}
+			} else {
+				Write-Host "  Source already configured: $($desired.Name)" -ForegroundColor Green
+			}
+		} else {
+			# Add new source
+			Write-Host "  Adding source: $($desired.Name)" -ForegroundColor Green
+			choco source add --name="$($desired.Name)" --source="$($desired.Source)" --priority=$($desired.Priority) | Out-Null
+
+			if ($desired.Disabled) {
+				choco source disable --name="$($desired.Name)" | Out-Null
+			}
+		}
+	}
+
+	Write-Host "`nCurrent Chocolatey sources:" -ForegroundColor Cyan
+	choco source list
+}
+
 function Set-ComputerLanguage {
 	param (
 		[string]$Language = "en-US"
@@ -84,17 +173,68 @@ function Set-ComputerLanguage {
 Function Set-DailyReboot {
 <#
 	.SYNOPSIS
-		Creates a scheduled task to restart the computer daily at 3am, if no one is using the computer.
-		Helpful for maintaining updated and stability.
+		Creates a scheduled task to restart the computer daily at a specified time.
+		Suspends BitLocker if enabled before reboot to prevent recovery prompts.
+
+	.PARAMETER Time
+		The time of day to perform the restart. Defaults to 3am.
+
+	.EXAMPLE
+		Set-DailyReboot
+		Creates a daily restart task for 3am.
+
+	.EXAMPLE
+		Set-DailyReboot -Time "2am"
+		Creates a daily restart task for 2am.
 #>
+	[CmdletBinding()]
+	param (
+		[Parameter()]
+		[DateTime]$Time = "3:00 AM"
+	)
+
 	Write-Host "Schedule Daily Restart"
-		$Action = New-ScheduledTaskAction -Execute 'shutdown.exe' -Argument '-f -r -t 0'
-		$Trigger = New-ScheduledTaskTrigger -Daily -At 3am
-		$Idle = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration 00:30:00 -IdleWaitTimeout 02:00:00
-		$User = "NT AUTHORITY\SYSTEM"
-		Register-ScheduledTask -Action $action -Trigger $trigger -User $User -Settings $Idle -TaskName "Daily Restart" -Description "Daily restart" -Force | Out-Null
-		$NewDate = (Get-ScheduledTask -TaskName "Daily Restart").Triggers.StartBoundary.subString(0,16)
-	Write-Host "The next scheduled 'Daily Restart' task will happen at $([Datetime]::ParseExact($NewDate, 'yyyy-MM-ddTHH:mm', $null))"
+
+	# Create the resume BitLocker script
+	$ResumeScript = @'
+Start-Sleep -Seconds 30
+$Volume = Get-BitLockerVolume -MountPoint C:
+if ($Volume.ProtectionStatus -eq 'Off') {
+	Resume-BitLocker -MountPoint C:
+	New-Item -Path 'HKLM:\SOFTWARE\Ambitions' -Force | Out-Null
+	Set-ItemProperty -Path 'HKLM:\SOFTWARE\Ambitions' -Name 'BitLockerResumedDate' -Value (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') -Force
+}
+'@
+
+	# Save the resume script to a known location
+	$ScriptPath = "C:\Ambitions\Scripts\ResumeBitLocker.ps1"
+	New-Item -Path "C:\Ambitions\Scripts" -ItemType Directory -Force | Out-Null
+	$ResumeScript | Out-File -FilePath $ScriptPath -Encoding ASCII -Force
+
+	# Build the main command
+	$Command = "if ((Get-BitLockerVolume -MountPoint C:).ProtectionStatus -eq 'On') { Suspend-BitLocker -MountPoint C: -RebootCount 5; New-Item -Path 'HKLM:\SOFTWARE\Ambitions' -Force | Out-Null; Set-ItemProperty -Path 'HKLM:\SOFTWARE\Ambitions' -Name 'BitLockerSuspendedDate' -Value (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') -Force; Set-ItemProperty -Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'ResumeBitLocker' -Value 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $ScriptPath' -Force }; Restart-Computer -Force"
+
+	# Create the scheduled task action using PowerShell
+	$Action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -Command `"$Command`""
+
+	# Create the trigger with specified time
+	$Trigger = New-ScheduledTaskTrigger -Daily -At $Time
+
+	# Configure to run only when idle
+	$Idle = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration 00:30:00 -IdleWaitTimeout 02:00:00
+
+	$User = "NT AUTHORITY\SYSTEM"
+
+	Register-ScheduledTask -Action $Action -Trigger $Trigger -User $User -Settings $Idle -TaskName "Daily Restart" -Description "Daily restart with BitLocker suspension" -Force | Out-Null
+
+	# Get the actual next run time from the task
+	$NextRun = (Get-ScheduledTaskInfo -TaskName "Daily Restart").NextRunTime
+
+	if ($NextRun) {
+		Write-Host "The next scheduled 'Daily Restart' task will happen at $NextRun"
+	} else {
+		Write-Host "Daily Restart task created, but next run time could not be determined."
+	}
 }
 
 Function Set-DailyRebootDelay {
@@ -204,7 +344,7 @@ Function Set-DnsMadeEasyDDNS {
 
 	If (-not $ToFile) {
 		If (-Not $IPAddress) {
-			$IPAddress = (Invoke-WebRequest -Uri http://myip.dnsmadeeasy.com/ -UseBasicParsing).Content
+			$IPAddress = (Invoke-WebRequest -Uri https://myip.dnsmadeeasy.com/ -UseBasicParsing).Content
 		}
 		$FinalUrl = $FinalUrl + "&ip=" + $IpAddress
 
@@ -323,17 +463,292 @@ Function Set-ServerRebootScriptPassword {
 Function Set-WeeklyReboot {
 <#
 	.SYNOPSIS
-		Creates a scheduled task to restart the computer Weekly on Sunday at 3am, if no one is using the computer.
-		Helpful for maintaining updated and stability.
+		Creates a scheduled task to restart the computer weekly at a specified time and day.
+		Suspends BitLocker if enabled before reboot to prevent recovery prompts.
+
+	.PARAMETER Time
+		The time of day to perform the restart. Defaults to 3am.
+
+	.PARAMETER Day
+		The day of the week to perform the restart. Defaults to Sunday.
+
+	.EXAMPLE
+		Set-WeeklyReboot
+		Creates a weekly restart task for Sunday at 3am.
+
+	.EXAMPLE
+		Set-WeeklyReboot -Time "2am" -Day Monday
+		Creates a weekly restart task for Monday at 2am.
 #>
+	[CmdletBinding()]
+	param (
+		[Parameter()]
+		[DateTime]$Time = "3:00 AM",
+
+		[Parameter()]
+		[ValidateSet('Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday')]
+		[string]$Day = 'Sunday'
+	)
+
 	Write-Host "Schedule Weekly Restart"
-		$Action = New-ScheduledTaskAction -Execute 'shutdown.exe' -Argument '-f -r -t 0'
-		$Trigger = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek Sunday -At 3am
-		$Idle = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration 00:30:00 -IdleWaitTimeout 02:00:00
-		$User = "NT AUTHORITY\SYSTEM"
-		Register-ScheduledTask -Action $action -Trigger $trigger -User $User -Settings $Idle -TaskName "Weekly Restart" -Description "Weekly restart" -Force | Out-Null
-		$NewDate = (Get-ScheduledTask -TaskName "Weekly Restart").Triggers.StartBoundary.subString(0,16)
-	Write-Host "The next scheduled 'Weekly Restart' task will happen at $([Datetime]::ParseExact($NewDate, 'yyyy-MM-ddTHH:mm', $null))"
+
+	# Create the resume BitLocker script
+	$ResumeScript = @'
+Start-Sleep -Seconds 30
+$Volume = Get-BitLockerVolume -MountPoint C:
+if ($Volume.ProtectionStatus -eq 'Off') {
+	Resume-BitLocker -MountPoint C:
+	New-Item -Path 'HKLM:\SOFTWARE\Ambitions' -Force | Out-Null
+	Set-ItemProperty -Path 'HKLM:\SOFTWARE\Ambitions' -Name 'BitLockerResumedDate' -Value (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') -Force
+}
+'@
+
+	# Save the resume script to a known location
+	$ScriptPath = "C:\Ambitions\Scripts\ResumeBitLocker.ps1"
+	New-Item -Path "C:\Ambitions\Scripts" -ItemType Directory -Force | Out-Null
+	$ResumeScript | Out-File -FilePath $ScriptPath -Encoding ASCII -Force
+
+	# Build the main command
+	$Command = "if ((Get-BitLockerVolume -MountPoint C:).ProtectionStatus -eq 'On') { Suspend-BitLocker -MountPoint C: -RebootCount 5; New-Item -Path 'HKLM:\SOFTWARE\Ambitions' -Force | Out-Null; Set-ItemProperty -Path 'HKLM:\SOFTWARE\Ambitions' -Name 'BitLockerSuspendedDate' -Value (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') -Force; Set-ItemProperty -Path 'HKLM:\Software\Microsoft\Windows\CurrentVersion\RunOnce' -Name 'ResumeBitLocker' -Value 'powershell.exe -NoProfile -WindowStyle Hidden -ExecutionPolicy Bypass -File $ScriptPath' -Force }; Restart-Computer -Force"
+
+	# Create the scheduled task action using PowerShell
+	$Action = New-ScheduledTaskAction -Execute 'powershell.exe' -Argument "-NoProfile -WindowStyle Hidden -Command `"$Command`""
+
+	# Create the trigger with specified day and time
+	$Trigger = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek $Day -At $Time
+
+	# Configure to run only when idle
+	$Idle = New-ScheduledTaskSettingsSet -RunOnlyIfIdle -IdleDuration 00:30:00 -IdleWaitTimeout 02:00:00
+
+	$User = "NT AUTHORITY\SYSTEM"
+
+	Register-ScheduledTask -Action $Action -Trigger $Trigger -User $User -Settings $Idle -TaskName "Weekly Restart" -Description "Weekly restart with BitLocker suspension" -Force | Out-Null
+
+	# Get the actual next run time from the task
+	$NextRun = (Get-ScheduledTaskInfo -TaskName "Weekly Restart").NextRunTime
+
+	if ($NextRun) {
+		Write-Host "The next scheduled 'Weekly Restart' task will happen at $NextRun"
+	} else {
+		Write-Host "Weekly Restart task created, but next run time could not be determined."
+	}
+}
+
+Function Set-RDPSignature {
+	<#
+	.SYNOPSIS
+		Signs one or more .rdp files using the code-signing certificate from Azure Key Vault.
+	.DESCRIPTION
+		Retrieves the organization's code-signing certificate from Azure Key Vault and uses
+		rdpsign.exe to apply a digital signature to each specified .rdp file. Signed RDP files
+		suppress the "Unknown Publisher" security warning when clients launch remote desktop
+		connections.
+
+		Supports two config modes:
+		  -VaultConfigPath: Load vault credentials from a local JSON file (for testing).
+		  -SigningPassword: Download and decrypt vault credentials from the config repo (production).
+	.PARAMETER Path
+		One or more paths to .rdp files to sign.
+	.PARAMETER VaultConfigPath
+		Path to a local JSON file containing vault credentials. Used for testing before the
+		encrypted config file is uploaded to the config repo. Mutually exclusive with -SigningPassword.
+	.PARAMETER SigningPassword
+		Password to decrypt the vault config from the config repo. Mutually exclusive with -VaultConfigPath.
+	.PARAMETER VaultConfigUrl
+		URL of the encrypted vault config in the config repo. Defaults to the VConfig.enc URL.
+		Only used with -SigningPassword.
+	.EXAMPLE
+		Set-RDPSignature -Path "C:\Users\Public\Desktop\Server.rdp" -VaultConfigPath "C:\Ambitions\GitHub\PWSH\VaultConfig.json"
+
+		Signs a single RDP file using a local vault config JSON for testing.
+	.EXAMPLE
+		Set-RDPSignature -Path "C:\Users\Public\Desktop\Server.rdp" -SigningPassword "mypassword"
+
+		Signs a single RDP file using the encrypted vault config from the config repo.
+	.EXAMPLE
+		Set-RDPSignature -Path @("C:\server1.rdp","C:\server2.rdp") -SigningPassword "mypassword"
+
+		Signs multiple RDP files in one call using the production encrypted vault config.
+	#>
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory=$true)]
+		[string[]]$Path,
+		[Parameter()]
+		[string]$VaultConfigPath,
+		[Parameter()]
+		[string]$SigningPassword,
+		[Parameter()]
+		[string]$VaultConfigUrl = "https://raw.githubusercontent.com/<YOUR_ORG>/<YOUR_BINCACHE_REPO>/refs/heads/main/Utilities/VConfig.enc"
+	)
+
+	if ([string]::IsNullOrEmpty($VaultConfigPath) -and [string]::IsNullOrEmpty($SigningPassword)) {
+		Write-Error "Provide either -VaultConfigPath (local JSON file) or -SigningPassword (encrypted config repo)."
+		return
+	}
+	if (-not [string]::IsNullOrEmpty($VaultConfigPath) -and -not [string]::IsNullOrEmpty($SigningPassword)) {
+		Write-Error "Provide only one of -VaultConfigPath or -SigningPassword, not both."
+		return
+	}
+
+	$rdpSignPath = "$env:SystemRoot\System32\rdpsign.exe"
+	if (-not (Test-Path $rdpSignPath)) {
+		Write-Error "rdpsign.exe not found at $rdpSignPath. Ensure Remote Desktop services are installed."
+		return
+	}
+
+	$validPaths = $Path | Where-Object {
+		if (-not (Test-Path $_)) {
+			Write-Warning "File not found, skipping: $_"
+			$false
+		} elseif ([System.IO.Path]::GetExtension($_).ToLower() -ne '.rdp') {
+			Write-Warning "Not an .rdp file, skipping: $_"
+			$false
+		} else {
+			$true
+		}
+	}
+
+	if (-not $validPaths) {
+		Write-Error "No valid .rdp files to sign."
+		return
+	}
+
+	try {
+		if (-not [string]::IsNullOrEmpty($VaultConfigPath)) {
+			Write-Host "Loading vault config from local file..." -ForegroundColor Cyan
+			$configJson = Get-Content -Path $VaultConfigPath -Raw -ErrorAction Stop
+		} else {
+			Write-Host "Downloading and decrypting vault config from the config repo..." -ForegroundColor Cyan
+			$configJson = Get-DecryptedConfig -Url $VaultConfigUrl -Password $SigningPassword
+		}
+		$config = $configJson | ConvertFrom-Json
+	} catch {
+		Write-Error "Failed to load vault config: $_"
+		return
+	}
+
+	foreach ($field in @('VaultName','CertName','TenantId','ClientId','ClientSecret')) {
+		if ([string]::IsNullOrEmpty($config.$field)) {
+			Write-Error "Vault config is missing required field: $field"
+			return
+		}
+	}
+
+	$vaultName    = $config.VaultName
+	$certName     = $config.CertName
+	$tenantId     = $config.TenantId
+	$clientId     = $config.ClientId
+	$clientSecret = $config.ClientSecret
+
+	$certThumbprint = $null
+	$tempPfx        = $null
+
+	try {
+		# Authenticate via OAuth 2.0 client credentials - no Az module dependency
+		Write-Host "Authenticating to Azure AD..." -ForegroundColor Cyan
+		$tokenUri  = "https://login.microsoftonline.com/$tenantId/oauth2/v2.0/token"
+		$tokenBody = @{
+			grant_type    = "client_credentials"
+			client_id     = $clientId
+			client_secret = $clientSecret
+			scope         = "https://vault.azure.net/.default"
+		}
+		$tokenResponse = Invoke-RestMethod -Method POST -Uri $tokenUri -Body $tokenBody `
+			-ContentType "application/x-www-form-urlencoded" -ErrorAction Stop
+		$accessToken = $tokenResponse.access_token
+		Write-Host "  Authenticated as service principal ($clientId)." -ForegroundColor Green
+
+		# Get certificate metadata - the 'sid' field is the secret URI containing the PFX
+		Write-Host "Retrieving certificate '$certName' from vault '$vaultName'..." -ForegroundColor Cyan
+		$kvHeaders = @{ Authorization = "Bearer $accessToken" }
+		$certUri   = "https://$vaultName.vault.azure.net/certificates/$certName/?api-version=7.4"
+		$certInfo  = Invoke-RestMethod -Uri $certUri -Headers $kvHeaders -Method GET -ErrorAction Stop
+		if (-not $certInfo.sid) {
+			throw "Certificate '$certName' returned no secret identifier. Verify the certificate name and permissions."
+		}
+		Write-Host "  Certificate found." -ForegroundColor Gray
+
+		# Download PFX with private key via the secret identifier
+		Write-Host "  Downloading PFX..." -ForegroundColor Gray
+		$secretUri  = "$($certInfo.sid)?api-version=7.4"
+		$secretInfo = Invoke-RestMethod -Uri $secretUri -Headers $kvHeaders -Method GET -ErrorAction Stop
+		$base64Value = $secretInfo.value
+		Write-Host "  PFX retrieved. ContentType: $($secretInfo.contentType)" -ForegroundColor Gray
+
+		$accessToken = $null
+
+		$pfxBytes    = [Convert]::FromBase64String($base64Value)
+		$base64Value = $null
+		Write-Host "  PFX size: $($pfxBytes.Length) bytes" -ForegroundColor Gray
+
+		$tempPfx = Join-Path ([System.IO.Path]::GetTempPath()) "rdpsign-$([Guid]::NewGuid().ToString('N')).pfx"
+		[System.IO.File]::WriteAllBytes($tempPfx, $pfxBytes)
+		[System.Array]::Clear($pfxBytes, 0, $pfxBytes.Length)
+
+		# rdpsign.exe searches Cert:\LocalMachine\My; import there first (requires admin),
+		# fall back to CurrentUser\My if elevation is unavailable.
+		$emptyPw           = New-Object System.Security.SecureString
+		$certStoreLocation = $null
+		try {
+			$cert              = Import-PfxCertificate -FilePath $tempPfx -CertStoreLocation Cert:\LocalMachine\My `
+				-Password $emptyPw -Exportable -ErrorAction Stop
+			$certStoreLocation = 'Cert:\LocalMachine\My'
+		} catch {
+			Write-Host "  LocalMachine store unavailable (requires admin), trying CurrentUser..." -ForegroundColor Yellow
+			$cert              = Import-PfxCertificate -FilePath $tempPfx -CertStoreLocation Cert:\CurrentUser\My `
+				-Password $emptyPw -Exportable -ErrorAction Stop
+			$certStoreLocation = 'Cert:\CurrentUser\My'
+		}
+		$certThumbprint = $cert.Thumbprint
+		Write-Host "  Certificate imported to $certStoreLocation" -ForegroundColor Gray
+		Write-Host "  SHA1 thumbprint: $certThumbprint" -ForegroundColor Gray
+
+		if (-not $cert.HasPrivateKey) {
+			throw "Certificate lacks a private key. In Key Vault, set 'Exportable Private Key' to YES and create a new certificate version."
+		}
+		if ($cert.NotAfter -lt (Get-Date)) {
+			throw "Certificate expired on $($cert.NotAfter). Renew before signing."
+		}
+
+		Write-Host "  Certificate ready: $($cert.Subject)" -ForegroundColor Green
+
+		$signed = 0
+		$failed = 0
+		foreach ($rdpFile in $validPaths) {
+			Write-Host "Signing: $rdpFile" -ForegroundColor Cyan
+			& $rdpSignPath /sha256 $certThumbprint $rdpFile
+			if ($LASTEXITCODE -eq 0) {
+				$fileContent = Get-Content $rdpFile -Raw
+				if ($fileContent -match 'signature:s:') {
+					Write-Host "  [SIGNED] $(Split-Path $rdpFile -Leaf)" -ForegroundColor Green
+				} else {
+					Write-Host "  [SIGNED - no signature line found in file]" -ForegroundColor Yellow
+				}
+				$signed++
+			} else {
+				Write-Host "  [FAILED] $(Split-Path $rdpFile -Leaf) (rdpsign.exe exit code: $LASTEXITCODE)" -ForegroundColor Red
+				$failed++
+			}
+		}
+
+		if ($failed -gt 0) {
+			Write-Host "Signing complete: $signed signed, $failed failed." -ForegroundColor Yellow
+		} else {
+			Write-Host "Signing complete: $signed file(s) signed successfully." -ForegroundColor Green
+		}
+
+	} catch {
+		Write-Host "RDP signing failed: $_" -ForegroundColor Red
+		Write-Host $_.ScriptStackTrace -ForegroundColor DarkRed
+	} finally {
+		if ($certThumbprint -and $certStoreLocation) {
+			Get-ChildItem "$certStoreLocation\$certThumbprint" -ErrorAction SilentlyContinue | Remove-Item -Force
+		}
+		if ($tempPfx -and (Test-Path $tempPfx -ErrorAction SilentlyContinue)) {
+			Remove-Item $tempPfx -Force -ErrorAction SilentlyContinue
+		}
+	}
 }
 
 # SIG # Begin signature block

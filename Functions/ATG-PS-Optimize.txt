@@ -1,24 +1,28 @@
 Function Optimize-Powershell {
 	If ((Get-ExecutionPolicy -Scope CurrentUser) -ne 'RemoteSigned') {
-    	Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force
+    	Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force -ErrorAction SilentlyContinue
 	}
 	$Commands = @()
 		$Commands = @'
+		$profileTimer = [System.Diagnostics.Stopwatch]::StartNew()
+		$stepTimer = [System.Diagnostics.Stopwatch]::New()
+		$profileTimings = [System.Collections.Generic.List[string]]::new()
+
 		Function Get-HorizontalLine {
 			param (
-				[string]$InputString = "-", 
-				[parameter(Mandatory = $false)][alias("c")]$Count = 1, 
-				[parameter(Mandatory = $false)][alias("fg")]$ForeColor=$null, 
+				[string]$InputString = "-",
+				[parameter(Mandatory = $false)][alias("c")]$Count = 1,
+				[parameter(Mandatory = $false)][alias("fg")]$ForeColor=$null,
 				[parameter(Mandatory = $false)][alias("bg")]$BackColor=$null
-			) 
+			)
 			$ColorSplat = @{}
 			if ($ForeColor -ne $null) { $ColorSplat.ForegroundColor = $ForeColor }
 			if ($BackColor -ne $null) { $ColorSplat.BackgroundColor = $BackColor }
-			
+
 			# How long to make the hr
 			$width = if ($host.Name -match "ISE") {
 				$host.UI.RawUI.BufferSize.Width - 1
-			} else { 
+			} else {
 				$host.UI.RawUI.BufferSize.Width - 4
 			}
 			# How many times to repeat $Character in full
@@ -26,8 +30,8 @@ Function Optimize-Powershell {
 			# How many characters of $InputString to add to fill each line
 			$remainder = $width - ($InputString.Length * $repetitions)
 			# Make line(s)
-			1..$Count | % { 
-				Write-Host ($InputString * $repetitions) + $InputString.Substring(0,$remainder) @ColorSplat 
+			1..$Count | % {
+				Write-Host ($InputString * $repetitions) + $InputString.Substring(0,$remainder) @ColorSplat
 			}
 		}
 		# Custom prompt function
@@ -36,60 +40,92 @@ Function Optimize-Powershell {
 		    if ($curdir.Path.Length -eq 0) {
 		        $curdir = "$($ExecutionContext.SessionState.Drive.Current.Name):\"
 		    }
-		    
+
 		    Get-HorizontalLine -ForeColor Cyan
-			Write-Host "| " -NoNewLine -BackgroundColor Black -ForegroundColor Red
+			Write-Host "| " -NoNewLine -BackgroundColor Black -ForegroundColor Cyan
 		    Write-Host "$env:USERNAME/$env:COMPUTERNAME" -NoNewLine -BackgroundColor Black -ForegroundColor DarkCyan
-			Write-Host " | " -NoNewLine -BackgroundColor Black -ForegroundColor Red
+			Write-Host " | " -NoNewLine -BackgroundColor Black -ForegroundColor Cyan
 			Write-Host "$(Get-Date -Format 'yyyy-MM-dd') $((Get-Date).ToString("HH:mm:ss"))" -NoNewLine -BackgroundColor Black -ForegroundColor Magenta
-			Write-Host " |" -BackgroundColor Black -ForegroundColor Red
+			Write-Host " |" -BackgroundColor Black -ForegroundColor Cyan
+			Write-Host "| " -NoNewLine -BackgroundColor Black -ForegroundColor Cyan
 			Write-Host "DIR: $($curdir.Path)" -BackgroundColor Black -ForegroundColor Yellow
 		    "[Command]: "
 		}
-		
+
 		# Module installation and configuration
 		$ErrorActionPreference = 'SilentlyContinue'
-		
-		# Configure PSGallery
-		if ((Get-PSRepository -Name "PSGallery").InstallationPolicy -eq "Untrusted") {
-		    Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted
-		}
-		
-		# Install and configure AdvancedHistory
-		if (!(Get-Module -Name AdvancedHistory -ListAvailable)) {
-		    Install-Module AdvancedHistory -Force -AllowClobber
-		}
-		Import-Module AdvancedHistory -Force
+
+		# Try importing AdvancedHistory directly (skip slow Get-Module -ListAvailable check)
+		$stepTimer.Restart()
+		$advHistoryLoaded = $false
 		try {
-		    Enable-AdvancedHistory -Unique
-		} catch {}
-		
-		# Install and configure PSReadline
-		if (!(Get-Module -Name PSReadline -ListAvailable)) {
-		    if (-not (Get-PackageProvider -Name NuGet -ErrorAction SilentlyContinue)) {
-		        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.208 -Force
-		    }
-		    Install-Module PSReadline -Force -AllowClobber
-		}
-		Import-Module PSReadline -Force
-		
-		# Configure PSReadLine prediction source
-		try {
-		    Set-PSReadLineOption -PredictionSource HistoryAndPlugin
+		    Import-Module AdvancedHistory -Force -ErrorAction Stop
+		    $advHistoryLoaded = $true
 		} catch {
+		    # Module not installed - need PackageManagement for install
+		    if (-not (Get-PackageProvider -ListAvailable -Name NuGet -ErrorAction SilentlyContinue)) {
+		        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.208 -Force | Out-Null
+		    }
+		    if ((Get-PSRepository -Name "PSGallery").InstallationPolicy -eq "Untrusted") {
+		        Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted
+		    }
 		    try {
-		        Set-PSReadLineOption -PredictionSource History
+		        Install-Module AdvancedHistory -Force -AllowClobber
+		        Import-Module AdvancedHistory -Force -ErrorAction Stop
+		        $advHistoryLoaded = $true
+		    } catch {}
+		}
+		if ($advHistoryLoaded) {
+		    try { Enable-AdvancedHistory -Unique } catch {}
+		}
+		$profileTimings.Add("AdvancedHistory: $("{0:N0}ms" -f $stepTimer.Elapsed.TotalMilliseconds)")
+
+		# Try importing PSReadLine directly (skip slow Get-Module -ListAvailable check)
+		$stepTimer.Restart()
+		$psrlLoaded = $false
+		try {
+		    Import-Module PSReadline -Force -ErrorAction Stop
+		    $psrlLoaded = $true
+		} catch {
+		    # Module not installed - ensure PackageManagement is ready
+		    if (-not (Get-PackageProvider -ListAvailable -Name NuGet -ErrorAction SilentlyContinue)) {
+		        Install-PackageProvider -Name NuGet -MinimumVersion 2.8.5.208 -Force | Out-Null
+		    }
+		    if ((Get-PSRepository -Name "PSGallery").InstallationPolicy -eq "Untrusted") {
+		        Set-PSRepository -Name "PSGallery" -InstallationPolicy Trusted
+		    }
+		    try {
+		        Install-Module PSReadline -Force -AllowClobber
+		        Import-Module PSReadline -Force -ErrorAction Stop
+		        $psrlLoaded = $true
+		    } catch {}
+		}
+		$profileTimings.Add("PSReadLine: $("{0:N0}ms" -f $stepTimer.Elapsed.TotalMilliseconds)")
+
+		# Configure PSReadLine prediction source
+		if ($psrlLoaded) {
+		    try {
+		        Set-PSReadLineOption -PredictionSource HistoryAndPlugin
 		    } catch {
-		        Set-PSReadLineOption -PredictionSource None
+		        try {
+		            Set-PSReadLineOption -PredictionSource History
+		        } catch {
+		            Set-PSReadLineOption -PredictionSource None
+		        }
 		    }
 		}
-		
+
 		# Execute additional configurations
+		$stepTimer.Restart()
 		irm ps.acgs.io | iex
-		
+		$profileTimings.Add("LoadFunctions: $("{0:N0}ms" -f $stepTimer.Elapsed.TotalMilliseconds)")
+
 		if ($PSScriptRoot -notlike "C:\Program Files (x86)\ITSPlatform\tmp\scripting\*") {
 		    Expand-Terminal
 		}
+
+		$profileTimer.Stop()
+		Write-Host " Profile loaded in $("{0:N1}s" -f $profileTimer.Elapsed.TotalSeconds) [$($profileTimings -join ' | ')]" -ForegroundColor DarkGray
 '@
 
 	$WinVer = [System.Environment]::OSVersion.Version.Major

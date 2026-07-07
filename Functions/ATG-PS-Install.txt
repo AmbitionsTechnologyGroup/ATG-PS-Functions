@@ -73,7 +73,6 @@ Function Install-Choco {
 	Set-ExecutionPolicy Bypass -Scope Process -Force
 	Enable-SSL
 	Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Chocolatey/installchoco.txt -UseBasicParsing | Invoke-Expression
-	Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Scripts/Chocolatey/installchoco.txt -UseBasicParsing | Invoke-Expression
 }
 
 Function Install-ITS247Agent {
@@ -178,50 +177,153 @@ Function Install-O2016STD([String] $MSPURL){
 		$Shortcut.Save()
 }
 
-Function Install-O365([String] $SiteCode = "Generic"){
+Function Install-O365 {
+	[CmdletBinding()]
+	param(
+		[String]$SiteCode = "Generic",
+		[String]$ConfigUrl,
+		[Switch]$SharedComputer
+	)
+
 	Write-Host "Downloading MS Office"
-		Enable-SSL
-		New-Item -ItemType Directory -Force -Path "C:\Ambitions\O365"
-		(New-Object System.Net.WebClient).DownloadFile('https://download.ambitionsgroup.com/O365/setup.exe', 'C:\Ambitions\O365\setup.exe')
-	Write-Host "Downloading MS Office config files"
-		$O365ConfigSource = "https://download.ambitionsgroup.com/Sites/" + $SiteCode + "/" + $SiteCode + "_O365_Config.xml"
-		$O365ConfigDest = "C:\Ambitions\O365\" + $SiteCode + "_O365_Config.xml"
-		(New-Object System.Net.WebClient).DownloadFile($O365ConfigSource, $O365ConfigDest)
-	Write-Host "Installing Office"
-		& C:\Ambitions\O365\setup.exe /configure $O365ConfigDest | Wait-Process
-	Write-Host "Placing Shortcuts"
-		If (Test-Path "C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE"){
-			$TargetFile = "C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE"
-		} ELSEIF (Test-Path "C:\Program Files (x86)\Microsoft Office\root\Office16\OUTLOOK.EXE"){
-			$TargetFile = "C:\Program Files (x86)\Microsoft Office\root\Office16\OUTLOOK.EXE"
+	Enable-SSL
+
+	function Get-ODTUri {
+		<#
+		.SYNOPSIS
+		Get Download URL of latest Office 365 Deployment Tool (ODT)
+		#>
+		[CmdletBinding()]
+		[OutputType([string])]
+		param ()
+
+		$url = "https://www.microsoft.com/en-us/download/details.aspx?id=49117"
+
+		try {
+			$response = Invoke-WebRequest -Uri $url -UseBasicParsing -ErrorAction Stop
 		}
+		catch {
+			throw "Failed to connect to ODT: $url with error $_."
+		}
+
+		$ODTUri = $response.Links | Where-Object {
+			$_.href -match "https://download\.microsoft\.com/download/.*/officedeploymenttool_.*\.exe"
+		}
+
+		if ($ODTUri) {
+			return $ODTUri.href
+		}
+		else {
+			throw "Could not find ODT download link on the page"
+		}
+	}
+
+	# Get the ODT Setup.exe URL
+	$downloadUrl = Get-ODTUri
+	Write-Host "ODT Download URL: $downloadUrl"
+
+	# Create the O365 folder if it doesn't exist
+	$O365Folder = "C:\Ambitions\O365"
+	if (-not (Test-Path $O365Folder)) {
+		New-Item -Path $O365Folder -ItemType Directory -Force | Out-Null
+		Write-Host "Created folder: $O365Folder"
+	}
+
+	# Download ODT
+	$odtPath = Join-Path $O365Folder "ODTSetup.exe"
+	(New-Object System.Net.WebClient).DownloadFile($downloadUrl, $odtPath)
+
+	# Extract silently to the same folder
+	Write-Host "Extracting ODT to: $O365Folder"
+	Start-Process -FilePath $odtPath -ArgumentList "/quiet /extract:`"$O365Folder`"" -Wait
+
+	Write-Host "ODT extracted successfully to $O365Folder"
+
+	# Determine config file source and destination
+	Write-Host "Downloading MS Office config files"
+	if ($ConfigUrl) {
+		# Use the provided URL directly
+		$O365ConfigSource = $ConfigUrl
+		$configFileName = Split-Path $ConfigUrl -Leaf
+		if (-not $configFileName.EndsWith('.xml')) {
+			$configFileName = "O365_Config.xml"
+		}
+		$O365ConfigDest = Join-Path $O365Folder $configFileName
+	}
+	else {
+		# Build URL from SiteCode using Ambitions site-config scheme
+		$O365ConfigSource = "https://download.ambitionsgroup.com/Sites/" + $SiteCode + "/" + $SiteCode + "_O365_Config.xml"
+		$O365ConfigDest = Join-Path $O365Folder ($SiteCode + "_O365_Config.xml")
+	}
+
+	# Download config file
+	(New-Object System.Net.WebClient).DownloadFile($O365ConfigSource, $O365ConfigDest)
+
+	# Modify config for SharedComputer if switch is enabled
+	if ($SharedComputer) {
+		Write-Host "Enabling SharedComputerLicensing in config file"
+		[xml]$configXml = Get-Content $O365ConfigDest
+
+		# Find and update SharedComputerLicensing property
+		$sharedComputerProperty = $configXml.SelectNodes("//Property[@Name='SharedComputerLicensing']")
+		foreach ($property in $sharedComputerProperty) {
+			$property.Value = "1"
+		}
+
+		# Save the modified config
+		$configXml.Save($O365ConfigDest)
+		Write-Host "SharedComputerLicensing enabled"
+	}
+
+	Write-Host "Installing Office"
+	& $O365Folder\setup.exe /configure $O365ConfigDest | Wait-Process
+
+	Write-Host "Placing Shortcuts"
+
+	# Outlook shortcut
+	$TargetFile = $null
+	If (Test-Path "C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE"){
+		$TargetFile = "C:\Program Files\Microsoft Office\root\Office16\OUTLOOK.EXE"
+	} ELSEIF (Test-Path "C:\Program Files (x86)\Microsoft Office\root\Office16\OUTLOOK.EXE"){
+		$TargetFile = "C:\Program Files (x86)\Microsoft Office\root\Office16\OUTLOOK.EXE"
+	}
+	if ($TargetFile) {
 		$ShortcutFile = "$env:Public\Desktop\Outlook.lnk"
 		$WScriptShell = New-Object -ComObject WScript.Shell
 		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
 		$Shortcut.TargetPath = $TargetFile
 		$Shortcut.Save()
+	}
 
-		If (Test-Path "C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE"){
-			$TargetFile = "C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE"
-		} ELSEIF (Test-Path "C:\Program Files (x86)\Microsoft Office\root\Office16\EXCEL.EXE"){
-			$TargetFile = "C:\Program Files (x86)\Microsoft Office\root\Office16\EXCEL.EXE"
-		}
+	# Excel shortcut
+	$TargetFile = $null
+	If (Test-Path "C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE"){
+		$TargetFile = "C:\Program Files\Microsoft Office\root\Office16\EXCEL.EXE"
+	} ELSEIF (Test-Path "C:\Program Files (x86)\Microsoft Office\root\Office16\EXCEL.EXE"){
+		$TargetFile = "C:\Program Files (x86)\Microsoft Office\root\Office16\EXCEL.EXE"
+	}
+	if ($TargetFile) {
 		$ShortcutFile = "$env:Public\Desktop\Excel.lnk"
 		$WScriptShell = New-Object -ComObject WScript.Shell
 		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
 		$Shortcut.TargetPath = $TargetFile
 		$Shortcut.Save()
+	}
 
-		If (Test-Path "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"){
-			$TargetFile = "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"
-		} ELSEIF (Test-Path "C:\Program Files (x86)\Microsoft Office\root\Office16\WINWORD.EXE"){
-			$TargetFile = "C:\Program Files (x86)\Microsoft Office\root\Office16\WINWORD.EXE"
-		}
+	# Word shortcut
+	$TargetFile = $null
+	If (Test-Path "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"){
+		$TargetFile = "C:\Program Files\Microsoft Office\root\Office16\WINWORD.EXE"
+	} ELSEIF (Test-Path "C:\Program Files (x86)\Microsoft Office\root\Office16\WINWORD.EXE"){
+		$TargetFile = "C:\Program Files (x86)\Microsoft Office\root\Office16\WINWORD.EXE"
+	}
+	if ($TargetFile) {
 		$ShortcutFile = "$env:Public\Desktop\Word.lnk"
 		$WScriptShell = New-Object -ComObject WScript.Shell
 		$Shortcut = $WScriptShell.CreateShortcut($ShortcutFile)
 		$Shortcut.TargetPath = $TargetFile
 		$Shortcut.Save()
+	}
 }
 
 Function Install-O365ProofPointConnectors {
@@ -231,11 +333,11 @@ Function Install-O365ProofPointConnectors {
 #>
 	If (Get-Command Get-Mailbox -ErrorAction SilentlyContinue){
 		Function Install-ProofPointInbound {
-			New-InboundConnector -Name “Inbound from ProofPoint” -Comment “Only accept email from ProofPoint transport addresses” -Enabled $True  -SenderDomains * -RestrictDomainsToIPAddresses $true -RequireTls $true -SenderIPAddresses 148.163.159.0/24, 148.163.158.0/24, 148.163.157.0/24, 148.163.156.0/24, 148.163.155.0/24, 148.163.154.0/24, 148.163.153.0/24, 148.163.151.0/24, 148.163.150.0/24, 148.163.149.0/24, 148.163.148.0/24, 148.163.147.0/24, 148.163.146.0/24, 148.163.145.0/24, 148.163.143.0/24, 148.163.142.0/24, 148.163.141.0/24, 148.163.140.0/24, 148.163.139.0/24, 148.163.138.0/24, 148.163.137.0/24, 148.163.135.0/24, 148.163.134.0/24, 148.163.133.0/24, 148.163.132.0/24, 148.163.131.0/24, 148.163.130.0/24, 148.163.129.0/24, 52.54.85.198, 52.55.243.18, 34.192.199.2, 67.231.156.0/24, 67.231.155.0/24, 67.231.154.0/24, 67.231.153.0/24, 67.231.152.0/24, 67.231.148.0/24, 67.231.147.0/24, 67.231.146.0/24, 67.231.145.0/24, 67.231.144.0/24, 148.163.152.0/24, 148.163.144.0/24, 148.163.136.0/24, 148.163.128.0/24, 67.231.149.0/24
+			New-InboundConnector -Name "Inbound from ProofPoint" -Comment "Only accept email from ProofPoint transport addresses" -Enabled $True  -SenderDomains * -RestrictDomainsToIPAddresses $true -RequireTls $true -SenderIPAddresses 148.163.159.0/24, 148.163.158.0/24, 148.163.157.0/24, 148.163.156.0/24, 148.163.155.0/24, 148.163.154.0/24, 148.163.153.0/24, 148.163.151.0/24, 148.163.150.0/24, 148.163.149.0/24, 148.163.148.0/24, 148.163.147.0/24, 148.163.146.0/24, 148.163.145.0/24, 148.163.143.0/24, 148.163.142.0/24, 148.163.141.0/24, 148.163.140.0/24, 148.163.139.0/24, 148.163.138.0/24, 148.163.137.0/24, 148.163.135.0/24, 148.163.134.0/24, 148.163.133.0/24, 148.163.132.0/24, 148.163.131.0/24, 148.163.130.0/24, 148.163.129.0/24, 52.54.85.198, 52.55.243.18, 34.192.199.2, 67.231.156.0/24, 67.231.155.0/24, 67.231.154.0/24, 67.231.153.0/24, 67.231.152.0/24, 67.231.148.0/24, 67.231.147.0/24, 67.231.146.0/24, 67.231.145.0/24, 67.231.144.0/24, 148.163.152.0/24, 148.163.144.0/24, 148.163.136.0/24, 148.163.128.0/24, 67.231.149.0/24
 		}
 
 		Function Install-ProofPointOutbound {
-			New-OutboundConnector -Name “Outbound to ProofPoint” -Comment “Send all external outbound email through ProofPoint SmartHost” -Enabled $true -RecipientDomains * -SmartHosts outbound-us1.ppe-hosted.com -TlsSettings EncryptionOnly -UseMXRecord $false
+			New-OutboundConnector -Name "Outbound to ProofPoint" -Comment "Send all external outbound email through ProofPoint SmartHost" -Enabled $true -RecipientDomains * -SmartHosts outbound-us1.ppe-hosted.com -TlsSettings EncryptionOnly -UseMXRecord $false
 		}
 
 		If (Get-InboundConnector) {
@@ -264,9 +366,9 @@ Function Install-O365ProofPointConnectors {
 			Install-ProofPointOutbound
 		}
 
-		Set-HostedConnectionFilterPolicy “Default” -IPAllowList 148.163.147.0/24, 148.163.146.0/24, 148.163.145.0/24, 148.163.143.0/24, 148.163.142.0/24, 148.163.141.0/24, 148.163.140.0/24, 148.163.139.0/24, 148.163.138.0/24, 148.163.137.0/24, 148.163.135.0/24, 148.163.134.0/24, 148.163.133.0/24, 148.163.132.0/24, 148.163.131.0/24, 148.163.130.0/24, 148.163.129.0/24, 52.54.85.198, 52.55.243.18, 34.192.199.2, 67.231.156.0/24, 67.231.155.0/24, 67.231.154.0/24, 67.231.153.0/24, 67.231.152.0/24, 67.231.148.0/24, 67.231.147.0/24, 67.231.146.0/24, 67.231.145.0/24, 67.231.144.0/24, 148.163.152.0/24, 148.163.144.0/24, 148.163.136.0/24, 148.163.128.0/24, 67.231.149.0/24 -EnableSafeList $True -AdminDisplayName "Proofpoint Bypass 365 Spam filter"
+		Set-HostedConnectionFilterPolicy "Default" -IPAllowList 148.163.147.0/24, 148.163.146.0/24, 148.163.145.0/24, 148.163.143.0/24, 148.163.142.0/24, 148.163.141.0/24, 148.163.140.0/24, 148.163.139.0/24, 148.163.138.0/24, 148.163.137.0/24, 148.163.135.0/24, 148.163.134.0/24, 148.163.133.0/24, 148.163.132.0/24, 148.163.131.0/24, 148.163.130.0/24, 148.163.129.0/24, 52.54.85.198, 52.55.243.18, 34.192.199.2, 67.231.156.0/24, 67.231.155.0/24, 67.231.154.0/24, 67.231.153.0/24, 67.231.152.0/24, 67.231.148.0/24, 67.231.147.0/24, 67.231.146.0/24, 67.231.145.0/24, 67.231.144.0/24, 148.163.152.0/24, 148.163.144.0/24, 148.163.136.0/24, 148.163.128.0/24, 67.231.149.0/24 -EnableSafeList $True -AdminDisplayName "Proofpoint Bypass 365 Spam filter"
 		Set-HostedContentFilterPolicy -Identity "Default" -AddXHeaderValue "Office 365 Notice: Possible Spam" -AdminDisplayName "Disabled 365 Filtering, inbound handled by Proofpoint." -BulkSpamAction "NoAction" -BulkThreshold 9 -DownloadLink $False -EnableEndUserSpamNotifications $False -EnableLanguageBlockList $False -EnableRegionBlockList $False -HighConfidencePhishAction Quarantine -HighConfidenceSpamAction AddXHeader -IncreaseScoreWithBizOrInfoUrls Off -IncreaseScoreWithImageLinks Off -IncreaseScoreWithNumericIps Off -IncreaseScoreWithRedirectToOtherPort Off -InlineSafetyTipsEnabled $False -MakeDefault -MarkAsSpamBulkMail Off -MarkAsSpamEmbedTagsInHtml Off -MarkAsSpamEmptyMessages Off -MarkAsSpamFormTagsInHtml Off -MarkAsSpamFramesInHtml Off -MarkAsSpamFromAddressAuthFail Off -MarkAsSpamJavaScriptInHtml Off -MarkAsSpamNdrBackscatter Off -MarkAsSpamObjectTagsInHtml Off -MarkAsSpamSensitiveWordList Off -MarkAsSpamSpfRecordHardFail Off -MarkAsSpamWebBugsInHtml Off -PhishSpamAction AddXHeader -PhishZapEnabled $False -QuarantineRetentionPeriod 30 -RedirectToRecipients $Null -RegionBlockList $Null -SpamAction AddXHeader -SpamZapEnabled $False -TestModeAction None -TestModeBccToRecipients $Null
-		$DisableMailoxJunkFilters = Get-ExoMailbox -RecipientTypeDetails UserMailbox -ResultSize Unlimited; $All | foreach {Set-MailboxJunkEmailConfiguration $_.Name -Enabled $false}
+		$DisableMailoxJunkFilters = Get-ExoMailbox -RecipientTypeDetails UserMailbox -ResultSize Unlimited; $DisableMailoxJunkFilters | foreach {Set-MailboxJunkEmailConfiguration $_.Name -Enabled $false}
 	} Else {
 		Write-Host "You are not connected to an exchange server. Try the command 'Connect-O365Exchange'."
 	}
@@ -766,7 +868,8 @@ Function Install-WinGet {
 			$WGLatestLink = $realTagUrl.split('/')[-1].Trim('v')
 			
 			If ($WGVersion -match $WGLatestLink) {
-				Write-Host "The installed version $WGVersion is up to date."winget source update
+				Write-Host "The installed version $WGVersion is up to date."
+				winget source update
 			} Else {
 				Write-Host "The installed version $WGVersion is out of date."
 				If ($PSVersionTable.PSEdition -eq "Core") {Powershell.exe -NonInteractive -Command '$GetWinGetDependancies;$GetWinGet'} Else {$GetWinGetDependancies | IEX ; $GetWinGet | IEX}
@@ -825,6 +928,219 @@ Function Install-WinRepairToolbox {
 	Remove-Item -Path $CustomizationFilePath -Force
 	"& $($DLFolder + '\Windows_Repair_Toolbox.exe')" | Clip
 	Write-Host "The command to launch Windows Repair Toolbox has been put in your clipboard."
+}
+
+
+function Install-ClaudeCode {
+	<#
+	.SYNOPSIS
+		Installs Claude Code system-wide to C:\Ambitions\ClaudeCode.
+	.DESCRIPTION
+		Downloads and installs Claude Code for all users on the machine.
+		Requires Administrator privileges. Adds to system PATH.
+		Each user authenticates separately (credentials are per-user).
+	.PARAMETER Force
+		Reinstall even if already installed.
+	.EXAMPLE
+		Install-ClaudeCode
+	.EXAMPLE
+		Install-ClaudeCode -Force
+	.NOTES
+		Requires: Administrator privileges, Windows 10/11, PowerShell 5.1+
+	#>
+	[CmdletBinding()]
+	param(
+		[switch]$Force
+	)
+
+	# Paths
+	$ClaudeFolder = "C:\Ambitions\ClaudeCode"
+	$ClaudeExe = "$ClaudeFolder\claude.exe"
+	$UserClaudeFolder = "$env:LOCALAPPDATA\Programs\claude-code"
+	$UserClaudeExe = "$env:LOCALAPPDATA\Microsoft\WindowsApps\claude.exe"
+
+	# Check admin
+	$identity = [Security.Principal.WindowsIdentity]::GetCurrent()
+	$principal = New-Object Security.Principal.WindowsPrincipal($identity)
+	if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+		Write-Host "[!] Administrator privileges required for system-wide install." -ForegroundColor Red
+		Write-Host "    Run PowerShell as Administrator and try again." -ForegroundColor Yellow
+		return $false
+	}
+
+	# Check existing
+	if ((Test-Path $ClaudeExe) -and -not $Force) {
+		Write-Host "[OK] Claude Code is already installed at $ClaudeFolder" -ForegroundColor Green
+		Write-Host "    Use -Force to reinstall, or run Start-ClaudeCode to launch." -ForegroundColor Yellow
+		return $true
+	}
+
+	# Enable TLS
+	try {
+		[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls13
+	} catch {
+		[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+	}
+
+	Write-Host "`n=== Installing Claude Code System-Wide ===" -ForegroundColor Cyan
+	Write-Host "Install location: $ClaudeFolder" -ForegroundColor White
+
+	try {
+		Write-Host "`nStep 1: Running official installer..." -ForegroundColor Yellow
+		$script = Invoke-ValidatedDownload -Uri "https://claude.ai/install.ps1"
+		Invoke-Expression $script
+		Start-Sleep -Seconds 3
+
+		# Find installed location
+		$SourceFolder = $null
+		if (Test-Path $UserClaudeFolder) {
+			$SourceFolder = $UserClaudeFolder
+		} elseif (Test-Path "$env:USERPROFILE\.claude\local") {
+			$SourceFolder = "$env:USERPROFILE\.claude\local"
+		} else {
+			$found = Get-ChildItem -Path $env:LOCALAPPDATA -Filter "claude.exe" -Recurse -ErrorAction SilentlyContinue | Select-Object -First 1
+			if ($found) { $SourceFolder = $found.DirectoryName }
+		}
+
+		if (-not $SourceFolder) {
+			throw "Could not locate Claude Code installation files."
+		}
+
+		Write-Host " [OK] Found at: $SourceFolder" -ForegroundColor Green
+
+		Write-Host "`nStep 2: Copying to system-wide location..." -ForegroundColor Yellow
+		if (Test-Path $ClaudeFolder) { Remove-Item -Path $ClaudeFolder -Recurse -Force -ErrorAction SilentlyContinue }
+		New-Item -ItemType Directory -Path $ClaudeFolder -Force | Out-Null
+		Copy-Item -Path "$SourceFolder\*" -Destination $ClaudeFolder -Recurse -Force
+		Write-Host " [OK] Installed to $ClaudeFolder" -ForegroundColor Green
+
+		Write-Host "`nStep 3: Adding to system PATH..." -ForegroundColor Yellow
+		$currentPath = [Environment]::GetEnvironmentVariable("Path", "Machine")
+		if ($currentPath -notlike "*$ClaudeFolder*") {
+			$newPath = "$currentPath;$ClaudeFolder"
+			[Environment]::SetEnvironmentVariable("Path", $newPath, "Machine")
+			Write-Host " [OK] Added to system PATH" -ForegroundColor Green
+		} else {
+			Write-Host " [OK] Already in system PATH" -ForegroundColor Green
+		}
+		# Update current session
+		if ($env:Path -notlike "*$ClaudeFolder*") { $env:Path = "$env:Path;$ClaudeFolder" }
+
+		Write-Host "`nStep 4: Cleaning up user install..." -ForegroundColor Yellow
+		if (Test-Path $UserClaudeFolder) { Remove-Item -Path $UserClaudeFolder -Recurse -Force -ErrorAction SilentlyContinue }
+		if (Test-Path $UserClaudeExe) { Remove-Item -Path $UserClaudeExe -Force -ErrorAction SilentlyContinue }
+		Write-Host " [OK] Cleaned up" -ForegroundColor Green
+
+		Write-Host "`n=== Installation Complete ===" -ForegroundColor Green
+		Write-Host "Run Start-ClaudeCode to launch." -ForegroundColor Cyan
+		return $true
+
+	} catch {
+		Write-Host "[!] Installation failed: $_" -ForegroundColor Red
+		return $false
+	}
+}
+
+Function Install-Croc {
+	<#
+	.SYNOPSIS
+		Installs croc file transfer utility using the first available package manager.
+	.DESCRIPTION
+		Tries installation methods in order: winget, Start-PSWinget, chocolatey, scoop.
+		Returns the path to the croc executable on success, or throws on failure.
+	.EXAMPLE
+		Install-Croc
+		Installs croc and returns the path to the executable.
+	.NOTES
+		Some fallback methods require the function loader:
+		irm ps.acgs.io | iex
+	#>
+	[CmdletBinding()]
+	param()
+
+	$existing = Find-CrocExe
+	if ($existing) {
+		Write-Host "croc is already installed at: $existing" -ForegroundColor Green
+		return $existing
+	}
+
+	# --- Method 1: winget ---
+	$isSystem = ([System.Security.Principal.WindowsIdentity]::GetCurrent().Name -match 'SYSTEM$')
+	if (-not $isSystem -and (Get-Command winget -ErrorAction SilentlyContinue)) {
+		Write-Host "Attempting install via winget..." -ForegroundColor Cyan
+		try {
+			$null = Invoke-WinGetInstall -Id schollz.croc 2>&1
+			$found = Find-CrocExe
+			if ($found) {
+				Write-Host "croc installed via winget at: $found" -ForegroundColor Green
+				return $found
+			}
+		} catch {
+			Write-Warning "winget install failed: $_"
+		}
+	}
+
+	# --- Method 2: Start-PSWinget (works as SYSTEM or when winget isn't in PATH) ---
+	if (Get-Command Start-PSWinget -ErrorAction SilentlyContinue) {
+		Write-Host "Attempting install via Start-PSWinget..." -ForegroundColor Cyan
+		try {
+			$null = Start-PSWinget -Command 'Install-WinGetPackage "schollz.croc"' 2>&1
+			$found = Find-CrocExe
+			if ($found) {
+				Write-Host "croc installed via Start-PSWinget at: $found" -ForegroundColor Green
+				return $found
+			}
+		} catch {
+			Write-Warning "Start-PSWinget install failed: $_"
+		}
+	}
+
+	# --- Method 3: Chocolatey ---
+	if (-not (Get-Command choco -ErrorAction SilentlyContinue)) {
+		if (Get-Command Install-Choco -ErrorAction SilentlyContinue) {
+			Write-Host "Installing Chocolatey via Install-Choco..." -ForegroundColor Cyan
+			try { $null = Install-Choco 2>&1 } catch { Write-Warning "Install-Choco failed: $_" }
+		}
+	}
+	if (Get-Command choco -ErrorAction SilentlyContinue) {
+		Write-Host "Attempting install via Chocolatey..." -ForegroundColor Cyan
+		try {
+			$null = choco install croc -y 2>&1
+			$found = Find-CrocExe
+			if ($found) {
+				Write-Host "croc installed via Chocolatey at: $found" -ForegroundColor Green
+				return $found
+			}
+		} catch {
+			Write-Warning "Chocolatey install failed: $_"
+		}
+	}
+
+	# --- Method 4: Scoop ---
+	if (-not (Get-Command scoop -ErrorAction SilentlyContinue)) {
+		Write-Host "Installing Scoop..." -ForegroundColor Cyan
+		try {
+			Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser -Force -ErrorAction SilentlyContinue
+			$null = Invoke-RestMethod -Uri https://get.scoop.sh | Invoke-Expression 2>&1
+		} catch {
+			Write-Warning "Scoop installation failed: $_"
+		}
+	}
+	if (Get-Command scoop -ErrorAction SilentlyContinue) {
+		Write-Host "Attempting install via Scoop..." -ForegroundColor Cyan
+		try {
+			$null = scoop install croc 2>&1
+			$found = Find-CrocExe
+			if ($found) {
+				Write-Host "croc installed via Scoop at: $found" -ForegroundColor Green
+				return $found
+			}
+		} catch {
+			Write-Warning "Scoop install failed: $_"
+		}
+	}
+
+	throw "Failed to install croc via any available method. Please install manually from https://github.com/schollz/croc/releases"
 }
 
 

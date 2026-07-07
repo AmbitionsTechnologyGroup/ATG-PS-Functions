@@ -66,6 +66,1967 @@ Function Repair-Volumes {
 	}
 }
 
+Function Repair-ChocoDependency {
+<#
+	.SYNOPSIS
+		Repairs "unresolved package dependency constraints" errors that block Chocolatey installs and upgrades.
+	.DESCRIPTION
+		Chocolatey v2.x refuses to install or upgrade ANY package while one or more
+		already-installed packages declare a dependency that is not present in the
+		lib folder. The blocking error reads:
+
+			"One or more unresolved package dependency constraints detected in the
+			 Chocolatey lib folder. All dependency constraints must be resolved to
+			 add or update packages."
+
+		This commonly happens on machines where packages such as
+		dotnet-8.0-desktopruntime or dellcommandupdate were installed without their
+		chocolatey-core.extension and vcredist140 dependencies. Until those missing
+		dependencies are present, even unrelated operations (upgrading pwsh or
+		microsoft-edge, "choco upgrade all", etc.) fail.
+
+		This function installs the missing dependency packages in a single
+		"choco install" call so Chocolatey resolves them as a group. Installing them
+		one at a time can fail, because each pass still sees the others as unresolved
+		(for example "choco install chocolatey-core.extension" fails while vcredist140
+		is still missing). The well-known culprits (chocolatey-core.extension and
+		vcredist140) are always included, and any additional dependency names found in
+		supplied choco output are added to the repair set.
+	.PARAMETER ChocoOutput
+		Optional captured output from a failed "choco install" / "choco upgrade"
+		operation. Any package names referenced by the unresolved-dependency errors
+		are parsed out and added to the repair set.
+	.PARAMETER AdditionalPackage
+		Optional extra package id(s) to include in the repair install.
+	.EXAMPLE
+		Repair-ChocoDependency
+	.EXAMPLE
+		$Output = choco upgrade pwsh -y --force 2>&1
+		If ($Output -match 'Unable to resolve dependency') { Repair-ChocoDependency -ChocoOutput $Output }
+	.NOTES
+		Requires Chocolatey. If choco.exe is missing it is installed first via Install-Choco.
+#>
+	[CmdletBinding()]
+	Param(
+		[Parameter(ValueFromPipeline = $true)]
+		[string[]]$ChocoOutput,
+
+		[Parameter()]
+		[string[]]$AdditionalPackage
+	)
+
+	# Make sure choco is available before trying to repair anything.
+	If (!(Get-Command choco -ErrorAction SilentlyContinue)) {
+		Write-Host "Chocolatey not found. Installing it first." -ForegroundColor Yellow
+		Install-Choco
+	}
+	If (!(Get-Command choco -ErrorAction SilentlyContinue)) {
+		Write-Host "Chocolatey is still not available, cannot repair dependencies." -ForegroundColor Red
+		Return $false
+	}
+
+	# chocolatey-core.extension and vcredist140 are by far the most common missing
+	# constraints. vcredist140 itself depends on chocolatey-core.extension, so listing
+	# both in one install lets choco resolve the whole group at once.
+	$RepairSet = New-Object System.Collections.Generic.List[string]
+	ForEach ($Pkg in @('chocolatey-core.extension', 'vcredist140')) { $RepairSet.Add($Pkg) }
+
+	# Pull any other unresolved dependency names out of the choco output we were handed.
+	# The blocking errors look like:
+	#   Unable to resolve dependency 'vcredist140'.
+	#   Unable to find a version of 'chocolatey-core.extension' that is compatible...
+	If ($ChocoOutput) {
+		$Text = $ChocoOutput -join "`n"
+		$Patterns = @(
+			"Unable to resolve dependency '([^']+)'",
+			"Unable to find a version of '([^']+)'"
+		)
+		ForEach ($Pattern in $Patterns) {
+			ForEach ($Match in [regex]::Matches($Text, $Pattern)) {
+				$Name = $Match.Groups[1].Value.Trim()
+				If ($Name -and ($RepairSet -notcontains $Name)) { $RepairSet.Add($Name) }
+			}
+		}
+	}
+
+	# Caller-specified extras.
+	ForEach ($Pkg in $AdditionalPackage) {
+		If ($Pkg -and ($RepairSet -notcontains $Pkg)) { $RepairSet.Add($Pkg) }
+	}
+
+	Write-Host "Repairing Chocolatey dependency constraints by installing: $($RepairSet -join ', ')" -ForegroundColor Cyan
+
+	# Install the whole set in one call so choco resolves them together. Packages that
+	# are already present at a satisfying version are skipped, so this is a safe no-op
+	# when nothing is actually broken.
+	$ChocoArgs = @('install') + $RepairSet + @('-y')
+	$RepairOutput = & choco @ChocoArgs 2>&1
+	$RepairText = $RepairOutput | Out-String
+	Write-Host $RepairText
+
+	If ($RepairText -match 'packages failed') {
+		Write-Host "Dependency repair reported one or more failures. Review C:\ProgramData\chocolatey\logs\chocolatey.log." -ForegroundColor Red
+		Return $false
+	}
+
+	Write-Host "Chocolatey dependency constraints repaired." -ForegroundColor Green
+	Return $true
+}
+
+Function Repair-DomainTrust {
+<#
+	.SYNOPSIS
+		Attempts to repair a broken domain trust relationship without unjoining/rejoining.
+	.DESCRIPTION
+		Runs through a progressive series of fixes for the "no computer account for this
+		workstation trust relationship" error. Starts with the least invasive fixes and
+		works down the list. Reboot-required fixes are saved for last.
+		Assumes all PS-Functions are already loaded via:
+			irm ps.acgs.io | iex
+	.EXAMPLE
+		Repair-DomainTrust
+#>
+	[CmdletBinding()]
+	Param()
+
+	# Require elevation -- most operations need local admin
+	$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+		[Security.Principal.WindowsBuiltInRole]::Administrator)
+	If (-not $isAdmin) {
+		Write-Host "    [XX] This function must be run as Administrator." -ForegroundColor Red
+		Return
+	}
+
+	$localComputer = $env:COMPUTERNAME
+
+	#region Helpers
+	Function Test-DomainConnectivity {
+		Try {
+			$result = Test-ComputerSecureChannel -ErrorAction Stop
+			Return $result
+		} Catch {
+			Return $false
+		}
+	}
+
+	Function Write-Step {
+		Param([string]$Message)
+		Write-Host "`n[*] $Message" -ForegroundColor Cyan
+	}
+
+	Function Write-Pass {
+		Param([string]$Message)
+		Write-Host "    [OK] $Message" -ForegroundColor Green
+	}
+
+	Function Write-Fail {
+		Param([string]$Message)
+		Write-Host "    [!!] $Message" -ForegroundColor Yellow
+	}
+
+	Function Write-Fatal {
+		Param([string]$Message)
+		Write-Host "    [XX] $Message" -ForegroundColor Red
+	}
+	#endregion
+
+	#region Step 0 - Fix system time first (Kerberos is time-sensitive)
+	Write-Step "Step 0: Syncing system time via Update-NTPDateTime..."
+	Try {
+		Update-NTPDateTime
+		Write-Pass "Time sync complete."
+	} Catch {
+		Write-Fail "Update-NTPDateTime failed: $_"
+		Write-Verbose "Falling back to w32tm resync..."
+		$null = w32tm /resync /force 2>&1
+		If ($LASTEXITCODE -eq 0) {
+			Write-Pass "w32tm resync succeeded as fallback."
+		} Else {
+			Write-Fail "w32tm fallback also failed (exit code $LASTEXITCODE). Continuing anyway."
+		}
+	}
+	#endregion
+
+	#region Step 1 - Test if time sync alone fixed it
+	Write-Step "Step 1: Testing domain connectivity after time sync..."
+	If (Test-DomainConnectivity) {
+		Write-Pass "Domain trust is healthy after time sync. No further action needed."
+		Return
+	}
+	Write-Fail "Still broken. Continuing..."
+	#endregion
+
+	#region Step 2 - Gather environment info
+	Write-Step "Step 2: Detecting domain and available domain controllers..."
+	$detectedDomain = $null
+	Try {
+		$detectedDomain = (Get-CimInstance Win32_ComputerSystem).Domain
+		Write-Pass "Machine reports domain: $detectedDomain"
+	} Catch {
+		Write-Fatal "Could not detect domain from Win32_ComputerSystem: $_"
+	}
+
+	If (-not $detectedDomain -or $detectedDomain -eq 'WORKGROUP') {
+		Write-Fatal "Machine does not appear to be domain-joined (reports: $detectedDomain). Cannot continue."
+		Return
+	}
+
+	# Validate domain name format to prevent injection into native commands
+	If ($detectedDomain -notmatch '^[a-zA-Z0-9._-]+$') {
+		Write-Fatal "Detected domain name contains unexpected characters: $detectedDomain. Aborting."
+		Return
+	}
+
+	# Discover DCs
+	$dcs = @()
+	Try {
+		$dcs = @([System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain().DomainControllers |
+			Select-Object -ExpandProperty Name)
+		Write-Pass "Found $($dcs.Count) domain controller(s): $($dcs -join ', ')"
+	} Catch {
+		Write-Fail "Could not enumerate DCs via DirectoryServices. Trying nltest..."
+		$nltestOut = nltest /dclist:$detectedDomain 2>&1
+		If ($LASTEXITCODE -eq 0) {
+			$dcs = @($nltestOut | Where-Object { $_ -match '\\\\' } |
+				ForEach-Object { ($_ -split '\\\\')[1].Trim().Split()[0] } |
+				Where-Object { $_ -and $_ -match '^\w' })
+			Write-Pass "nltest found DC(s): $($dcs -join ', ')"
+		} Else {
+			Write-Fatal "Could not enumerate DCs via nltest either (exit code $LASTEXITCODE)."
+			Write-Step "Falling back to DNS SRV records to discover domain controllers..."
+			Try {
+				# SRV avoids filtering out the resolver's own IP (common when DC == DNS server).
+				$srvRecords = Resolve-DnsName -Name "_ldap._tcp.$detectedDomain" -Type SRV -ErrorAction Stop
+				$dcs = @($srvRecords | Where-Object { $_.Type -eq 'SRV' } |
+					Select-Object -ExpandProperty NameTarget)
+				Write-Pass "DNS SRV returned $($dcs.Count) DC(s): $($dcs -join ', ')"
+			} Catch {
+				Write-Fatal "DNS SRV fallback failed: $($_.Exception.Message)"
+			}
+		}
+	}
+
+	$targetDC = $dcs | Select-Object -First 1
+	If (-not $targetDC) {
+		Write-Fatal "No domain controllers found. Cannot proceed."
+		Return
+	}
+	#endregion
+
+	#region Step 3 - Prompt for domain admin credentials
+	Write-Step "Step 3: Prompting for domain admin credentials..."
+	$cred = $null
+	Try {
+		$cred = Get-Credential -Message "Enter Domain Admin credentials for $detectedDomain"
+		If (-not $cred) { Throw "No credentials provided." }
+		Write-Pass "Credentials captured for: $($cred.UserName)"
+	} Catch {
+		Write-Fatal "Credential prompt failed or was cancelled: $_"
+		Return
+	}
+	#endregion
+
+	#region Step 4 - Try Test-ComputerSecureChannel -Repair (no reboot)
+	Write-Step "Step 4: Attempting Test-ComputerSecureChannel -Repair..."
+	Try {
+		$repaired = Test-ComputerSecureChannel -Repair -Credential $cred -ErrorAction Stop
+		If ($repaired) {
+			Write-Pass "Secure channel repaired successfully."
+			If (Test-DomainConnectivity) {
+				Write-Pass "Domain trust verified. Done! (No reboot needed)"
+				Return
+			} Else {
+				Write-Fail "Repair reported success but trust test still failing. Continuing..."
+			}
+		} Else {
+			Write-Fail "Test-ComputerSecureChannel -Repair returned false."
+		}
+	} Catch {
+		Write-Fail "Test-ComputerSecureChannel -Repair threw an error: $_"
+	}
+	#endregion
+
+	#region Step 5 - Reset-ComputerMachinePassword (no reboot)
+	If ($targetDC) {
+		Write-Step "Step 5: Attempting Reset-ComputerMachinePassword against $targetDC..."
+		Try {
+			Reset-ComputerMachinePassword -Server $targetDC -Credential $cred -ErrorAction Stop
+			Write-Pass "Machine password reset complete."
+			If (Test-DomainConnectivity) {
+				Write-Pass "Domain trust verified. Done! (No reboot needed)"
+				Return
+			} Else {
+				Write-Fail "Password reset done but trust test still failing. Continuing..."
+			}
+		} Catch {
+			Write-Fail "Reset-ComputerMachinePassword failed: $_"
+		}
+	}
+	#endregion
+
+	#region Step 6 - Remote into DC: check & toggle computer account (no reboot)
+	If ($targetDC) {
+		Write-Step "Step 6: Remoting into DC ($targetDC) to check computer account in AD..."
+		$dcSession = $null
+		Try {
+			$sessionOpts = New-PSSessionOption -OpenTimeout 30000 -OperationTimeout 60000
+			$dcSession = New-PSSession -ComputerName $targetDC -Credential $cred -SessionOption $sessionOpts -ErrorAction Stop
+			Write-Pass "PSSession to $targetDC established."
+
+			$acctStatus = Invoke-Command -Session $dcSession -ScriptBlock {
+				Param($cn)
+				Import-Module ActiveDirectory -ErrorAction Stop
+				$acct = Get-ADComputer $cn -Properties Enabled, PasswordLastSet -ErrorAction Stop
+				[pscustomobject]@{
+					Enabled           = $acct.Enabled
+					PasswordLastSet   = $acct.PasswordLastSet
+					DistinguishedName = $acct.DistinguishedName
+				}
+			} -ArgumentList $localComputer
+
+			Write-Verbose "AD account status: Enabled=$($acctStatus.Enabled) | PasswordLastSet=$($acctStatus.PasswordLastSet)"
+
+			# If account is disabled, enable it
+			If (-not $acctStatus.Enabled) {
+				Write-Fail "Computer account is DISABLED. Re-enabling..."
+				Invoke-Command -Session $dcSession -ScriptBlock {
+					Param($cn)
+					Enable-ADAccount -Identity $cn
+				} -ArgumentList $localComputer
+				Write-Pass "Computer account re-enabled."
+			}
+
+			# Only cycle the account if trust is still broken after fixing state
+			If (-not (Test-DomainConnectivity)) {
+				Write-Step "Step 6b: Cycling AD computer account disable/enable to reset trust..."
+				Invoke-Command -Session $dcSession -ScriptBlock {
+					Param($cn)
+					Set-ADComputer -Identity $cn -Enabled $false
+					Start-Sleep -Seconds 2
+					Set-ADComputer -Identity $cn -Enabled $true
+				} -ArgumentList $localComputer
+				Write-Pass "Account disable/enable cycle complete."
+			}
+		} Catch {
+			Write-Fail "Remote DC operations failed: $_"
+		} Finally {
+			If ($dcSession) { Remove-PSSession $dcSession -ErrorAction SilentlyContinue }
+		}
+
+		# Give replication a moment then test
+		Start-Sleep -Seconds 3
+		If (Test-DomainConnectivity) {
+			Write-Pass "Domain trust verified after AD account operations. Done! (No reboot needed)"
+			Return
+		} Else {
+			Write-Fail "AD account operations complete but trust still failing. Continuing..."
+		}
+	} Else {
+		Write-Fail "No DC available for remote operations. Skipping Step 6."
+	}
+	#endregion
+
+	#region Step 7 - nltest /sc_reset (no reboot, more aggressive channel reset)
+	Write-Step "Step 7: Attempting nltest /sc_reset to force secure channel reset..."
+	$nltestResult = nltest /sc_reset:$detectedDomain 2>&1
+	Write-Verbose "nltest sc_reset completed with exit code: $LASTEXITCODE"
+	If ($nltestResult -match 'NERR_Success') {
+		Write-Pass "nltest sc_reset succeeded."
+	} Else {
+		Write-Fail "nltest sc_reset output did not indicate clear success: $nltestResult"
+	}
+	If (Test-DomainConnectivity) {
+		Write-Pass "Domain trust verified after nltest sc_reset. Done! (No reboot needed)"
+		Return
+	} Else {
+		Write-Fail "Still failing after nltest sc_reset. Continuing to reboot-required fixes..."
+	}
+	#endregion
+
+	#region Step 8 - Reboot-required: netdom resetpwd
+	Write-Host "`n--- Non-reboot fixes exhausted. Trying reboot-required fixes. ---" -ForegroundColor Magenta
+	Write-Step "Step 8: Running netdom resetpwd to reset machine password (requires reboot)..."
+	If ($targetDC) {
+		$BSTR = [System.Runtime.InteropServices.Marshal]::SecureStringToBSTR($cred.Password)
+		Try {
+			$plain = [System.Runtime.InteropServices.Marshal]::PtrToStringAuto($BSTR)
+			$null = netdom resetpwd /server:$targetDC /userd:$($cred.UserName) /passwordd:$plain 2>&1
+			Write-Verbose "netdom resetpwd completed with exit code: $LASTEXITCODE"
+			If ($LASTEXITCODE -eq 0) {
+				Write-Pass "netdom resetpwd completed. A reboot will be required."
+			} Else {
+				Write-Fail "netdom resetpwd returned exit code $LASTEXITCODE."
+			}
+		} Catch {
+			Write-Fail "netdom resetpwd failed: $_"
+		} Finally {
+			[System.Runtime.InteropServices.Marshal]::ZeroFreeBSTR($BSTR)
+			Remove-Variable plain -ErrorAction SilentlyContinue
+		}
+	} Else {
+		Write-Fail "No DC available for netdom resetpwd. Skipping."
+	}
+	#endregion
+
+	# Clean up credentials
+	Remove-Variable cred -ErrorAction SilentlyContinue
+
+	#region Final summary
+	Write-Host "`n========================================" -ForegroundColor White
+	Write-Host " Repair-DomainTrust: All steps complete." -ForegroundColor White
+	Write-Host "========================================" -ForegroundColor White
+	If (Test-DomainConnectivity) {
+		Write-Pass "Domain trust is NOW HEALTHY. You may or may not need a reboot depending on which step resolved it."
+	} Else {
+		Write-Fatal "Domain trust could NOT be automatically repaired."
+		Write-Host @"
+
+Next manual steps to try:
+  1. Reboot the machine (if netdom resetpwd ran, this may resolve it)
+  2. If still broken after reboot, manually unjoin and rejoin the domain
+  3. Verify DNS is pointing at a DC (ipconfig /all, nslookup $detectedDomain)
+  4. Verify no duplicate computer accounts exist in AD for $localComputer
+"@ -ForegroundColor Yellow
+	}
+	#endregion
+}
+
+
+Function Repair-RemoteWMI {
+	<#
+	.SYNOPSIS
+		Attempts to repair WMI connectivity on a remote host without rebooting.
+
+	.DESCRIPTION
+		Targets the PRTG PE015 error ("Cannot initiate WMI connections to host").
+		Runs a progressive series of repair steps on the remote machine:
+		  0. Pre-flight check for DCOM port connectivity (TCP 135)
+		  1. Restart the WMI (Winmgmt) service and dependent services,
+			 kill orphaned WMI provider host processes
+		  2. Test WMI -- if Step 1 fixed it, skip heavier repairs (unless -Force)
+		  3. Re-register WMI provider DLLs and recompile core Windows MOFs
+		  4. Reset DCOM permissions on the WMI namespace
+		  5. Verify WMI repository consistency and salvage if corrupt
+		  6. Final WMI connectivity validation via DCOM CIM session,
+			 including a PRTG-style uptime (LastBootUpTime) query
+
+		If all WMI tests pass but PRTG is still reporting PE015, the issue is
+		likely a hung connection on the PRTG probe. When running locally on the
+		probe server, the function will prompt to restart the PRTGProbeService.
+
+		Requires Stop-StuckService from this PWSH function library when using
+		-RestartProbe (load via: irm ps.acgs.io | iex).
+
+	.PARAMETER ComputerName
+		One or more remote hostnames or IPs to repair.
+
+	.PARAMETER Credential
+		Optional PSCredential for authentication to the remote host.
+
+	.PARAMETER SkipPortCheck
+		Skip the TCP 135 pre-flight check (useful if ICMP/Test-NetConnection
+		is blocked but WMI traffic is actually allowed).
+
+	.PARAMETER Force
+		Run all repair steps even if early WMI tests pass. Use this when
+		the sensor is intermittently failing.
+
+	.PARAMETER RestartProbe
+		After successful WMI repair, restart the local PRTG probe service
+		to clear any hung connections. Only works when running on the probe
+		server. Prompts for confirmation before restarting.
+
+	.EXAMPLE
+		Repair-RemoteWMI -ComputerName RD7 -Verbose
+
+	.EXAMPLE
+		Repair-RemoteWMI -ComputerName RD7 -Force -RestartProbe -Verbose
+
+	.EXAMPLE
+		Repair-RemoteWMI -ComputerName RD7, RD8 -Credential (Get-Credential)
+	#>
+	[CmdletBinding(SupportsShouldProcess)]
+	param(
+		[Parameter(Mandatory, ValueFromPipeline, ValueFromPipelineByPropertyName)]
+		[string[]]$ComputerName,
+
+		[Parameter()]
+		[PSCredential]$Credential,
+
+		[Parameter()]
+		[switch]$SkipPortCheck,
+
+		[Parameter()]
+		[switch]$Force,
+
+		[Parameter()]
+		[switch]$RestartProbe
+	)
+
+	begin {
+		$sessionParams = @{
+			ErrorAction = 'Stop'
+		}
+		if ($Credential) {
+			$sessionParams['Credential'] = $Credential
+		}
+
+		# Validate Stop-StuckService is available if -RestartProbe was requested
+		if ($RestartProbe -and -not (Get-Command -Name Stop-StuckService -ErrorAction SilentlyContinue)) {
+			Write-Warning 'Stop-StuckService not found. Load PS-Functions first: irm ps.acgs.io | iex'
+			Write-Warning '-RestartProbe will fall back to Stop-Service only (no stuck-service kill).'
+		}
+
+		# Helper: stop WMI dependent services, return their names for restart
+		$stopDependentsBlock = {
+			$deps = Get-Service -Name Winmgmt -DependentServices -ErrorAction SilentlyContinue |
+				Where-Object { $_.Status -eq 'Running' } |
+				Select-Object -ExpandProperty Name
+			if ($deps) {
+				foreach ($svc in $deps) {
+					Stop-Service -Name $svc -Force -ErrorAction SilentlyContinue
+				}
+			}
+			return $deps
+		}
+
+		# Helper: restart dependent services by name
+		$startDependentsBlock = {
+			param([string[]]$ServiceNames)
+			if ($ServiceNames) {
+				foreach ($svc in $ServiceNames) {
+					Start-Service -Name $svc -ErrorAction SilentlyContinue
+				}
+			}
+		}
+
+		# Pre-convert scriptblocks to strings once for remote invocation
+		$stopDependentsStr  = $stopDependentsBlock.ToString()
+		$startDependentsStr = $startDependentsBlock.ToString()
+
+		# Helper: test WMI via DCOM CIM session including uptime query
+		function Test-WMIConnectivity {
+			param(
+				[string]$Target,
+				[PSCredential]$Cred
+			)
+			$cimSession = $null
+			try {
+				$cimParams = @{
+					ComputerName = $Target
+					ErrorAction  = 'Stop'
+				}
+				if ($Cred) {
+					$cimParams['Credential'] = $Cred
+				}
+				$dcomOption = New-CimSessionOption -Protocol Dcom
+				$cimSession = New-CimSession @cimParams -SessionOption $dcomOption
+				$os = Get-CimInstance -CimSession $cimSession -ClassName Win32_OperatingSystem -ErrorAction Stop
+
+				if (-not $os) {
+					return @{ Pass = $false; Detail = 'NoResultsReturned'; Uptime = $null }
+				}
+
+				# Compute uptime the same way PRTG's WMI System Uptime sensor does
+				$lastBoot = $os.LastBootUpTime
+				if ($lastBoot) {
+					$uptime = (Get-Date) - $lastBoot
+					$uptimeStr = '{0}d {1}h {2}m' -f $uptime.Days, $uptime.Hours, $uptime.Minutes
+				} else {
+					$uptimeStr = 'LastBootUpTime was null'
+				}
+
+				return @{ Pass = $true; Detail = 'Success'; Uptime = $uptimeStr }
+			} catch {
+				return @{ Pass = $false; Detail = "Failed: $_"; Uptime = $null }
+			} finally {
+				if ($cimSession) {
+					Remove-CimSession -CimSession $cimSession -ErrorAction SilentlyContinue
+				}
+			}
+		}
+
+		# Helper: restart PRTG probe service with 60s timeout
+		# Uses Stop-StuckService from this PWSH function library if the service gets stuck
+		function Restart-LocalProbeService {
+			[CmdletBinding(SupportsShouldProcess)]
+			param()
+
+			$serviceName = 'PRTGProbeService'
+			$timeoutSec = 60
+
+			$svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+			if (-not $svc) {
+				Write-Warning "PRTGProbeService not found on this machine. If the probe runs on a different server, restart it there manually."
+				return 'NotFound'
+			}
+
+			Write-Verbose "PRTGProbeService found locally (Status: $($svc.Status))"
+
+			if (-not $PSCmdlet.ShouldProcess($serviceName, 'Restart PRTG Probe Service')) {
+				return 'SkippedByUser'
+			}
+
+			if ($svc.Status -eq 'Running') {
+				Write-Verbose "Stopping PRTGProbeService (timeout: ${timeoutSec}s)..."
+				try {
+					$svc.Stop()
+				} catch {
+					Write-Verbose "Stop() call threw: $_"
+				}
+
+				try {
+					$svc.WaitForStatus('Stopped', [TimeSpan]::FromSeconds($timeoutSec))
+					Write-Verbose "PRTGProbeService stopped gracefully"
+				} catch {
+					Write-Warning "PRTGProbeService did not stop within ${timeoutSec}s -- attempting Stop-StuckService..."
+
+					if (Get-Command -Name Stop-StuckService -ErrorAction SilentlyContinue) {
+						try {
+							Stop-StuckService -Name $serviceName
+							Start-Sleep -Seconds 3
+							$svc = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+							if ($svc.Status -ne 'Stopped') {
+								Write-Warning "Stop-StuckService ran but service status is: $($svc.Status)"
+								return 'StuckKillFailed'
+							}
+							Write-Verbose "Stop-StuckService successfully killed the stuck probe process"
+						} catch {
+							Write-Warning "Stop-StuckService failed: $_"
+							return 'StuckKillFailed'
+						}
+					} else {
+						Write-Warning "Stop-StuckService not available. Load PS-Functions (irm ps.acgs.io | iex) and retry, or manually kill the probe process."
+						return 'StuckNoKill'
+					}
+				}
+			}
+
+			Write-Verbose "Starting PRTGProbeService..."
+			try {
+				Start-Service -Name $serviceName -ErrorAction Stop
+			} catch {
+				Write-Warning "Start-Service failed: $_"
+				return 'StartFailed'
+			}
+
+			try {
+				$svc = Get-Service -Name $serviceName
+				$svc.WaitForStatus('Running', [TimeSpan]::FromSeconds($timeoutSec))
+				Write-Verbose "PRTGProbeService restarted successfully"
+				return 'Restarted'
+			} catch {
+				Write-Warning "PRTGProbeService did not reach Running state within ${timeoutSec}s: $_"
+				return 'StartTimeout'
+			}
+		}
+
+		$repairedComputers = [System.Collections.Generic.List[string]]::new()
+	}
+
+	process {
+		foreach ($computer in $ComputerName) {
+			Write-Verbose "[$computer] Starting WMI repair sequence$(if ($Force) { ' (Force mode)' })"
+
+			$result = [PSCustomObject]@{
+				ComputerName    = $computer
+				PortCheck       = 'Skipped'
+				ServiceRestart  = 'Skipped'
+				WmiprvseCleanup = 'Skipped'
+				EarlyTest       = 'Skipped'
+				DLLReregister   = 'Skipped'
+				MOFRecompile    = 'Skipped'
+				DCOMPermissions = 'Skipped'
+				RepoConsistency = 'Skipped'
+				RepoSalvage     = 'Skipped'
+				FinalTest       = 'Skipped'
+				Uptime          = $null
+				Status          = 'Unknown'
+			}
+
+			if (-not $SkipPortCheck) {
+				Write-Verbose "[$computer] Step 0 - Testing TCP 135 (DCOM/RPC endpoint mapper)"
+				try {
+					$portTest = Test-NetConnection -ComputerName $computer -Port 135 -WarningAction SilentlyContinue
+					if ($portTest.TcpTestSucceeded) {
+						$result.PortCheck = 'Open'
+						Write-Verbose "[$computer] TCP 135 is open"
+					} else {
+						$result.PortCheck = 'Blocked'
+						$result.Status = 'PortBlocked'
+						Write-Warning "[$computer] TCP 135 is blocked. This is likely a firewall issue, not a WMI service issue. Verify DCOM/WMI firewall rules."
+						$result
+						continue
+					}
+				} catch {
+					$result.PortCheck = "TestFailed: $_"
+					Write-Verbose "[$computer] Port check failed, continuing with repair anyway"
+				}
+			}
+
+			try {
+				Write-Verbose "[$computer] Establishing PSRemoting session"
+				$session = New-PSSession -ComputerName $computer @sessionParams
+			} catch {
+				Write-Warning "[$computer] Failed to establish PSRemoting session: $_"
+				$result.Status = 'RemotingFailed'
+				$result
+				continue
+			}
+
+			try {
+				Write-Verbose "[$computer] Step 1 - Restarting WMI service, dependencies, and cleaning up wmiprvse"
+				$step1 = Invoke-Command -Session $session -ScriptBlock {
+					param($stopBlock, $startBlock)
+					$svcResult = 'Skipped'
+					$cleanResult = 'Skipped'
+					try {
+						$deps = & $([ScriptBlock]::Create($stopBlock))
+						Restart-Service -Name Winmgmt -Force -ErrorAction Stop
+						Start-Sleep -Seconds 3
+						if ($deps) {
+							& $([ScriptBlock]::Create($startBlock)) -ServiceNames $deps
+						}
+						$svcResult = 'Success'
+					} catch {
+						$svcResult = "Failed: $_"
+					}
+					try {
+						$procs = Get-Process -Name wmiprvse -ErrorAction SilentlyContinue
+						if ($procs) {
+							$count = $procs.Count
+							$procs | Stop-Process -Force -ErrorAction SilentlyContinue
+							Start-Sleep -Seconds 2
+							$cleanResult = "Killed $count orphaned wmiprvse.exe process(es)"
+						} else {
+							$cleanResult = 'NoneFound'
+						}
+					} catch {
+						$cleanResult = "Failed: $_"
+					}
+					return @{ ServiceRestart = $svcResult; WmiprvseCleanup = $cleanResult }
+				} -ArgumentList $stopDependentsStr, $startDependentsStr
+				$result.ServiceRestart = $step1.ServiceRestart
+				$result.WmiprvseCleanup = $step1.WmiprvseCleanup
+				Write-Verbose "[$computer] Service restart: $($step1.ServiceRestart), wmiprvse cleanup: $($step1.WmiprvseCleanup)"
+
+				Write-Verbose "[$computer] Step 2 - Early WMI connectivity test"
+				$earlyTest = Test-WMIConnectivity -Target $computer -Cred $Credential
+				$earlyTestPassed = $earlyTest.Pass
+
+				if ($earlyTestPassed -and -not $Force) {
+					$result.EarlyTest = $earlyTest.Detail
+					$result.Uptime = $earlyTest.Uptime
+					$result.FinalTest = $earlyTest.Detail
+					$result.Status = 'Repaired'
+					Write-Verbose "[$computer] WMI responded after service restart (uptime: $($earlyTest.Uptime)) -- skipping heavier repairs"
+				} else {
+					if ($earlyTestPassed) {
+						$result.EarlyTest = "$($earlyTest.Detail) (continuing due to -Force)"
+						Write-Verbose "[$computer] WMI responded but -Force specified -- running all repairs"
+					} else {
+						$result.EarlyTest = $earlyTest.Detail
+						Write-Verbose "[$computer] WMI still failing after restart, continuing with deeper repairs"
+					}
+
+					Write-Verbose "[$computer] Step 3 - Re-registering WMI provider DLLs and recompiling MOFs"
+					$step3 = Invoke-Command -Session $session -ScriptBlock {
+						$sysDir = "$env:SystemRoot\System32\wbem"
+						$dllResult = 'Skipped'
+						$mofResult = 'Skipped'
+
+						try {
+							$dlls = @(
+								'scrcons.dll', 'unsecapp.dll', 'wmiprvsd.dll',
+								'wmiprvse.dll', 'wmisvc.dll', 'wbemcomn.dll',
+								'wbemprox.dll', 'wbemcore.dll', 'wbemsvc.dll',
+								'fastprox.dll', 'mofd.dll', 'cimwin32.dll',
+								'wmiutils.dll', 'repdrvfs.dll', 'wmipiprt.dll'
+							)
+							$errors = @()
+							foreach ($dll in $dlls) {
+								$dllPath = Join-Path $sysDir $dll
+								if (Test-Path $dllPath) {
+									& regsvr32.exe /s $dllPath 2>&1 | Out-Null
+									if ($LASTEXITCODE -ne 0) {
+										$errors += "$dll (exit $LASTEXITCODE)"
+									}
+								}
+							}
+							if ($errors.Count -gt 0) {
+								$dllResult = "PartialSuccess ($($errors -join ', '))"
+							} else {
+								$dllResult = 'Success'
+							}
+						} catch {
+							$dllResult = "Failed: $_"
+						}
+
+						try {
+							$coreMofs = @(
+								'cimwin32.mof', 'cimwin32.mfl',
+								'win32_encryptablevolume.mof',
+								'rsop.mof', 'rsop.mfl',
+								'wmi.mof', 'wmi.mfl',
+								'wmitimep.mof',
+								'regevent.mof',
+								'ntevt.mof', 'ntevt.mfl',
+								'secrcw32.mof', 'secrcw32.mfl',
+								'dsprov.mof', 'dsprov.mfl',
+								'scrcons.mof',
+								'tscfgwmi.mof', 'tscfgwmi.mfl',
+								'rdpdr.mof'
+							)
+							$compiled = 0
+							$failed = 0
+							foreach ($mofName in $coreMofs) {
+								$mofPath = Join-Path $sysDir $mofName
+								if (Test-Path $mofPath) {
+									& mofcomp.exe $mofPath 2>&1 | Out-Null
+									if ($LASTEXITCODE -eq 0) {
+										$compiled++
+									} else {
+										$failed++
+									}
+								}
+							}
+							$mofResult = "Compiled: $compiled, Failed: $failed"
+						} catch {
+							$mofResult = "Failed: $_"
+						}
+
+						return @{ DLLReregister = $dllResult; MOFRecompile = $mofResult }
+					}
+					$result.DLLReregister = $step3.DLLReregister
+					$result.MOFRecompile = $step3.MOFRecompile
+					Write-Verbose "[$computer] DLL re-register: $($step3.DLLReregister), MOF recompile: $($step3.MOFRecompile)"
+
+					Write-Verbose "[$computer] Step 4 - Resetting DCOM/WMI namespace permissions"
+					$dcomResult = Invoke-Command -Session $session -ScriptBlock {
+						try {
+							$namespace = [wmiclass]'root\cimv2:__SystemSecurity'
+							$sd = $namespace.GetSD()
+							if ($sd.ReturnValue -eq 0) {
+								$setResult = $namespace.SetSD($sd.SD)
+								if ($setResult.ReturnValue -eq 0) {
+									return 'Success'
+								} else {
+									return "SetSD returned $($setResult.ReturnValue)"
+								}
+							} else {
+								return "GetSD returned $($sd.ReturnValue)"
+							}
+						} catch {
+							return "Failed: $_"
+						}
+					}
+					$result.DCOMPermissions = $dcomResult
+					Write-Verbose "[$computer] DCOM permissions reset: $dcomResult"
+
+					Write-Verbose "[$computer] Step 5 - Checking WMI repository consistency (salvage if needed)"
+					$step5 = Invoke-Command -Session $session -ScriptBlock {
+						param($stopBlock, $startBlock)
+						$consistency = 'Skipped'
+						$salvage = 'Skipped'
+						try {
+							$output = & winmgmt /verifyrepository 2>&1
+							$outputStr = ($output | Out-String).Trim()
+							if ($outputStr -match 'is consistent' -and $outputStr -notmatch 'not consistent') {
+								$consistency = 'Consistent'
+							} else {
+								$consistency = "Inconsistent: $outputStr"
+								# Salvage: stop Winmgmt, repair, restart
+								$deps = $null
+								try {
+									$deps = & $([ScriptBlock]::Create($stopBlock))
+									Stop-Service -Name Winmgmt -Force -ErrorAction Stop
+									& winmgmt /salvagerepository 2>&1 | Out-Null
+									Start-Service -Name Winmgmt -ErrorAction Stop
+									Start-Sleep -Seconds 3
+									if ($deps) {
+										& $([ScriptBlock]::Create($startBlock)) -ServiceNames $deps
+									}
+									$verify = & winmgmt /verifyrepository 2>&1
+									$verifyStr = ($verify | Out-String).Trim()
+									if ($verifyStr -match 'is consistent' -and $verifyStr -notmatch 'not consistent') {
+										$salvage = 'SalvagedSuccessfully'
+									} else {
+										$salvage = "SalvageFailed: $verifyStr"
+									}
+								} catch {
+									# Ensure Winmgmt is restarted even if salvage fails
+									try { Start-Service -Name Winmgmt -ErrorAction SilentlyContinue } catch {}
+									if ($deps) {
+										try { & $([ScriptBlock]::Create($startBlock)) -ServiceNames $deps } catch {}
+									}
+									$salvage = "Failed: $_"
+								}
+							}
+						} catch {
+							$consistency = "Failed: $_"
+						}
+						return @{ RepoConsistency = $consistency; RepoSalvage = $salvage }
+					} -ArgumentList $stopDependentsStr, $startDependentsStr
+					$result.RepoConsistency = $step5.RepoConsistency
+					$result.RepoSalvage = $step5.RepoSalvage
+					Write-Verbose "[$computer] Repository: $($step5.RepoConsistency), Salvage: $($step5.RepoSalvage)"
+
+					Write-Verbose "[$computer] Step 6 - Final WMI connectivity test (DCOM + uptime)"
+					$finalTest = Test-WMIConnectivity -Target $computer -Cred $Credential
+					$result.FinalTest = $finalTest.Detail
+					$result.Uptime = $finalTest.Uptime
+					if ($finalTest.Pass) {
+						$result.Status = 'Repaired'
+					} else {
+						$result.Status = 'VerificationFailed'
+					}
+					Write-Verbose "[$computer] Final WMI test: $($finalTest.Detail), Uptime: $($finalTest.Uptime)"
+				}
+
+			} finally {
+				if ($session) {
+					Remove-PSSession -Session $session -ErrorAction SilentlyContinue
+				}
+			}
+
+			if ($result.Status -eq 'Repaired') {
+				$repairedComputers.Add($computer)
+				Write-Verbose "[$computer] WMI repair completed successfully. Rescan the PRTG sensor to confirm."
+			} else {
+				Write-Warning "[$computer] WMI repair completed but verification failed. A reboot may still be needed."
+			}
+
+			$result
+		}
+	}
+
+	end {
+		if ($repairedComputers.Count -eq 0) {
+			return
+		}
+
+		if ($RestartProbe) {
+			Write-Host ''
+			Write-Host "WMI is working on: $($repairedComputers -join ', ')" -ForegroundColor Green
+			Write-Host 'If PRTG sensors are still showing PE015, the probe likely has a hung connection.' -ForegroundColor Yellow
+			Write-Host ''
+
+			$probeResult = Restart-LocalProbeService
+			Write-Host "Probe restart result: $probeResult" -ForegroundColor Cyan
+		} else {
+			# Check if probe is local and suggest -RestartProbe if so
+			$localProbe = Get-Service -Name PRTGProbeService -ErrorAction SilentlyContinue
+			if ($localProbe) {
+				Write-Host ''
+				Write-Host "WMI is working on: $($repairedComputers -join ', ')" -ForegroundColor Green
+				Write-Host 'TIP: If the PRTG sensor still shows PE015, the probe may have a hung connection.' -ForegroundColor Yellow
+				Write-Host 'Run again with -RestartProbe to restart the local PRTGProbeService.' -ForegroundColor Yellow
+			}
+		}
+	}
+}
+
+
+Function Repair-NTPConfiguration {
+<#
+.SYNOPSIS
+	Repairs Windows Time Service (w32time) configuration based on domain role.
+.DESCRIPTION
+	Detects whether the machine is a PDC Emulator, additional domain controller,
+	domain-joined member, or standalone, then applies the appropriate NTP fix:
+
+	  PDC Emulator        -- Unregisters/re-registers w32time, then configures
+							 Tier 3 NTP pool peers and forces a resync.
+	  Additional DC       -- Unregisters/re-registers w32time, then configures
+							 NT5DS domain-hierarchy sync toward the PDC Emulator.
+	  Domain member       -- Option A: quick 'net time' sync from the PDC.
+							 Falls through to Option B (full reset) if the
+							 Windows Time source is still bad after Option A.
+							 Use -Force to skip Option A entirely.
+	  Standalone          -- Unregisters/re-registers w32time and configures
+							 the Tier 3 NTP pool directly.
+
+	Domain members get their time from domain controllers, which get their time
+	from north-america.pool.ntp.org (Tier 3). Do not configure Tier 1 or Tier 2
+	servers directly.
+
+	NOTE: Allow 30+ seconds after starting w32time before trusting
+	'w32tm /query /source' output. This function includes that wait automatically.
+.PARAMETER NTPPool
+	The Tier 3 NTP pool base name to use for PDC Emulator and standalone
+	configuration. Defaults to 'north-america.pool.ntp.org'. Four numbered
+	sub-pools (0. through 3.) are configured automatically.
+.PARAMETER Force
+	On domain-joined members, skip Option A (quick sync) and go directly to
+	the full Option B reset sequence.
+.EXAMPLE
+	Repair-NTPConfiguration
+	Detects role and applies the appropriate NTP fix automatically.
+.EXAMPLE
+	Repair-NTPConfiguration -Force
+	On a domain member, skips the quick sync attempt and runs the full reset.
+.EXAMPLE
+	Repair-NTPConfiguration -NTPPool 'pool.ntp.org'
+	Uses a custom NTP pool for PDC Emulator or standalone configuration.
+.NOTES
+	Requires Administrator privileges. Restarts the Windows Time Service as part
+	of the repair sequence. Schedule a maintenance window if needed.
+	WARNING: Only Tier 3 NTP pool servers are appropriate for direct configuration.
+	Tier 1 and Tier 2 servers are reserved for authorized NTP infrastructure only.
+#>
+	[CmdletBinding()]
+	param(
+		[ValidateNotNullOrEmpty()]
+		[string]$NTPPool = 'north-america.pool.ntp.org',
+
+		[switch]$Force
+	)
+
+	$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+		[Security.Principal.WindowsBuiltInRole]::Administrator)
+	if (-not $isAdmin) {
+		Write-Host "Administrator privileges are required." -ForegroundColor Red
+		return
+	}
+
+	if ($NTPPool -notmatch '^[a-zA-Z0-9._-]+$') {
+		Write-Host "Invalid NTP pool name: $NTPPool" -ForegroundColor Red
+		return
+	}
+
+	# DomainRole values from Win32_ComputerSystem:
+	#   0 = Standalone Workstation, 1 = Member Workstation,
+	#   2 = Standalone Server,      3 = Member Server,
+	#   4 = Backup/Additional DC,   5 = PDC Emulator
+	$computerSystem = $null
+	try {
+		$computerSystem = Get-WmiObject Win32_ComputerSystem -ErrorAction Stop
+	} catch {
+		Write-Host "Failed to query Win32_ComputerSystem: $($_.Exception.Message)" -ForegroundColor Red
+		return
+	}
+
+	$domainRole = [int]$computerSystem.DomainRole
+	$domainName = $computerSystem.Domain
+	$isPDC      = $domainRole -eq 5
+	$isAddlDC   = $domainRole -eq 4
+	$isMember   = $domainRole -in @(1, 3)
+
+	Write-Host ""
+	switch ($domainRole) {
+		5       { Write-Host "=== Role: PDC Emulator ===" -ForegroundColor Cyan }
+		4       { Write-Host "=== Role: Additional Domain Controller ===" -ForegroundColor Cyan }
+		3       { Write-Host "=== Role: Domain Member Server ===" -ForegroundColor Cyan }
+		1       { Write-Host "=== Role: Domain Member Workstation ===" -ForegroundColor Cyan }
+		2       { Write-Host "=== Role: Standalone Server ===" -ForegroundColor Cyan }
+		0       { Write-Host "=== Role: Standalone Workstation ===" -ForegroundColor Cyan }
+		default { Write-Host "=== Role: Unknown (DomainRole=$domainRole) ===" -ForegroundColor Cyan }
+	}
+	if ($domainRole -ge 1 -and $domainRole -le 5) {
+		Write-Host "Domain: $domainName" -ForegroundColor Cyan
+	}
+	Write-Host ""
+
+	#region Helper -- discover PDC emulator
+	$pdcHost = $null
+	if ($isAddlDC -or $isMember) {
+		try {
+			$pdcHost = ([System.DirectoryServices.ActiveDirectory.Domain]::GetCurrentDomain()).PdcRoleOwner.Name
+			Write-Host "PDC Emulator: $pdcHost" -ForegroundColor Cyan
+		} catch {
+			Write-Host "WARNING: Could not discover PDC emulator: $($_.Exception.Message)" -ForegroundColor Yellow
+		}
+	}
+	#endregion
+
+	#region PDC Emulator -- configure external Tier 3 NTP pool
+	if ($isPDC) {
+		$peerList = "0.$NTPPool 1.$NTPPool 2.$NTPPool 3.$NTPPool"
+		Write-Host "NTP peers: $peerList" -ForegroundColor Cyan
+		Write-Host ""
+
+		Write-Host "Step 1 -- Current time source:" -ForegroundColor Cyan
+		$src = & w32tm /query /source 2>&1
+		Write-Host "  $src"
+
+		Write-Host "`nStep 2 -- Stop and unregister w32time:" -ForegroundColor Cyan
+		& net stop w32time 2>&1 | ForEach-Object { Write-Host "  $_" }
+		& w32tm /unregister 2>&1 | ForEach-Object { Write-Host "  $_" }
+
+		Write-Host "`nStep 3 -- Register and start w32time:" -ForegroundColor Cyan
+		& w32tm /register 2>&1 | ForEach-Object { Write-Host "  $_" }
+		& net start w32time 2>&1 | ForEach-Object { Write-Host "  $_" }
+
+		Write-Host "`nStep 4 -- Configure NTP peers (first pass):" -ForegroundColor Cyan
+		& w32tm /config /manualpeerlist:$peerList /syncfromflags:manual /reliable:YES /update 2>&1 |
+			ForEach-Object { Write-Host "  $_" }
+
+		Write-Host "`nStep 5 -- Stop, restart, apply config (second pass), resync:" -ForegroundColor Cyan
+		& net stop w32time 2>&1 | ForEach-Object { Write-Host "  $_" }
+		& net start w32time 2>&1 | ForEach-Object { Write-Host "  $_" }
+		# Second /config pass after service is running -- /update uses RPC and
+		# requires the service to be active. Both passes ensure the config
+		# survives the stop/start cycle.
+		& w32tm /config /manualpeerlist:$peerList /syncfromflags:manual /reliable:YES /update 2>&1 |
+			ForEach-Object { Write-Host "  $_" }
+
+		Write-Host "`nWaiting 30 seconds for w32time to settle..." -ForegroundColor Cyan
+		Start-Sleep -Seconds 30
+
+		& w32tm /resync 2>&1 | ForEach-Object { Write-Host "  $_" }
+		$finalSrc    = & w32tm /query /source 2>&1
+		$finalSrcStr = "$finalSrc"
+		$stillBad    = $finalSrcStr -match '(Local CMOS Clock|Free-running System Clock|error)' -or
+					   $finalSrcStr -eq ''
+		if ($stillBad) {
+			Write-Host "`nFinal time source: $finalSrc" -ForegroundColor Yellow
+			Write-Host "WARNING: PDC Emulator is still not syncing from the NTP pool." -ForegroundColor Yellow
+			Write-Host "  - Verify outbound UDP 123 is not blocked to the internet" -ForegroundColor Yellow
+			Write-Host "  - Check for Group Policy overrides: w32tm /query /configuration" -ForegroundColor Yellow
+			Write-Host "  - Check Event Log: Applications and Services -> Microsoft -> Windows -> Time-Service" -ForegroundColor Yellow
+		} else {
+			Write-Host "`nFinal time source: $finalSrc" -ForegroundColor Green
+			Write-Host "PDC Emulator NTP configuration complete." -ForegroundColor Green
+		}
+		return
+	}
+	#endregion
+
+	#region Additional DC -- sync via NT5DS domain hierarchy toward PDC
+	if ($isAddlDC) {
+		Write-Host "Step 1 -- Current time source:" -ForegroundColor Cyan
+		$src = & w32tm /query /source 2>&1
+		Write-Host "  $src"
+
+		Write-Host "`nStep 2 -- Stop and unregister w32time:" -ForegroundColor Cyan
+		& net stop w32time 2>&1 | ForEach-Object { Write-Host "  $_" }
+		& w32tm /unregister 2>&1 | ForEach-Object { Write-Host "  $_" }
+
+		Write-Host "`nStep 3 -- Register and start w32time:" -ForegroundColor Cyan
+		& w32tm /register 2>&1 | ForEach-Object { Write-Host "  $_" }
+		& net start w32time 2>&1 | ForEach-Object { Write-Host "  $_" }
+
+		Write-Host "`nStep 4 -- Configure NT5DS domain hierarchy sync:" -ForegroundColor Cyan
+		& w32tm /config /syncfromflags:domhier /reliable:NO /update 2>&1 |
+			ForEach-Object { Write-Host "  $_" }
+
+		Write-Host "`nWaiting 30 seconds for w32time to settle..." -ForegroundColor Cyan
+		Start-Sleep -Seconds 30
+
+		& w32tm /resync 2>&1 | ForEach-Object { Write-Host "  $_" }
+		$finalSrc = & w32tm /query /source 2>&1
+		Write-Host "`nFinal time source: $finalSrc" -ForegroundColor Green
+		if ($pdcHost) {
+			Write-Host "This DC should now be syncing from the PDC emulator ($pdcHost) via domain hierarchy." -ForegroundColor Green
+		}
+		Write-Host "Domain Controller NTP configuration complete." -ForegroundColor Green
+		return
+	}
+	#endregion
+
+	#region Domain members -- Option A (quick) then Option B (full reset)
+	if ($isMember) {
+		if (-not $pdcHost) {
+			Write-Host "Cannot proceed: PDC emulator not discovered. Domain member time sync requires a reachable DC." -ForegroundColor Red
+			return
+		}
+
+		if (-not $Force) {
+			Write-Host "Option A: Quick sync from PDC (try this first)" -ForegroundColor Cyan
+			& net time "\\$pdcHost" /set /y 2>&1 | ForEach-Object { Write-Host "  $_" }
+
+			$src = & w32tm /query /source 2>&1
+			Write-Host "  Time source: $src" -ForegroundColor Cyan
+
+			$srcStr = "$src"
+			$isBadSource = $srcStr -match '(Local CMOS Clock|Free-running System Clock|error)' -or
+						   $srcStr -eq ''
+
+			if (-not $isBadSource) {
+				Write-Host "`nOption A succeeded -- time synced from domain." -ForegroundColor Green
+				return
+			}
+
+			Write-Host "`nTime source still reports: $src" -ForegroundColor Yellow
+			Write-Host "Option A did not resolve the issue. Proceeding to Option B (full reset)..." -ForegroundColor Yellow
+			Write-Host ""
+		} else {
+			Write-Host "Skipping Option A -- running Option B full reset directly." -ForegroundColor Yellow
+			Write-Host ""
+		}
+
+		Write-Host "Option B: Full reset sequence" -ForegroundColor Cyan
+
+		Write-Host "`n  Stopping w32time..." -ForegroundColor Cyan
+		& net stop w32time 2>&1 | ForEach-Object { Write-Host "    $_" }
+
+		Write-Host "`n  Unregistering w32time..." -ForegroundColor Cyan
+		& w32tm /unregister 2>&1 | ForEach-Object { Write-Host "    $_" }
+
+		Write-Host "`n  Sync from PDC (pass 1 -- before register)..." -ForegroundColor Cyan
+		& net time "\\$pdcHost" /set /y 2>&1 | ForEach-Object { Write-Host "    $_" }
+
+		Write-Host "`n  Registering w32time..." -ForegroundColor Cyan
+		& w32tm /register 2>&1 | ForEach-Object { Write-Host "    $_" }
+
+		Write-Host "`n  Sync from PDC (pass 2 -- after register)..." -ForegroundColor Cyan
+		& net time "\\$pdcHost" /set /y 2>&1 | ForEach-Object { Write-Host "    $_" }
+
+		Write-Host "`n  Starting w32time..." -ForegroundColor Cyan
+		& net start w32time 2>&1 | ForEach-Object { Write-Host "    $_" }
+
+		# w32tm /config uses RPC and requires the service to be running.
+		# Must come after net start w32time -- not before.
+		Write-Host "`n  Configuring domain hierarchy sync (NT5DS)..." -ForegroundColor Cyan
+		& w32tm /config /syncfromflags:domhier /reliable:NO /update 2>&1 |
+			ForEach-Object { Write-Host "    $_" }
+
+		Write-Host "`n  Sync from PDC (pass 3 -- after start)..." -ForegroundColor Cyan
+		& net time "\\$pdcHost" /set /y 2>&1 | ForEach-Object { Write-Host "    $_" }
+
+		$src = & w32tm /query /source 2>&1
+		Write-Host "  Time source: $src" -ForegroundColor Cyan
+
+		Write-Host "`nWaiting 30 seconds for w32time to settle..." -ForegroundColor Cyan
+		Start-Sleep -Seconds 30
+
+		Write-Host "`n  Final sync from PDC (pass 4)..." -ForegroundColor Cyan
+		& net time "\\$pdcHost" /set /y 2>&1 | ForEach-Object { Write-Host "    $_" }
+
+		& w32tm /resync /force 2>&1 | ForEach-Object { Write-Host "    $_" }
+
+		$finalSrc = & w32tm /query /source 2>&1
+		$finalSrcStr = "$finalSrc"
+		$stillBad = $finalSrcStr -match '(Local CMOS Clock|Free-running System Clock|error)' -or
+					$finalSrcStr -eq ''
+
+		if (-not $stillBad) {
+			Write-Host "  Final time source: $finalSrc" -ForegroundColor Green
+			Write-Host "`nDomain member NTP reset complete." -ForegroundColor Green
+			return
+		}
+
+		Write-Host "  Final time source: $finalSrc" -ForegroundColor Yellow
+		Write-Host ""
+
+		# Check whether Group Policy is locking the NTP configuration.
+		# w32tm /config writes to HKLM\SYSTEM\...\Services\W32Time but the service
+		# reads HKLM\SOFTWARE\Policies\Microsoft\W32Time preferentially when GPO
+		# has written values there. Anything tagged (Policy) in /query /configuration
+		# cannot be overridden by w32tm /config.
+		$configOutput = (& w32tm /query /configuration 2>&1) | Out-String
+		$hasPolicySettings = $configOutput -match '\(Policy\)'
+
+		if ($hasPolicySettings) {
+			$policyType      = $null
+			$policyNtpServer = $null
+			if ($configOutput -match 'Type:\s+(\S+)\s+\(Policy\)') {
+				$policyType = $Matches[1]
+			}
+			if ($configOutput -match 'NtpServer:\s+(\S+)\s+\(Policy\)') {
+				# Strip NTP flags (e.g. ",0x8") to get the bare hostname
+				$policyNtpServer = ($Matches[1]) -replace ',.*$', ''
+			}
+
+			Write-Host "Group Policy is overriding w32time configuration:" -ForegroundColor Yellow
+			if ($policyType)      { Write-Host "  Type (Policy):      $policyType" -ForegroundColor Yellow }
+			if ($policyNtpServer) { Write-Host "  NtpServer (Policy): $policyNtpServer" -ForegroundColor Yellow }
+			Write-Host "  'w32tm /config' cannot override Policy-tagged settings." -ForegroundColor Yellow
+
+			# Test whether the GPO-specified NTP server is actually reachable
+			if ($policyNtpServer -and (Get-Command Get-NTPOffset -ErrorAction SilentlyContinue)) {
+				Write-Host "`nTesting NTP reachability of '$policyNtpServer'..." -ForegroundColor Cyan
+				$ntpTest = Get-NTPOffset -Server $policyNtpServer -TimeoutMs 5000
+				if ($ntpTest.Success) {
+					Write-Host "  '$policyNtpServer' is reachable (offset: $([Math]::Round($ntpTest.OffsetMs / 1000, 2))s)." -ForegroundColor Green
+					Write-Host "  The server is responding -- w32time may need more time to sync." -ForegroundColor Yellow
+					Write-Host "  Try 'w32tm /resync /rediscover' in a few minutes." -ForegroundColor Yellow
+				} else {
+					Write-Host "  '$policyNtpServer' is NOT reachable: $($ntpTest.Error)" -ForegroundColor Red
+					Write-Host "  The GPO is pointing at an NTP server that is not responding." -ForegroundColor Red
+				}
+			}
+
+			# Run gpupdate in case an admin already corrected the GPO but it hasn't been pulled yet
+			Write-Host "`nRunning 'gpupdate /force' in case the GPO was already corrected..." -ForegroundColor Cyan
+			& gpupdate /force 2>&1 | ForEach-Object { Write-Host "  $_" }
+
+			Start-Sleep -Seconds 5
+			& w32tm /resync /rediscover 2>&1 | ForEach-Object { Write-Host "  $_" }
+
+			$postGPUSrc    = & w32tm /query /source 2>&1
+			$postGPUSrcStr = "$postGPUSrc"
+			$stillBadAfterGPU = $postGPUSrcStr -match '(Local CMOS Clock|Free-running System Clock|error)' -or
+								$postGPUSrcStr -eq ''
+
+			if (-not $stillBadAfterGPU) {
+				Write-Host "  Time source after gpupdate: $postGPUSrc" -ForegroundColor Green
+				Write-Host "`nDomain member NTP resolved after Group Policy refresh." -ForegroundColor Green
+				return
+			}
+
+			Write-Host "  Time source after gpupdate: $postGPUSrc" -ForegroundColor Yellow
+			Write-Host "`nGroup Policy is still preventing correct NTP sync. A GPO change is required:" -ForegroundColor Yellow
+			Write-Host "  Path: Computer Configuration -> Administrative Templates -> System -> Windows Time Service -> Time Providers" -ForegroundColor Yellow
+			Write-Host "  Options:" -ForegroundColor Yellow
+			if ($policyNtpServer) {
+				Write-Host "    a. Fix NtpServer in the GPO -- '$policyNtpServer' is not responding." -ForegroundColor Yellow
+				Write-Host "       Recommended: point to the PDC emulator ($pdcHost) or remove the policy." -ForegroundColor Yellow
+			} else {
+				Write-Host "    a. Fix the NtpServer value in the GPO or remove the policy." -ForegroundColor Yellow
+			}
+			Write-Host "    b. Set 'Configure Windows NTP Client' to 'Not Configured' to let" -ForegroundColor Yellow
+			Write-Host "       domain members sync via NT5DS (domain hierarchy) automatically." -ForegroundColor Yellow
+			Write-Host "  After updating the GPO, run 'gpupdate /force' then 'w32tm /resync /rediscover'." -ForegroundColor Yellow
+			Write-Host "`n  Diagnostic commands:" -ForegroundColor Cyan
+			Write-Host "    gpresult /r                  -- which GPOs are applied to this machine" -ForegroundColor Cyan
+			Write-Host "    w32tm /query /configuration  -- all settings with (Policy) vs (Local) tags" -ForegroundColor Cyan
+			Write-Host "    w32tm /query /status         -- sync status and last successful sync time" -ForegroundColor Cyan
+		} else {
+			Write-Host "WARNING: w32time source is still not syncing from the domain." -ForegroundColor Yellow
+			Write-Host "No Group Policy override detected. Check the following:" -ForegroundColor Yellow
+			Write-Host "  - The PDC emulator ($pdcHost) is online and responding to NTP (UDP 123)" -ForegroundColor Yellow
+			Write-Host "  - No firewall is blocking UDP 123 between this machine and the DC" -ForegroundColor Yellow
+			Write-Host "  Run 'w32tm /query /configuration' and 'w32tm /query /status' for details." -ForegroundColor Yellow
+		}
+		return
+	}
+	#endregion
+
+	#region Standalone -- configure Tier 3 NTP pool directly
+	$peerList = "0.$NTPPool 1.$NTPPool 2.$NTPPool 3.$NTPPool"
+	Write-Host "NTP peers: $peerList" -ForegroundColor Cyan
+	Write-Host ""
+
+	Write-Host "Step 1 -- Stop and unregister w32time:" -ForegroundColor Cyan
+	& net stop w32time 2>&1 | ForEach-Object { Write-Host "  $_" }
+	& w32tm /unregister 2>&1 | ForEach-Object { Write-Host "  $_" }
+
+	Write-Host "`nStep 2 -- Register and start w32time:" -ForegroundColor Cyan
+	& w32tm /register 2>&1 | ForEach-Object { Write-Host "  $_" }
+	& net start w32time 2>&1 | ForEach-Object { Write-Host "  $_" }
+
+	Write-Host "`nStep 3 -- Configure NTP peers:" -ForegroundColor Cyan
+	& w32tm /config /manualpeerlist:$peerList /syncfromflags:manual /reliable:YES /update 2>&1 |
+		ForEach-Object { Write-Host "  $_" }
+
+	Write-Host "`nWaiting 30 seconds for w32time to settle..." -ForegroundColor Cyan
+	Start-Sleep -Seconds 30
+
+	& w32tm /resync 2>&1 | ForEach-Object { Write-Host "  $_" }
+	$finalSrc = & w32tm /query /source 2>&1
+	Write-Host "`nFinal time source: $finalSrc" -ForegroundColor Green
+	Write-Host "Standalone NTP configuration complete." -ForegroundColor Green
+	#endregion
+}
+
+
+Function Repair-ExchangeDAGCopies {
+	<#
+	.SYNOPSIS
+		Attempts to repair failed or suspended Exchange DAG database copies using an escalating strategy.
+	.DESCRIPTION
+		For each failed/suspended copy matching the filters, tries in order:
+		  1. Resume (gentle - for transient failures or manual suspensions)
+		  2. Reseed with -DeleteExistingFiles (standard reseed)
+		  3. Manual temp-seeding folder cleanup + reseed (handles filesystem/locked file errors)
+		Waits between each step to allow replication to stabilize before checking if further
+		action is needed.
+
+		Optionally registers a Windows scheduled task to run this repair once a week at a
+		specified after-hours time. The scheduled task runs as SYSTEM, which on an Exchange
+		server is a member of the Exchange Trusted Subsystem and has the rights needed for
+		these operations.
+
+		Must be run from a server with the Exchange Management Tools installed.
+	.PARAMETER ServerFilter
+		Wildcard filter for the server name portion of the copy identity. Default: '*' (all servers).
+		Example: 'EX2016-3' to target only copies on EX2016-3.
+	.PARAMETER DatabaseFilter
+		Wildcard filter for the database name portion of the copy identity. Default: '*' (all databases).
+		Example: '2016-MailStoreDBAttorneys-*'
+	.PARAMETER ResumeWaitSeconds
+		Seconds to wait after a Resume attempt before checking if replication recovered. Default: 60.
+	.PARAMETER StaggerSeconds
+		Seconds to wait between initiating operations on different databases. Default: 10.
+	.PARAMETER Parallel
+		If specified, all reseeds are kicked off in rapid succession (separated only by
+		-StaggerSeconds). Use with caution on WAN links: 9 simultaneous reseeds across a
+		shared link will saturate it and slow every copy to a crawl.
+		Default behavior (when -Parallel is omitted) is serial: after each reseed is initiated,
+		the function waits for the copy's status to return to Healthy/Mounted before moving
+		on to the next copy. This is the safe choice for WAN-connected DAG members.
+	.PARAMETER ReseedTimeoutHours
+		In serial mode (default), the maximum time to wait for a single reseed to complete
+		before giving up and moving to the next copy. Default: 24 hours. Range: 1-168.
+	.PARAMETER ReseedPollMinutes
+		In serial mode (default), how often to poll Get-MailboxDatabaseCopyStatus while
+		waiting for a reseed to complete. Default: 5 minutes. Range: 1-60.
+	.PARAMETER AutoFilesystemRepair
+		If specified, when a reseed fails with NTFS corruption symptoms (error 1392 or
+		'Corruption in the filesystem has been detected'), the function extracts the
+		affected drive letter from the error message, runs Repair-Volume -Scan on the
+		target server, and (if the scan reports errors) Repair-Volume -SpotFix. Each
+		volume is repaired at most once per session and the OS volume is always skipped.
+		Note: -SpotFix briefly dismounts the volume, which momentarily disrupts any
+		other databases hosted on it. After a successful repair the reseed is retried.
+		Off by default; opt in explicitly when you understand the dismount tradeoff.
+	.PARAMETER RegisterScheduledTask
+		Registers a Windows scheduled task ('ATG-RepairExchangeDAGCopies') that runs this
+		repair once a week at the configured day/time. All repair-mode parameters
+		(-ServerFilter, -DatabaseFilter, -ResumeWaitSeconds, -StaggerSeconds, -Parallel,
+		-ReseedTimeoutHours, -ReseedPollMinutes, -AutoFilesystemRepair) are captured into
+		the wrapper script so the scheduled run uses the same scope and behavior.
+	.PARAMETER UnregisterScheduledTask
+		Removes the ATG-RepairExchangeDAGCopies scheduled task if it exists.
+	.PARAMETER ScheduledDay
+		Day of the week for the scheduled task to run. Default: Saturday.
+	.PARAMETER ScheduledTime
+		Time of day for the scheduled task to run. Default: 11:00 PM (after hours).
+	.EXAMPLE
+		Repair-ExchangeDAGCopies -ServerFilter 'EX2016-3'
+		Repairs every failed/suspended copy on server EX2016-3.
+	.EXAMPLE
+		Repair-ExchangeDAGCopies -ServerFilter 'EX2016-3' -DatabaseFilter '2016-MailStoreDBAttorneys-*' -WhatIf
+		Previews the repair actions for matching copies without making changes.
+	.EXAMPLE
+		Repair-ExchangeDAGCopies -ServerFilter 'EX2016-3' -Parallel
+		Kicks off reseeds in parallel for all failed copies on EX2016-3 (faster on a LAN, but
+		don't use over a WAN with multiple copies - it will saturate the link).
+	.EXAMPLE
+		Repair-ExchangeDAGCopies -ServerFilter 'EX2016-3' -AutoFilesystemRepair
+		If a reseed fails because of NTFS corruption (error 1392 or 'Corruption in the
+		filesystem...'), runs Repair-Volume -Scan and -SpotFix on the affected volume and
+		retries the reseed. Skips the OS volume.
+	.EXAMPLE
+		Repair-ExchangeDAGCopies -RegisterScheduledTask
+		Schedules a weekly repair at the default day/time (Saturday 11:00 PM) covering all servers
+		and databases. Runs serial by default (waits for each reseed to finish before starting
+		the next), suitable for WAN-connected DAG members.
+	.EXAMPLE
+		Repair-ExchangeDAGCopies -RegisterScheduledTask -ScheduledDay Sunday -ScheduledTime '1:00 AM' -ServerFilter 'EX2016-3'
+		Schedules a weekly repair Sunday at 1 AM scoped to EX2016-3.
+	.EXAMPLE
+		Repair-ExchangeDAGCopies -UnregisterScheduledTask
+		Removes the scheduled task.
+	.NOTES
+		Output from the scheduled run is appended to:
+		  $env:ProgramData\ATG\Logs\Repair-ExchangeDAGCopies.log
+		The wrapper script lives at:
+		  $env:ProgramData\ATG\Repair-ExchangeDAGCopies.ps1
+	#>
+	[CmdletBinding(DefaultParameterSetName = 'Repair', SupportsShouldProcess)]
+	param(
+		[Parameter(ParameterSetName = 'Repair')]
+		[Parameter(ParameterSetName = 'Register')]
+		[string]$ServerFilter = '*',
+
+		[Parameter(ParameterSetName = 'Repair')]
+		[Parameter(ParameterSetName = 'Register')]
+		[string]$DatabaseFilter = '*',
+
+		[Parameter(ParameterSetName = 'Repair')]
+		[Parameter(ParameterSetName = 'Register')]
+		[ValidateRange(0, 3600)]
+		[int]$ResumeWaitSeconds = 60,
+
+		[Parameter(ParameterSetName = 'Repair')]
+		[Parameter(ParameterSetName = 'Register')]
+		[ValidateRange(0, 3600)]
+		[int]$StaggerSeconds = 10,
+
+		[Parameter(ParameterSetName = 'Repair')]
+		[Parameter(ParameterSetName = 'Register')]
+		[switch]$Parallel,
+
+		[Parameter(ParameterSetName = 'Repair')]
+		[Parameter(ParameterSetName = 'Register')]
+		[ValidateRange(1, 168)]
+		[int]$ReseedTimeoutHours = 24,
+
+		[Parameter(ParameterSetName = 'Repair')]
+		[Parameter(ParameterSetName = 'Register')]
+		[ValidateRange(1, 60)]
+		[int]$ReseedPollMinutes = 5,
+
+		[Parameter(ParameterSetName = 'Repair')]
+		[Parameter(ParameterSetName = 'Register')]
+		[switch]$AutoFilesystemRepair,
+
+		[Parameter(Mandatory, ParameterSetName = 'Register')]
+		[switch]$RegisterScheduledTask,
+
+		[Parameter(Mandatory, ParameterSetName = 'Unregister')]
+		[switch]$UnregisterScheduledTask,
+
+		[Parameter(ParameterSetName = 'Register')]
+		[ValidateSet('Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday')]
+		[string]$ScheduledDay = 'Saturday',
+
+		[Parameter(ParameterSetName = 'Register')]
+		[DateTime]$ScheduledTime = '11:00 PM'
+	)
+
+	$TaskName = 'ATG-RepairExchangeDAGCopies'
+
+	#region Unregister Scheduled Task
+	if ($PSCmdlet.ParameterSetName -eq 'Unregister') {
+		$existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+		if (-not $existingTask) {
+			Write-Host "Scheduled task '$TaskName' does not exist." -ForegroundColor Yellow
+			return
+		}
+		if ($PSCmdlet.ShouldProcess($TaskName, 'Unregister-ScheduledTask')) {
+			try {
+				Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction Stop
+				Write-Host "Scheduled task '$TaskName' has been removed." -ForegroundColor Green
+			} catch {
+				Write-Host "Failed to remove scheduled task: $($_.Exception.Message)" -ForegroundColor Red
+			}
+		}
+		return
+	}
+	#endregion
+
+	#region Register Scheduled Task
+	if ($PSCmdlet.ParameterSetName -eq 'Register') {
+		$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole(
+			[Security.Principal.WindowsBuiltInRole]::Administrator)
+		if (-not $isAdmin) {
+			Write-Host "Administrator privileges are required to register a scheduled task." -ForegroundColor Red
+			return
+		}
+
+		# Validate filter inputs - allow PowerShell wildcards plus standard identifier chars,
+		# and reject anything else so the values are safe to embed in the wrapper script string.
+		foreach ($pair in @(
+			@{ Name = 'ServerFilter';   Value = $ServerFilter   },
+			@{ Name = 'DatabaseFilter'; Value = $DatabaseFilter }
+		)) {
+			if ($pair.Value -notmatch '^[A-Za-z0-9._\-*?]+$') {
+				Write-Host "Invalid $($pair.Name) value: '$($pair.Value)'. Allowed: letters, digits, dot, dash, underscore, * and ?." -ForegroundColor Red
+				return
+			}
+		}
+
+		$ScriptDir  = Join-Path $env:ProgramData 'ATG'
+		$LogDir     = Join-Path $ScriptDir       'Logs'
+		$ScriptPath = Join-Path $ScriptDir       'Repair-ExchangeDAGCopies.ps1'
+		$LogPath    = Join-Path $LogDir          'Repair-ExchangeDAGCopies.log'
+
+		# Wrapper script body. Single-quoted here-string keeps the body literal; the parameter
+		# header above it is interpolated and validated. Filter values are validated above.
+		$parallelLiteral = if ($Parallel) { '$true' } else { '$false' }
+		$autoFsLiteral   = if ($AutoFilesystemRepair) { '$true' } else { '$false' }
+		$WrapperHeader = @"
+`$LogPath              = '$LogPath'
+`$ServerFilter         = '$ServerFilter'
+`$DatabaseFilter       = '$DatabaseFilter'
+`$ResumeWaitSeconds    = $ResumeWaitSeconds
+`$StaggerSeconds       = $StaggerSeconds
+`$Parallel             = $parallelLiteral
+`$ReseedTimeoutHours   = $ReseedTimeoutHours
+`$ReseedPollMinutes    = $ReseedPollMinutes
+`$AutoFilesystemRepair = $autoFsLiteral
+"@
+
+		$WrapperBody = @'
+$ErrorActionPreference = 'Continue'
+New-Item -Path (Split-Path $LogPath -Parent) -ItemType Directory -Force | Out-Null
+
+$Stamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+"=== Repair-ExchangeDAGCopies run at $Stamp ===" | Out-File -FilePath $LogPath -Append -Encoding ASCII
+
+try {
+	if (-not (Get-PSSnapin -Registered -Name 'Microsoft.Exchange.Management.PowerShell.SnapIn' -ErrorAction SilentlyContinue)) {
+		throw 'Exchange Management Shell snap-in is not registered on this server.'
+	}
+	if (-not (Get-PSSnapin -Name 'Microsoft.Exchange.Management.PowerShell.SnapIn' -ErrorAction SilentlyContinue)) {
+		Add-PSSnapin Microsoft.Exchange.Management.PowerShell.SnapIn -ErrorAction Stop
+	}
+
+	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.SecurityProtocolType]::Tls12
+	Invoke-RestMethod -Uri 'https://ps.acgs.io' | Invoke-Expression
+
+	Repair-ExchangeDAGCopies `
+		-ServerFilter $ServerFilter `
+		-DatabaseFilter $DatabaseFilter `
+		-ResumeWaitSeconds $ResumeWaitSeconds `
+		-StaggerSeconds $StaggerSeconds `
+		-Parallel:$Parallel `
+		-ReseedTimeoutHours $ReseedTimeoutHours `
+		-ReseedPollMinutes $ReseedPollMinutes `
+		-AutoFilesystemRepair:$AutoFilesystemRepair *>&1 |
+		Tee-Object -FilePath $LogPath -Append
+} catch {
+	"[ERROR] $($_.Exception.Message)" | Out-File -FilePath $LogPath -Append -Encoding ASCII
+}
+'@
+
+		$Wrapper = $WrapperHeader + "`r`n" + $WrapperBody
+
+		if ($PSCmdlet.ShouldProcess($ScriptPath, 'Write wrapper script')) {
+			New-Item -Path $ScriptDir -ItemType Directory -Force | Out-Null
+			$Wrapper | Out-File -FilePath $ScriptPath -Encoding ASCII -Force
+		}
+
+		$existingTask = Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue
+		if ($existingTask) {
+			Write-Host "Scheduled task '$TaskName' already exists -- replacing." -ForegroundColor Yellow
+			if ($PSCmdlet.ShouldProcess($TaskName, 'Unregister existing task before replacing')) {
+				try {
+					Unregister-ScheduledTask -TaskName $TaskName -Confirm:$false -ErrorAction Stop
+				} catch {
+					Write-Host "Failed to remove existing task: $($_.Exception.Message)" -ForegroundColor Red
+					return
+				}
+			}
+		}
+
+		$Action    = New-ScheduledTaskAction -Execute 'powershell.exe' `
+			-Argument "-NoProfile -NonInteractive -ExecutionPolicy Bypass -WindowStyle Hidden -File `"$ScriptPath`""
+		$Trigger   = New-ScheduledTaskTrigger -Weekly -WeeksInterval 1 -DaysOfWeek $ScheduledDay -At $ScheduledTime
+		# 72h gives serial mode enough headroom to step through several large reseeds back-to-back
+		# (default 24h per-copy timeout x worst-case stuck copies). Tasks that exceed this are killed
+		# by the scheduler; the remaining copies will be retried on the next weekly run.
+		$Settings  = New-ScheduledTaskSettingsSet `
+			-AllowStartIfOnBatteries `
+			-DontStopIfGoingOnBatteries `
+			-StartWhenAvailable `
+			-ExecutionTimeLimit (New-TimeSpan -Hours 72)
+		$Principal = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+
+		$timeStr = $ScheduledTime.ToString('h:mm tt')
+		if ($PSCmdlet.ShouldProcess($TaskName, "Register-ScheduledTask weekly $ScheduledDay $timeStr")) {
+			try {
+				Register-ScheduledTask -TaskName $TaskName `
+					-Action $Action `
+					-Trigger $Trigger `
+					-Settings $Settings `
+					-Principal $Principal `
+					-Description "Repairs failed/suspended Exchange DAG database copies weekly. Filters: Server='$ServerFilter' Database='$DatabaseFilter'." `
+					-ErrorAction Stop | Out-Null
+
+				$modeStr = if ($Parallel) { 'Parallel (no wait between reseeds)' } else { "Serial (wait per copy, ${ReseedTimeoutHours}h timeout, ${ReseedPollMinutes}min poll)" }
+				$fsStr   = if ($AutoFilesystemRepair) { 'Enabled (will run Repair-Volume on corrupt non-OS volumes)' } else { 'Disabled' }
+				Write-Host "Scheduled task '$TaskName' created successfully." -ForegroundColor Green
+				Write-Host "  Schedule:       Weekly on $ScheduledDay at $timeStr" -ForegroundColor Cyan
+				Write-Host "  Mode:           $modeStr" -ForegroundColor Cyan
+				Write-Host "  AutoFsRepair:   $fsStr" -ForegroundColor Cyan
+				Write-Host "  ServerFilter:   $ServerFilter"   -ForegroundColor Cyan
+				Write-Host "  DatabaseFilter: $DatabaseFilter" -ForegroundColor Cyan
+				Write-Host "  Wrapper script: $ScriptPath"     -ForegroundColor Cyan
+				Write-Host "  Log file:       $LogPath"        -ForegroundColor Cyan
+				Write-Host "  To remove:      Repair-ExchangeDAGCopies -UnregisterScheduledTask" -ForegroundColor Cyan
+			} catch {
+				Write-Host "Failed to create scheduled task: $($_.Exception.Message)" -ForegroundColor Red
+			}
+		}
+		return
+	}
+	#endregion
+
+	#region Repair pass
+	if (-not (Get-Command Get-MailboxDatabaseCopyStatus -ErrorAction SilentlyContinue)) {
+		Write-Host "Exchange Management Shell cmdlets are not loaded." -ForegroundColor Red
+		Write-Host "Run from EMS, or load the snap-in first:" -ForegroundColor Red
+		Write-Host "  Add-PSSnapin Microsoft.Exchange.Management.PowerShell.SnapIn" -ForegroundColor Red
+		return
+	}
+
+	# Polls Get-MailboxDatabaseCopyStatus until the copy is Healthy/Mounted, the timeout fires,
+	# or the status is stuck in a failure state across multiple polls. Used in serial mode to
+	# avoid kicking off concurrent reseeds across a WAN link. Terminates without throwing so
+	# the outer loop can move on to the next copy regardless of outcome.
+	$waitForReseed = {
+		param([string]$Id, [int]$TimeoutHours, [int]$PollMinutes)
+
+		$start    = Get-Date
+		$deadline = $start.AddHours($TimeoutHours)
+		$badStates       = @('Failed','FailedAndSuspended','Suspended','ServiceDown','Disconnected')
+		$consecutiveBads = 0
+
+		Write-Host "    Waiting for $Id (poll every $PollMinutes min, timeout $TimeoutHours h)..." -ForegroundColor Cyan
+
+		do {
+			Start-Sleep -Seconds ($PollMinutes * 60)
+
+			$cur = Get-MailboxDatabaseCopyStatus -Identity $Id -ErrorAction SilentlyContinue
+			if (-not $cur) {
+				Write-Host "    [!] Could not query status for $Id. Continuing to next copy." -ForegroundColor Yellow
+				return
+			}
+
+			$elapsed = '{0:hh\:mm\:ss}' -f ((Get-Date) - $start)
+			Write-Host "    [+$elapsed] Status: $($cur.Status), CopyQueue: $($cur.CopyQueueLength)"
+
+			if ($cur.Status -in @('Healthy','Mounted')) {
+				Write-Host "    [OK] Reseed complete for $Id (elapsed $elapsed)." -ForegroundColor Green
+				return
+			}
+
+			if ($cur.Status -in $badStates) {
+				$consecutiveBads++
+				# 3 consecutive bad polls = ~$($PollMinutes * 3) min stuck. Bail out so the outer
+				# loop can move on rather than waiting the full timeout on a copy that isn't moving.
+				if ($consecutiveBads -ge 3) {
+					Write-Host "    [!!] Status stuck at $($cur.Status) over $consecutiveBads polls. Continuing to next copy." -ForegroundColor Red
+					return
+				}
+			} else {
+				$consecutiveBads = 0
+			}
+
+			if ((Get-Date) -gt $deadline) {
+				Write-Host "    [!] Timeout after $TimeoutHours hours for $Id. Continuing to next copy." -ForegroundColor Yellow
+				return
+			}
+		} while ($true)
+	}
+
+	# Tracks volumes already repaired during this session keyed by "<server>|<DriveLetter>"
+	# so 9 failing copies on the same I: drive only trigger one chkdsk pass.
+	$repairedVolumes = @{}
+
+	# Runs Repair-Volume -Scan on the target server, then -SpotFix only if the scan reports
+	# anything other than NoErrorsFound. Refuses to touch the OS volume. Returns the string
+	# 'Repaired' if a SpotFix completed, 'Clean' if scan reported no errors, 'Skipped' if
+	# the volume is the OS volume, or 'Failed' on any error path.
+	$runFilesystemRepair = {
+		param([string]$Server, [string]$Volume)
+
+		Write-Host "    Running Repair-Volume scan on $Server volume ${Volume}:..." -ForegroundColor Magenta
+		try {
+			$result = Invoke-Command -ComputerName $Server -ScriptBlock {
+				param([string]$v)
+				$osLetter = $env:SystemDrive.TrimEnd(':')
+				if ($v -ieq $osLetter) {
+					return [pscustomobject]@{ Outcome = 'Skipped'; Detail = "Refusing to chkdsk OS volume ${v}: on $env:COMPUTERNAME" }
+				}
+				try {
+					$scan = Repair-Volume -DriveLetter $v -Scan -ErrorAction Stop
+				} catch {
+					return [pscustomobject]@{ Outcome = 'Failed'; Detail = "Scan threw: $($_.Exception.Message)" }
+				}
+				if ($scan -eq 'NoErrorsFound') {
+					return [pscustomobject]@{ Outcome = 'Clean'; Detail = "Scan: $scan" }
+				}
+				try {
+					# -SpotFix dismounts the volume briefly; this affects every database
+					# whose files live on it. Only acceptable because the caller opted in
+					# via -AutoFilesystemRepair.
+					$fix = Repair-Volume -DriveLetter $v -SpotFix -ErrorAction Stop
+					return [pscustomobject]@{ Outcome = 'Repaired'; Detail = "Scan: $scan; SpotFix: $fix" }
+				} catch {
+					return [pscustomobject]@{ Outcome = 'Failed'; Detail = "Scan: $scan; SpotFix threw: $($_.Exception.Message)" }
+				}
+			} -ArgumentList $Volume -ErrorAction Stop
+
+			switch ($result.Outcome) {
+				'Clean'    { Write-Host "    [OK] Volume ${Volume}: scan clean. $($result.Detail)" -ForegroundColor Green }
+				'Repaired' { Write-Host "    [OK] Volume ${Volume}: $($result.Detail)" -ForegroundColor Green }
+				'Skipped'  { Write-Host "    [!!] $($result.Detail)" -ForegroundColor Red }
+				'Failed'   { Write-Host "    [!!] Volume ${Volume}: $($result.Detail)" -ForegroundColor Red }
+			}
+			return $result.Outcome
+		} catch {
+			Write-Host "    [!!] Filesystem repair invocation failed: $($_.Exception.Message)" -ForegroundColor Red
+			return 'Failed'
+		}
+	}
+
+	# Resolve target copies. Wrapping in @(...) ensures .Count works correctly when only
+	# one copy matches (PowerShell unwraps single-item collections by default).
+	$failedCopies = @(Get-MailboxDatabaseCopyStatus * |
+		Where-Object {
+			$_.Status -match 'Failed|Suspended' -and
+			$_.Name -like "*\$ServerFilter" -and
+			($_.Name -split '\\')[0] -like $DatabaseFilter
+		})
+
+	if ($failedCopies.Count -eq 0) {
+		Write-Host "No failed/suspended copies found matching filters." -ForegroundColor Green
+		return
+	}
+
+	Write-Host "Found $($failedCopies.Count) failed/suspended copy(s) to process." -ForegroundColor Cyan
+
+	foreach ($copy in $failedCopies) {
+		$identity = $copy.Name
+		$dbName   = ($identity -split '\\')[0]
+		$server   = ($identity -split '\\')[1]
+
+		Write-Host "`n[$identity] Status: $($copy.Status) | CopyQueue: $($copy.CopyQueueLength)" -ForegroundColor Yellow
+
+		# --- Step 1: Resume ---
+		Write-Host "  [1/3] Attempting Resume..." -ForegroundColor Cyan
+		if ($PSCmdlet.ShouldProcess($identity, 'Resume-MailboxDatabaseCopy')) {
+			try {
+				Resume-MailboxDatabaseCopy -Identity $identity -ErrorAction Stop
+				Write-Verbose "Resume command issued for $identity. Waiting $ResumeWaitSeconds seconds..."
+				Start-Sleep -Seconds $ResumeWaitSeconds
+
+				$status = (Get-MailboxDatabaseCopyStatus -Identity $identity).Status
+				if ($status -in @('Healthy','Mounted')) {
+					Write-Host "  [OK] Resume succeeded. Status: $status" -ForegroundColor Green
+					Start-Sleep -Seconds $StaggerSeconds
+					continue
+				} else {
+					Write-Host "  [--] Resume did not recover copy. Status: $status. Escalating..." -ForegroundColor Yellow
+				}
+			} catch {
+				Write-Host "  [--] Resume failed: $($_.Exception.Message)" -ForegroundColor Yellow
+			}
+		}
+
+		# --- Step 2: Standard Reseed ---
+		Write-Host "  [2/3] Attempting standard reseed (-DeleteExistingFiles)..." -ForegroundColor Cyan
+		$needsManualCleanup = $false
+		if ($PSCmdlet.ShouldProcess($identity, 'Update-MailboxDatabaseCopy -DeleteExistingFiles')) {
+			try {
+				Update-MailboxDatabaseCopy -Identity $identity -DeleteExistingFiles -Confirm:$false -ErrorAction Stop
+				Write-Host "  [OK] Reseed initiated for $identity." -ForegroundColor Green
+				if (-not $Parallel) {
+					& $waitForReseed -Id $identity -TimeoutHours $ReseedTimeoutHours -PollMinutes $ReseedPollMinutes
+				}
+				Start-Sleep -Seconds $StaggerSeconds
+				continue
+			} catch {
+				$errMsg = $_.Exception.Message
+				Write-Host "  [--] Standard reseed failed: $errMsg" -ForegroundColor Yellow
+
+				# Escalate to manual cleanup when the error suggests stale temp-seeding
+				# files, locked files, or filesystem corruption. '1392' is
+				# ERROR_FILE_CORRUPT; 'Corruption in the filesystem' / 'consistent with
+				# corruption of the filesystem' are the strings Exchange surfaces when
+				# NTFS reports trouble; 'JET_errFileAccessDenied' covers locked files.
+				if ($errMsg -match '1392|temp-seeding|JET_errFileAccessDenied|prerequisite check|Corruption in the filesystem|consistent with corruption of the filesystem') {
+					Write-Host "  [!] Detected temp-seeding or filesystem error. Escalating to manual cleanup..." -ForegroundColor Magenta
+					$needsManualCleanup = $true
+				} else {
+					Write-Host "  [!!] Unrecognized reseed error on $identity. Skipping to avoid further damage. Review manually." -ForegroundColor Red
+					continue
+				}
+			}
+		}
+
+		if (-not $needsManualCleanup) {
+			# Either ShouldProcess was false (-WhatIf) or the reseed succeeded/skipped.
+			# Don't proceed to destructive cleanup unless the prior step explicitly asked for it.
+			continue
+		}
+
+		# --- Step 3: Manual temp-seeding cleanup + reseed ---
+		Write-Host "  [3/3] Attempting manual temp-seeding folder cleanup on $server..." -ForegroundColor Cyan
+
+		# Resolve temp-seeding path from the database object's EdbFilePath
+		$tempSeedingPath = $null
+		try {
+			$db = Get-MailboxDatabase -Identity $dbName -Status -ErrorAction Stop
+			$dbDir = Split-Path $db.EdbFilePath.ToString() -Parent
+			$tempSeedingPath = Join-Path $dbDir 'temp-seeding'
+		} catch {
+			Write-Host ("  [!!] Could not resolve DB path for {0}: {1}" -f $dbName, $_.Exception.Message) -ForegroundColor Red
+			continue
+		}
+
+		Write-Verbose "Temp-seeding path resolved: $tempSeedingPath on $server"
+
+		$cleanupTarget = "{0}:{1}" -f $server, $tempSeedingPath
+		if ($PSCmdlet.ShouldProcess($cleanupTarget, 'Remove temp-seeding folder')) {
+			try {
+				Invoke-Command -ComputerName $server -ScriptBlock {
+					param($path)
+					if (Test-Path $path) {
+						Write-Host "    Removing: $path"
+						Remove-Item $path -Recurse -Force -ErrorAction Stop
+						Write-Host "    Removed successfully."
+					} else {
+						Write-Host "    Path not found (may already be gone): $path"
+					}
+				} -ArgumentList $tempSeedingPath -ErrorAction Stop
+
+				Write-Host "  [OK] Temp-seeding folder cleared. Retrying reseed..." -ForegroundColor Cyan
+
+				if ($PSCmdlet.ShouldProcess($identity, 'Update-MailboxDatabaseCopy after manual cleanup')) {
+					Update-MailboxDatabaseCopy -Identity $identity -DeleteExistingFiles -Confirm:$false -ErrorAction Stop
+					Write-Host "  [OK] Reseed initiated after manual cleanup." -ForegroundColor Green
+					if (-not $Parallel) {
+						& $waitForReseed -Id $identity -TimeoutHours $ReseedTimeoutHours -PollMinutes $ReseedPollMinutes
+					}
+				}
+			} catch {
+				$step3Err = $_.Exception.Message
+				Write-Host ("  [!!] Manual cleanup or reseed failed for {0}: {1}" -f $identity, $step3Err) -ForegroundColor Red
+
+				$looksLikeFsCorruption = $step3Err -match '1392|Corruption in the filesystem|consistent with corruption of the filesystem'
+
+				if (-not $AutoFilesystemRepair) {
+					if ($looksLikeFsCorruption) {
+						Write-Host "       Filesystem corruption suspected on $server. Re-run with -AutoFilesystemRepair, or investigate chkdsk on the hosting volume manually." -ForegroundColor Red
+					}
+					Start-Sleep -Seconds $StaggerSeconds
+					continue
+				}
+
+				if (-not $looksLikeFsCorruption) {
+					Write-Host "       Error does not match a known filesystem-corruption pattern; skipping chkdsk to be safe." -ForegroundColor Red
+					Start-Sleep -Seconds $StaggerSeconds
+					continue
+				}
+
+				# Extract drive letter from the first absolute path mentioned in the error
+				$driveLetter = $null
+				if ($step3Err -match '\b([A-Za-z]):\\') {
+					$driveLetter = $Matches[1].ToUpper()
+				}
+				if (-not $driveLetter) {
+					Write-Host "       Could not extract a drive letter from the error message; skipping chkdsk." -ForegroundColor Red
+					Start-Sleep -Seconds $StaggerSeconds
+					continue
+				}
+
+				$volKey = "{0}|{1}" -f $server, $driveLetter
+				if ($repairedVolumes.ContainsKey($volKey)) {
+					Write-Host "       Volume ${driveLetter}: on $server already repaired this run; retrying reseed without rescanning." -ForegroundColor Cyan
+				} else {
+					if (-not $PSCmdlet.ShouldProcess("$server volume ${driveLetter}:", 'Repair-Volume -Scan/-SpotFix')) {
+						Start-Sleep -Seconds $StaggerSeconds
+						continue
+					}
+					$outcome = & $runFilesystemRepair -Server $server -Volume $driveLetter
+					$repairedVolumes[$volKey] = $outcome
+					if ($outcome -notin @('Clean','Repaired')) {
+						Write-Host "       Filesystem repair did not complete cleanly (outcome: $outcome). Skipping further retries on this copy." -ForegroundColor Red
+						Start-Sleep -Seconds $StaggerSeconds
+						continue
+					}
+				}
+
+				if ($PSCmdlet.ShouldProcess($identity, 'Update-MailboxDatabaseCopy after filesystem repair')) {
+					try {
+						Write-Host "       Retrying reseed after filesystem repair..." -ForegroundColor Cyan
+						Update-MailboxDatabaseCopy -Identity $identity -DeleteExistingFiles -Confirm:$false -ErrorAction Stop
+						Write-Host "  [OK] Reseed initiated after filesystem repair." -ForegroundColor Green
+						if (-not $Parallel) {
+							& $waitForReseed -Id $identity -TimeoutHours $ReseedTimeoutHours -PollMinutes $ReseedPollMinutes
+						}
+					} catch {
+						Write-Host "       Reseed still fails after filesystem repair: $($_.Exception.Message)" -ForegroundColor Red
+						Write-Host "       This copy may need manual intervention beyond chkdsk (e.g. chkdsk /F offline, or a full reseed from a different source server)." -ForegroundColor Red
+					}
+				}
+			}
+		}
+
+		Start-Sleep -Seconds $StaggerSeconds
+	}
+
+	Write-Host "`nRepair pass complete. Run Get-MailboxDatabaseCopyStatus to review current state." -ForegroundColor Cyan
+	#endregion
+}
+
+
 # SIG # Begin signature block
 # MIIF0AYJKoZIhvcNAQcCoIIFwTCCBb0CAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR

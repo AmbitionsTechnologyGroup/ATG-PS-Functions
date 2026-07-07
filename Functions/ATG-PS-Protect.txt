@@ -1,0 +1,109 @@
+Function Protect-ConfigFile {
+	<#
+	.Synopsis
+	Encrypts a configuration file for secure storage
+	.Description
+	Takes a plaintext configuration file and encrypts it using AES-256-CBC with
+	HMAC-SHA256 integrity verification (Encrypt-then-MAC). The key is derived via
+	PBKDF2-SHA256 with 600000 iterations. The encrypted file can be safely
+	committed to a public or private repository.
+
+	File format: Base64( salt[16] + iv[16] + hmac[32] + ciphertext )
+	.Parameter Path
+	Path to the plaintext configuration file (e.g. Sophos.csv, Action1.csv)
+	.Parameter Password
+	Password used for encryption. Must match the password used for decryption.
+	.Parameter OutputPath
+	Path for the encrypted output file. Defaults to the same directory with .enc extension
+	.Example
+	Protect-ConfigFile -Path .\Sophos.csv -Password "MySecurePassword"
+	.Example
+	Protect-ConfigFile -Path .\Action1.csv -Password "MySecurePassword" -OutputPath .\Action1.enc
+	#>
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory = $true)]
+		[string]$Path,
+		[Parameter(Mandatory = $true)]
+		[string]$Password,
+		[string]$OutputPath
+	)
+
+	if (-not (Test-Path $Path)) {
+		throw "File not found: $Path"
+	}
+
+	if (-not $OutputPath) {
+		$OutputPath = [System.IO.Path]::ChangeExtension($Path, '.enc')
+	}
+
+	$plainBytes = [System.IO.File]::ReadAllBytes((Resolve-Path $Path).ProviderPath)
+
+	# Generate random salt and IV
+	$salt = New-Object byte[] 16
+	$iv = New-Object byte[] 16
+	$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+	$rng.GetBytes($salt)
+	$rng.GetBytes($iv)
+
+	$keyDerivation = $null
+	$aes = $null
+	$encryptor = $null
+	$hmac = $null
+	$encKey = $null
+	$hmacKey = $null
+
+	try {
+		# Derive 64 bytes: 32 for AES-256, 32 for HMAC-SHA256
+		$keyDerivation = New-Object System.Security.Cryptography.Rfc2898DeriveBytes(
+			$Password, $salt, 600000, [System.Security.Cryptography.HashAlgorithmName]::SHA256
+		)
+		$encKey = $keyDerivation.GetBytes(32)
+		$hmacKey = $keyDerivation.GetBytes(32)
+
+		# Encrypt with AES-256-CBC
+		$aes = [System.Security.Cryptography.Aes]::Create()
+		$aes.Key = $encKey
+		$aes.IV = $iv
+		$aes.Mode = [System.Security.Cryptography.CipherMode]::CBC
+		$aes.Padding = [System.Security.Cryptography.PaddingMode]::PKCS7
+
+		$encryptor = $aes.CreateEncryptor()
+		$ciphertext = $encryptor.TransformFinalBlock($plainBytes, 0, $plainBytes.Length)
+
+		# Compute HMAC-SHA256 over salt + iv + ciphertext (Encrypt-then-MAC)
+		$dataToAuth = New-Object byte[] ($salt.Length + $iv.Length + $ciphertext.Length)
+		[System.Buffer]::BlockCopy($salt, 0, $dataToAuth, 0, 16)
+		[System.Buffer]::BlockCopy($iv, 0, $dataToAuth, 16, 16)
+		[System.Buffer]::BlockCopy($ciphertext, 0, $dataToAuth, 32, $ciphertext.Length)
+
+		$hmac = New-Object System.Security.Cryptography.HMACSHA256
+		$hmac.Key = $hmacKey
+		$tag = $hmac.ComputeHash($dataToAuth)
+
+		# Combine: salt(16) + iv(16) + hmac(32) + ciphertext
+		$combined = New-Object byte[] (16 + 16 + 32 + $ciphertext.Length)
+		[System.Buffer]::BlockCopy($salt, 0, $combined, 0, 16)
+		[System.Buffer]::BlockCopy($iv, 0, $combined, 16, 16)
+		[System.Buffer]::BlockCopy($tag, 0, $combined, 32, 32)
+		[System.Buffer]::BlockCopy($ciphertext, 0, $combined, 64, $ciphertext.Length)
+
+		# Write as Base64
+		$outputFullPath = if ([System.IO.Path]::IsPathRooted($OutputPath)) {
+			$OutputPath
+		} else {
+			Join-Path (Get-Location) $OutputPath
+		}
+		[System.IO.File]::WriteAllText($outputFullPath, [System.Convert]::ToBase64String($combined))
+
+		Write-Host "Encrypted file saved to: $outputFullPath" -ForegroundColor Green
+	} finally {
+		if ($encKey) { [System.Array]::Clear($encKey, 0, $encKey.Length) }
+		if ($hmacKey) { [System.Array]::Clear($hmacKey, 0, $hmacKey.Length) }
+		if ($hmac) { $hmac.Dispose() }
+		if ($encryptor) { $encryptor.Dispose() }
+		if ($aes) { $aes.Dispose() }
+		if ($keyDerivation) { $keyDerivation.Dispose() }
+		$rng.Dispose()
+	}
+}

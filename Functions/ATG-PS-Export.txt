@@ -417,6 +417,130 @@ Function Export-UsersOneDrive {
 	Write-Host "`nComplete!" -ForegroundColor Green
 }
 
+Function Export-ExchangeDistributionList {
+	<#
+	.SYNOPSIS
+		Exports distribution list members to CSV, including nested groups.
+	
+	.DESCRIPTION
+		Retrieves all members of a distribution list, recursively processes nested groups,
+		removes duplicates, and exports to CSV sorted by DisplayName.
+	
+	.PARAMETER Identity
+		The name or email address of the distribution list to export.
+	
+	.PARAMETER OutputPath
+		The directory path where the CSV will be saved. Defaults to C:\Ambitions
+	
+	.EXAMPLE
+		Export-ExchangeDistributionList -Identity "Sales Team"
+	
+	.EXAMPLE
+		Export-ExchangeDistributionList -Identity "sales@company.com" -OutputPath "C:\Reports"
+	#>
+	
+	[CmdletBinding()]
+	param(
+		[Parameter(Mandatory=$true, Position=0)]
+		[string]$Identity,
+		
+		[Parameter(Mandatory=$false, Position=1)]
+		[string]$OutputPath = "C:\Ambitions"
+	)
+	
+	# Function to recursively get all members including nested groups
+	function Get-NestedGroupMembers {
+		param(
+			[string]$GroupIdentity,
+			[int]$Level = 0
+		)
+		
+		$Members = @()
+		$GroupMembers = Get-DistributionGroupMember -Identity $GroupIdentity -ResultSize Unlimited
+		
+		foreach ($Member in $GroupMembers) {
+			# Check if member is a group
+			if ($Member.RecipientType -like "*Group*") {
+				Write-Host ("  " * $Level) + "|-- Processing nested group: $($Member.DisplayName)" -ForegroundColor Yellow
+				
+				# Add the group itself
+				$Members += [PSCustomObject]@{
+					DisplayName = $Member.DisplayName
+					PrimarySmtpAddress = $Member.PrimarySmtpAddress
+					RecipientType = $Member.RecipientType
+					Title = $Member.Title
+					Department = $Member.Department
+					Company = $Member.Company
+					NestedLevel = $Level
+				}
+				
+				# Recursively get members of nested group
+				$Members += Get-NestedGroupMembers -GroupIdentity $Member.Identity -Level ($Level + 1)
+			}
+			else {
+				# Add regular member
+				$Members += [PSCustomObject]@{
+					DisplayName = $Member.DisplayName
+					PrimarySmtpAddress = $Member.PrimarySmtpAddress
+					RecipientType = $Member.RecipientType
+					Title = $Member.Title
+					Department = $Member.Department
+					Company = $Member.Company
+					NestedLevel = $Level
+				}
+			}
+		}
+		
+		return $Members
+	}
+	
+	# Ensure output directory exists
+	if (-not (Test-Path -Path $OutputPath)) {
+		try {
+			New-Item -Path $OutputPath -ItemType Directory -Force | Out-Null
+			Write-Host "Created directory: $OutputPath" -ForegroundColor Cyan
+		}
+		catch {
+			Write-Error "Failed to create output directory: $_"
+			return
+		}
+	}
+	
+	# Get the distribution list
+	try {
+		$DistributionList = Get-DistributionGroup -Identity $Identity -ErrorAction Stop
+		
+		Write-Host "`nFound: $($DistributionList.DisplayName)" -ForegroundColor Green
+		Write-Host "Total Direct Members: $($DistributionList.MemberCount)" -ForegroundColor Cyan
+		Write-Host "`nProcessing members and nested groups..." -ForegroundColor Cyan
+		
+		# Get all members including nested
+		$AllMembers = Get-NestedGroupMembers -GroupIdentity $Identity
+		
+		# Remove duplicates (same person might be in multiple nested groups)
+		$UniqueMembers = $AllMembers | Sort-Object PrimarySmtpAddress -Unique | Sort-Object DisplayName
+		
+		# Generate filename with timestamp
+		$Timestamp = Get-Date -Format "yyyyMMdd_HHmmss"
+		$Filename = Join-Path -Path $OutputPath -ChildPath "$($DistributionList.Name)_Members_$Timestamp.csv"
+		
+		# Export to CSV
+		$UniqueMembers | Export-Csv -Path $Filename -NoTypeInformation -Encoding UTF8
+		
+		Write-Host "`nExport Complete!" -ForegroundColor Green
+		Write-Host "Total Unique Members: $($UniqueMembers.Count)" -ForegroundColor Cyan
+		Write-Host "File: $Filename" -ForegroundColor Green
+		
+		# Return the file path
+		return $Filename
+		
+	} catch {
+		Write-Error "Failed to export distribution list: $_"
+		Write-Host "Distribution list '$Identity' not found or you don't have permission." -ForegroundColor Yellow
+	}
+}
+
+
 # SIG # Begin signature block
 # MIIF0AYJKoZIhvcNAQcCoIIFwTCCBb0CAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR

@@ -821,7 +821,7 @@ Function Convert-ToSharedMailbox {
 					$ReplyTo = Get-EXOMailbox -Identity $ReplyTo
 					$ReplyToName = $ReplyTo.DisplayName
 					$ReplyToEmail = $ReplyTo.PrimarySmtpAddress
-					$NewSharedMailbox | Set-MailboxAutoReplyConfiguration –InternalMessage "$Name is no longer with the organization. Please direct communications to $ReplyToName at $ReplyToEmail" –ExternalMessage "$Name is no longer with the organization. Please direct communications to $ReplyToName at $ReplyToEmail" -Verbose
+					$NewSharedMailbox | Set-MailboxAutoReplyConfiguration -InternalMessage "$Name is no longer with the organization. Please direct communications to $ReplyToName at $ReplyToEmail" -ExternalMessage "$Name is no longer with the organization. Please direct communications to $ReplyToName at $ReplyToEmail" -Verbose
 					$NewSharedMailbox | Set-MailboxAutoReplyConfiguration -AutoReplyState enabled
 					$NewSharedMailbox | Get-MailboxAutoReplyConfiguration | Select-Object Identity, AutoReplyState, ExternalMessage | FL
 					Clear-Variable -Name ReplyTo -Force -ErrorAction SilentlyContinue
@@ -895,6 +895,89 @@ Function Convert-ToSharedMailbox {
 	#>
 }
 
+
+function ConvertTo-EncodedCommand {
+	<#
+	.SYNOPSIS
+		Converts a PowerShell script to base64 encoding for use with powershell.exe -EncodedCommand
+	
+	.DESCRIPTION
+		Takes a PowerShell script (as string or from file) and converts it to base64-encoded 
+		UTF-16LE format required by the -EncodedCommand parameter.
+	
+	.PARAMETER ScriptBlock
+		The PowerShell code as a string to encode
+	
+	.PARAMETER Path
+		Path to a .ps1 file to encode
+	
+	.PARAMETER ToClipboard
+		Copy the encoded command to clipboard
+	
+	.EXAMPLE
+		ConvertTo-EncodedCommand -ScriptBlock "Get-Process | Where-Object CPU -gt 100"
+		
+	.EXAMPLE
+		ConvertTo-EncodedCommand -Path "C:\Scripts\MyScript.ps1" -ToClipboard
+		
+	.EXAMPLE
+		$encoded = ConvertTo-EncodedCommand -ScriptBlock "Write-Host 'Hello World'"
+		powershell.exe -EncodedCommand $encoded
+	
+	.EXAMPLE
+		# Multi-line script block
+		$script = @"
+		`$services = Get-Service | Where-Object Status -eq 'Running'
+		`$services | Export-Csv -Path C:\Temp\services.csv -NoTypeInformation
+		Write-Host "Exported `$(`$services.Count) services"
+		"@
+		ConvertTo-EncodedCommand -ScriptBlock $script -ToClipboard
+	#>
+	
+	[CmdletBinding(DefaultParameterSetName = 'ScriptBlock')]
+	param(
+		[Parameter(Mandatory = $true, 
+				   ParameterSetName = 'ScriptBlock',
+				   ValueFromPipeline = $true,
+				   Position = 0)]
+		[string]$ScriptBlock,
+		
+		[Parameter(Mandatory = $true, 
+				   ParameterSetName = 'Path')]
+		[ValidateScript({Test-Path $_ -PathType Leaf})]
+		[string]$Path,
+		
+		[Parameter(Mandatory = $false)]
+		[switch]$ToClipboard
+	)
+	
+	process {
+		try {
+			# Get the script content
+			if ($PSCmdlet.ParameterSetName -eq 'Path') {
+				$ScriptBlock = Get-Content -Path $Path -Raw
+			}
+			
+			# Convert to UTF-16LE bytes (required for -EncodedCommand)
+			$bytes = [System.Text.Encoding]::Unicode.GetBytes($ScriptBlock)
+			
+			# Convert to base64
+			$encodedCommand = [Convert]::ToBase64String($bytes)
+			
+			# Copy to clipboard if requested
+			if ($ToClipboard) {
+				$encodedCommand | Set-Clipboard
+				Write-Host "Encoded command copied to clipboard!" -ForegroundColor Green
+			}
+			
+			# Return the encoded string
+			return $encodedCommand
+		}
+		catch {
+			Write-Error "Failed to encode command: $_"
+		}
+	}
+}
 
 # SIG # Begin signature block
 # MIIF0AYJKoZIhvcNAQcCoIIFwTCCBb0CAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB

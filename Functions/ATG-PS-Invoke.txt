@@ -384,21 +384,80 @@ Function Invoke-IPv4NetworkScan {
 			$PropertiesToDisplay += "MAC"
 		}
 
-		# Check if it is possible to assign vendor to MAC --> import CSV-File 
+		# Check if it is possible to assign vendor to MAC --> import CSV-File
 		if ($EnableMACResolving) {
-			$LatestOUIs = (Invoke-WebRequest -Uri "https://standards-oui.ieee.org/oui/oui.txt" -UseBasicParsing).Content
-			$Output = ""
-
-			foreach($Line in $LatestOUIs -split '[\r\n]')
-			{
-				if($Line -match "^[A-F0-9]{6}")
-				{        
-					# Line looks like: 2405F5     (base 16)		Integrated Device Technology (Malaysia) Sdn. Bhd.
-					$Output += ($Line -replace '\s+', ' ').Replace(' (base 16) ', '|').Trim() + "`n"
-				}
+			$OUI_Sources = @(
+				@{ Uri = "https://standards-oui.ieee.org/oui/oui.txt"; Name = "IEEE" },
+				@{ Uri = "https://www.wireshark.org/download/automated/data/manuf"; Name = "Wireshark" },
+				@{ Uri = "https://maclookup.app/downloads/json-database/get-db"; Name = "maclookup.app" }
+			)
+			$OUILines = $null
+			$PreviousSecurityProtocol = [Net.ServicePointManager]::SecurityProtocol
+			try {
+				[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls13
+			}
+			catch {
+				[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 			}
 
-			Out-File -InputObject $Output -FilePath "C:\Ambitions\oui.txt"
+			foreach ($Source in $OUI_Sources) {
+				for ($RetryCount = 1; $RetryCount -le 2; $RetryCount++) {
+					try {
+						$RawData = Invoke-RestMethod -Uri $Source.Uri -ErrorAction Stop
+						$OUILines = [System.Collections.Generic.List[string]]::new()
+
+						switch ($Source.Name) {
+							"IEEE" {
+								# Lines: "2405F5     (base 16)		Vendor Name"
+								foreach ($Line in $RawData -split '[\r\n]') {
+									if ($Line -match "^[A-F0-9]{6}") {
+										$OUILines.Add(($Line -replace '\s+', ' ').Replace(' (base 16) ', '|').Trim())
+									}
+								}
+							}
+							"Wireshark" {
+								# Lines: "00:00:0C\tShortName\tFull Vendor Name"
+								foreach ($Line in $RawData -split '[\r\n]') {
+									if ($Line -match "^[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}:[0-9A-Fa-f]{2}\t") {
+										$Parts = $Line -split "`t"
+										$MAC = $Parts[0].Replace(":", "").ToUpper()
+										$Vendor = if ($Parts.Count -ge 3 -and $Parts[2]) { $Parts[2] } else { $Parts[1] }
+										$OUILines.Add("$MAC|$Vendor")
+									}
+								}
+							}
+							"maclookup.app" {
+								# JSON array of objects with macPrefix and vendorName
+								foreach ($Entry in $RawData) {
+									if ($Entry.macPrefix -and $Entry.vendorName) {
+										$MAC = $Entry.macPrefix.Replace(":", "").ToUpper()
+										$OUILines.Add("$MAC|$($Entry.vendorName)")
+									}
+								}
+							}
+						}
+
+						if ($OUILines.Count -gt 0) { break }
+					}
+					catch {
+						if ($RetryCount -lt 2) {
+							Write-Warning "OUI download from $($Source.Name) failed: $($_.Exception.Message). Retrying..."
+							Start-Sleep -Seconds 2
+						}
+					}
+				}
+				if ($OUILines -and $OUILines.Count -gt 0) {
+					Write-Verbose -Message "Downloaded OUI data from $($Source.Name) ($($OUILines.Count) entries)"
+					break
+				}
+				Write-Warning "Failed to download OUI data from $($Source.Name), trying next source..."
+			}
+
+			[Net.ServicePointManager]::SecurityProtocol = $PreviousSecurityProtocol
+
+			if ($OUILines -and $OUILines.Count -gt 0) {
+				Out-File -InputObject ($OUILines -join "`n") -FilePath "C:\Ambitions\oui.txt"
+			}
 			if (Test-Path -Path $OUIListPath -PathType Leaf) {
 				$OUIHashTable = @{ }
 
@@ -443,7 +502,7 @@ Function Invoke-IPv4NetworkScan {
 			# +++ Send ICMP requests +++
 			$Status = [String]::Empty
 
-			for ($i = 0; $i -lt $Tries; i++) {
+			for ($i = 0; $i -lt $Tries; $i++) {
 				try {
 					$PingObj = New-Object System.Net.NetworkInformation.Ping
 					
@@ -628,10 +687,10 @@ Function Invoke-IPv4NetworkScan {
 							Status       = $Job_Result.Status
 							Hostname     = $Job_Result.Hostname
 							MAC          = $Job_Result.MAC
-							Vendor       = $Vendor  
+							Vendor       = $Vendor
 							BufferSize   = $Job_Result.BufferSize
 							ResponseTime = $Job_Result.ResponseTime
-							TTL          = $ResuJob_Resultlt.TTL
+							TTL          = $Job_Result.TTL
 						} | Select-Object -Property $PropertiesToDisplay
 					}
 					else {
@@ -811,6 +870,770 @@ Write-Host "Running NDDC"
 
 	Write-Host "Cleaning up"
 		Remove-Item -Recurse -Force $outputfolder
+	}
+}
+
+Function Invoke-WinGetInstall {
+	<#
+	.SYNOPSIS
+		Run winget install or upgrade with standard hardened arg set.
+	.DESCRIPTION
+		Wraps winget install/upgrade with the refined arg set used across this
+		repo: --exact, --silent, --source winget, --accept-package-agreements,
+		--accept-source-agreements, --disable-interactivity.
+	.PARAMETER Id
+		Winget package ID (e.g., 'Microsoft.Edge').
+	.PARAMETER Command
+		Either 'install' or 'upgrade'. Default: install.
+	.EXAMPLE
+		Invoke-WinGetInstall -Id Microsoft.Edge
+	.EXAMPLE
+		Invoke-WinGetInstall -Id Dell.CommandUpdate -Command upgrade
+	#>
+	[CmdletBinding()]
+	Param(
+		[Parameter(Mandatory = $true)][string]$Id,
+		[ValidateSet('install', 'upgrade')][string]$Command = 'install'
+	)
+	& winget $Command --id $Id -e -h --accept-package-agreements --accept-source-agreements --source winget --disable-interactivity
+}
+
+Function Invoke-BPARemediation {
+<#
+	.SYNOPSIS
+		Automatically remediates common, safe BPA (Best Practices Analyzer) findings on Windows Servers.
+
+	.DESCRIPTION
+		This function scans for BPA issues using Get-BpaResult and automatically remediates
+		known safe fixes. It reports what was fixed, what was skipped, and what requires
+		manual attention.
+
+		The function uses a configuration hashtable that makes it easy to add new remediation
+		rules. Only safe, non-destructive changes are applied automatically.
+
+		Things that are explicitly SKIPPED (flagged for manual review):
+		- Anything requiring new accounts/credentials (like DHCP DNS credentials)
+		- Anything involving AD schema or forest-wide changes
+		- Anything involving certificates
+		- Network adapter/IP configuration changes
+		- Anything the script cannot verify is safe for the environment
+
+	.PARAMETER ComputerName
+		The target server to remediate. Defaults to localhost.
+
+	.PARAMETER Category
+		Optional filter to remediate specific categories only (e.g., 'Configuration', 'Security').
+		If not specified, all categories are processed.
+
+	.PARAMETER OutputPath
+		Optional path to export a remediation report. Supports .csv and .html extensions.
+		If not specified, no report file is generated.
+
+	.PARAMETER ModelId
+		Optional BPA Model ID to scan. If not specified, attempts to detect installed server roles.
+
+	.EXAMPLE
+		Invoke-BPARemediation -WhatIf
+		Preview what changes would be made without actually making them.
+
+	.EXAMPLE
+		Invoke-BPARemediation -Category 'Configuration'
+		Remediate only Configuration category findings.
+
+	.EXAMPLE
+		Invoke-BPARemediation -OutputPath "C:\Reports\BPA-Remediation.csv"
+		Run remediation and export results to a CSV file.
+
+	.EXAMPLE
+		Invoke-Command -ComputerName "SERVER01" -ScriptBlock { Invoke-BPARemediation -OutputPath "C:\Reports\BPA-Report.html" }
+		Remediate a remote server via PowerShell remoting and export an HTML report.
+
+	.NOTES
+		Requires Administrator privileges to run.
+		Requires the BestPractices PowerShell module (included in Windows Server).
+		Some remediations require the SmbServer, DnsServer, or DhcpServer modules.
+#>
+	[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Medium')]
+	param(
+		[Parameter(Mandatory = $false)]
+		[string]$ComputerName = 'localhost',
+
+		[Parameter(Mandatory = $false)]
+		[ValidateSet('Configuration', 'Security', 'Performance', 'Policy', 'Operation', 'PreDeployment', 'PostDeployment')]
+		[string[]]$Category,
+
+		[Parameter(Mandatory = $false)]
+		[ValidateScript({
+			if ($_ -match '\.(csv|html)$') { return $true }
+			throw "OutputPath must end with .csv or .html"
+		})]
+		[string]$OutputPath,
+
+		[Parameter(Mandatory = $false)]
+		[string]$ModelId
+	)
+
+	begin {
+		# Check for Administrator privileges
+		$IsAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+		if (-not $IsAdmin) {
+			throw "This function requires Administrator privileges. Please run as Administrator."
+		}
+
+		# Block remote execution - remediation commands only work locally.
+		# BPA scan can run remotely, but Set-SmbServerConfiguration/Set-DnsServerZone execute locally.
+		# To remediate a remote server, run this function directly on that server or use Invoke-Command.
+		$LocalFqdn = if ($env:USERDNSDOMAIN) { "$env:COMPUTERNAME.$env:USERDNSDOMAIN" } else { $null }
+		$IsLocalTarget = ($ComputerName -eq 'localhost' -or $ComputerName -eq '.' -or
+			$ComputerName -eq $env:COMPUTERNAME -or
+			($LocalFqdn -and $ComputerName -eq $LocalFqdn))
+		if (-not $IsLocalTarget) {
+			throw "Remote remediation is not supported. Remediation commands (Set-SmbServerConfiguration, Set-DnsServerZone) only execute locally. To remediate '$ComputerName', run this function directly on that server or use: Invoke-Command -ComputerName '$ComputerName' -ScriptBlock { Invoke-BPARemediation }"
+		}
+
+		# Check for BestPractices module
+		if (-not (Get-Module -ListAvailable -Name BestPractices)) {
+			throw "BestPractices module not found. This function requires Windows Server with the BestPractices module."
+		}
+
+		Import-Module BestPractices -ErrorAction Stop
+
+		Write-Verbose "Starting BPA Remediation on $ComputerName"
+
+		# Define safe remediations - add new entries here to expand coverage
+		# Format: Key = @{ Type; Property; Value; Description }
+		$SafeRemediations = @{
+			# SMB Server Settings
+			'SMB.AutoDisconnectTimeout' = @{
+				Type = 'SMB'
+				Property = 'AutoDisconnectTimeout'
+				Value = 0
+				Description = 'Set AutoDisconnectTimeout to 0 (disabled)'
+			}
+			'SMB.DurableHandleV2TimeoutInSeconds' = @{
+				Type = 'SMB'
+				Property = 'DurableHandleV2TimeoutInSeconds'
+				Value = 30
+				Description = 'Set DurableHandleV2TimeoutInSeconds to 30'
+			}
+			'SMB.AsynchronousCredits' = @{
+				Type = 'SMB'
+				Property = 'AsynchronousCredits'
+				Value = 512
+				Description = 'Set AsynchronousCredits to 512'
+			}
+			'SMB.Smb2CreditsMin' = @{
+				Type = 'SMB'
+				Property = 'Smb2CreditsMin'
+				Value = 512
+				Description = 'Set Smb2CreditsMin to 512'
+			}
+			'SMB.Smb2CreditsMax' = @{
+				Type = 'SMB'
+				Property = 'Smb2CreditsMax'
+				Value = 8192
+				Description = 'Set Smb2CreditsMax to 8192'
+			}
+		}
+
+		# Patterns that indicate issues requiring manual attention.
+		# Word-boundary anchors (\b) prevent false matches on common substrings.
+		$ManualReviewPatterns = @(
+			'credential',
+			'certificate',
+			'schema',
+			'forest',
+			'network adapter',
+			'IP address',
+			'IP configuration',
+			'\baccount\b',
+			'password',
+			'\bauthentication\b',
+			'domain controller',
+			'\breplication\b'
+		)
+
+		# Cache SMB configuration once per execution to avoid repeated queries for
+		# multiple SMB findings in the same scan session.
+		# Note: If multiple SMB properties are remediated, PreviousValue in result objects
+		# for subsequent findings will reflect the pre-remediation state (stale cache).
+		# The property-equality check remains accurate; only logged PreviousValue is affected.
+		$SmbConfig = $null
+		if (Get-Module -ListAvailable -Name SmbServer -ErrorAction SilentlyContinue) {
+			try {
+				$SmbConfig = Get-SmbServerConfiguration -ErrorAction Stop
+				Write-Verbose "SMB Server configuration loaded and cached"
+			} catch {
+				Write-Warning "Could not retrieve SMB Server configuration: $_"
+			}
+		}
+
+		# Initialize results collection
+		$Results = [System.Collections.ArrayList]::new()
+	}
+
+	process {
+		# Get available BPA models if not specified
+		if (-not $ModelId) {
+			Write-Verbose "Detecting installed BPA models..."
+			$Models = Get-BpaModel -ErrorAction SilentlyContinue
+			if (-not $Models) {
+				Write-Warning "No BPA models found. Ensure server roles are installed."
+				return
+			}
+			Write-Verbose "Found $($Models.Count) BPA model(s)"
+		} else {
+			$Models = Get-BpaModel -Id $ModelId -ErrorAction SilentlyContinue
+			if (-not $Models) {
+				Write-Warning "BPA model '$ModelId' not found."
+				return
+			}
+		}
+
+		foreach ($Model in $Models) {
+			Write-Verbose "Processing BPA model: $($Model.Id)"
+
+			# Invoke BPA scan (always local since remote remediation is blocked in begin block)
+			try {
+				Write-Verbose "Running BPA scan for $($Model.Id)..."
+				$null = Invoke-BpaModel -Id $Model.Id -ErrorAction Stop
+			} catch {
+				Write-Warning "Failed to invoke BPA scan for $($Model.Id): $_"
+				continue
+			}
+
+			# Get BPA results
+			try {
+				$BpaResults = @(Get-BpaResult -ModelId $Model.Id -ErrorAction Stop)
+				if ($Category) {
+					$BpaResults = @($BpaResults | Where-Object { $Category -contains $_.Category })
+				}
+				# Filter to non-compliant, actionable results
+				$BpaResults = @($BpaResults | Where-Object { $_.Compliance -ne $true -and $_.Severity -ne 'Informational' })
+			} catch {
+				Write-Warning "Failed to get BPA results for $($Model.Id): $_"
+				continue
+			}
+
+			Write-Verbose "Found $($BpaResults.Count) non-compliant BPA finding(s) for $($Model.Id)"
+
+			foreach ($Finding in $BpaResults) {
+				# Check manual review patterns before attempting remediation
+				$MatchedPattern = $null
+				foreach ($Pattern in $ManualReviewPatterns) {
+					if ($Finding.Title -match $Pattern -or $Finding.Problem -match $Pattern -or $Finding.Resolution -match $Pattern) {
+						$MatchedPattern = $Pattern
+						break
+					}
+				}
+
+				if ($MatchedPattern) {
+					Write-Verbose "Manual review required for $($Finding.RuleId): matched pattern '$MatchedPattern'"
+					$null = $Results.Add((New-BPAResultObject -Finding $Finding -Model $Model -ComputerName $ComputerName `
+						-Status 'ManualRequired' -Reason "Matched sensitive pattern '$MatchedPattern' - requires manual review"))
+					continue
+				}
+
+				# Each handler returns an array of partial result objects (empty if not applicable).
+				# Helpers are tried in priority order; the first that produces results wins.
+				$HandlerResults = @()
+
+				if ($HandlerResults.Count -eq 0 -and ($Finding.Title -match 'SMB|Server Message Block|file server' -or $Model.Id -match 'FileServices')) {
+					$HandlerResults = @(Invoke-SMBRemediation -Finding $Finding -SafeRemediations $SafeRemediations `
+						-SmbConfig $SmbConfig -WhatIf:$WhatIfPreference -Verbose:$VerbosePreference)
+				}
+
+				if ($HandlerResults.Count -eq 0 -and ($Finding.Title -match 'DNS' -or $Model.Id -match 'DNS')) {
+					$HandlerResults = @(Invoke-DNSRemediation -Finding $Finding -WhatIf:$WhatIfPreference -Verbose:$VerbosePreference)
+				}
+
+				if ($HandlerResults.Count -eq 0 -and ($Finding.Title -match 'DHCP' -or $Model.Id -match 'DHCP')) {
+					$HandlerResults = @(Invoke-DHCPRemediation -Finding $Finding -WhatIf:$WhatIfPreference -Verbose:$VerbosePreference)
+				}
+
+				if ($HandlerResults.Count -gt 0) {
+					# A handler matched - add one result row per partial result returned
+					foreach ($Partial in $HandlerResults) {
+						$null = $Results.Add((New-BPAResultObject -Finding $Finding -Model $Model -ComputerName $ComputerName `
+							-Status $Partial.Status -Target $Partial.Target `
+							-PreviousValue $Partial.PreviousValue -NewValue $Partial.NewValue -Reason $Partial.Reason))
+					}
+				} else {
+					# No handler matched this finding
+					$null = $Results.Add((New-BPAResultObject -Finding $Finding -Model $Model -ComputerName $ComputerName `
+						-Status 'Skipped' -Reason 'No safe automated remediation available'))
+				}
+			}
+		}
+	}
+
+	end {
+		# Display summary
+		$RemediatedItems = @($Results | Where-Object { $_.Status -eq 'Remediated' })
+		$SkippedItems = @($Results | Where-Object { $_.Status -eq 'Skipped' })
+		$ManualItems = @($Results | Where-Object { $_.Status -eq 'ManualRequired' })
+		$FailedItems = @($Results | Where-Object { $_.Status -eq 'Failed' })
+
+		Write-Host "`n========================================" -ForegroundColor Cyan
+		Write-Host "BPA Remediation Summary" -ForegroundColor Cyan
+		Write-Host "========================================" -ForegroundColor Cyan
+		Write-Host "Computer: $ComputerName"
+		Write-Host "Total Results: $($Results.Count)"
+		Write-Host "  Remediated:      $($RemediatedItems.Count)" -ForegroundColor Green
+		Write-Host "  Skipped:         $($SkippedItems.Count)" -ForegroundColor Yellow
+		Write-Host "  Manual Required: $($ManualItems.Count)" -ForegroundColor Red
+		Write-Host "  Failed:          $($FailedItems.Count)" -ForegroundColor Red
+		Write-Host "========================================`n" -ForegroundColor Cyan
+
+		# Show details for manual required items
+		if ($ManualItems.Count -gt 0) {
+			Write-Host "Items Requiring Manual Attention:" -ForegroundColor Yellow
+			foreach ($Item in $ManualItems) {
+				Write-Host "  - $($Item.Title)" -ForegroundColor Yellow
+				Write-Host "    Reason: $($Item.Reason)" -ForegroundColor Gray
+			}
+			Write-Host ""
+		}
+
+		# Export report if requested
+		if ($OutputPath) {
+			try {
+				$Extension = [System.IO.Path]::GetExtension($OutputPath).ToLower()
+				if ($Extension -eq '.csv') {
+					$Results | Export-Csv -Path $OutputPath -NoTypeInformation -Force
+					Write-Host "Report exported to: $OutputPath" -ForegroundColor Green
+				} elseif ($Extension -eq '.html') {
+					$PreContent = "<h1>BPA Remediation Report</h1><p>Generated: $(Get-Date)</p><p>Computer: $ComputerName</p>"
+					$HtmlContent = $Results | ConvertTo-Html -Title "BPA Remediation Report" -PreContent $PreContent | Out-String
+					$HtmlContent | Out-File -FilePath $OutputPath -Encoding UTF8 -Force
+					Write-Host "Report exported to: $OutputPath" -ForegroundColor Green
+				}
+			} catch {
+				Write-Error "Failed to export report: $_"
+			}
+		}
+
+		return $Results
+	}
+}
+
+
+Function Invoke-DHCPRemediation {
+	[CmdletBinding(SupportsShouldProcess = $true)]
+	param(
+		[Parameter(Mandatory = $true)]
+		[psobject]$Finding
+	)
+
+	if (-not (Get-Module -ListAvailable -Name DhcpServer -ErrorAction SilentlyContinue)) {
+		return @([PSCustomObject]@{
+			Target = $null
+			Status = 'Skipped'
+			PreviousValue = $null
+			NewValue = $null
+			Reason = 'DhcpServer module not available - DHCP role may not be installed'
+		})
+	}
+
+	# DNS dynamic update findings require manual attention (credential patterns already
+	# caught by ManualReviewPatterns in the main function, so only check non-overlapping patterns)
+	if ($Finding.Title -match 'dynamic update|DHCP.*DNS' -or $Finding.Problem -match 'dynamic update|DHCP.*DNS') {
+		return @([PSCustomObject]@{
+			Target = $null
+			Status = 'ManualRequired'
+			PreviousValue = $null
+			NewValue = $null
+			Reason = 'DHCP DNS configuration requires manual setup'
+		})
+	}
+
+	return @([PSCustomObject]@{
+		Target = $null
+		Status = 'Skipped'
+		PreviousValue = $null
+		NewValue = $null
+		Reason = 'DHCP remediation requires manual review for environment safety'
+	})
+}
+
+
+Function Invoke-DNSRemediation {
+	[CmdletBinding(SupportsShouldProcess = $true)]
+	param(
+		[Parameter(Mandatory = $true)]
+		[psobject]$Finding
+	)
+
+	if (-not (Get-Module -ListAvailable -Name DnsServer -ErrorAction SilentlyContinue)) {
+		return @([PSCustomObject]@{
+			Target = $null
+			Status = 'Skipped'
+			PreviousValue = $null
+			NewValue = $null
+			Reason = 'DnsServer module not available - DNS role may not be installed'
+		})
+	}
+
+	# Only handle notify/secondary zone findings
+	if (-not ($Finding.Title -match 'notify|secondary|zone transfer')) {
+		return @()
+	}
+
+	$PartialResults = [System.Collections.ArrayList]::new()
+
+	try {
+		# Single call returns full zone objects - no second per-zone query needed
+		$Zones = Get-DnsServerZone -ErrorAction Stop | Where-Object { $_.ZoneType -eq 'Primary' -and -not $_.IsAutoCreated }
+	} catch {
+		return @([PSCustomObject]@{
+			Target = $null
+			Status = 'Failed'
+			PreviousValue = $null
+			NewValue = $null
+			Reason = "Failed to query DNS zones: $_"
+		})
+	}
+
+	$ZonesChecked = 0
+	$ZonesAlreadyCompliant = 0
+
+	foreach ($Zone in $Zones) {
+		# Only adjust zones that have no secondary servers configured
+		if (-not ($null -eq $Zone.SecondaryServers -or $Zone.SecondaryServers.Count -eq 0)) {
+			continue
+		}
+
+		$ZonesChecked++
+
+		if ($Zone.Notify -eq 'NoNotify') {
+			Write-Verbose "DNS: Zone $($Zone.ZoneName) already set to NoNotify"
+			$ZonesAlreadyCompliant++
+			continue
+		}
+
+		if ($PSCmdlet.ShouldProcess("DNS Zone: $($Zone.ZoneName)", "Set Notify to NoNotify (no secondaries configured)")) {
+			try {
+				Set-DnsServerZone -Name $Zone.ZoneName -Notify 'NoNotify' -ErrorAction Stop
+				$null = $PartialResults.Add([PSCustomObject]@{
+					Target = $Zone.ZoneName
+					Status = 'Remediated'
+					PreviousValue = $Zone.Notify
+					NewValue = 'NoNotify'
+					Reason = 'Set zone notify to NoNotify - no secondary servers configured'
+				})
+				Write-Verbose "Remediated DNS zone $($Zone.ZoneName): Set Notify to NoNotify"
+			} catch {
+				$null = $PartialResults.Add([PSCustomObject]@{
+					Target = $Zone.ZoneName
+					Status = 'Failed'
+					PreviousValue = $Zone.Notify
+					NewValue = 'NoNotify'
+					Reason = "Failed to set zone notify: $_"
+				})
+			}
+		} else {
+			$null = $PartialResults.Add([PSCustomObject]@{
+				Target = $Zone.ZoneName
+				Status = 'Skipped'
+				PreviousValue = $Zone.Notify
+				NewValue = 'NoNotify'
+				Reason = 'WhatIf mode - no changes made'
+			})
+		}
+	}
+
+	# If we checked zones but all were already compliant, report that
+	if ($ZonesChecked -gt 0 -and $PartialResults.Count -eq 0) {
+		return @([PSCustomObject]@{
+			Target = $null
+			Status = 'Skipped'
+			PreviousValue = 'NoNotify'
+			NewValue = 'NoNotify'
+			Reason = "All $ZonesChecked applicable DNS zone(s) already set to NoNotify"
+		})
+	}
+
+	return @($PartialResults)
+}
+
+
+Function Invoke-SMBRemediation {
+	[CmdletBinding(SupportsShouldProcess = $true)]
+	param(
+		[Parameter(Mandatory = $true)]
+		[psobject]$Finding,
+
+		[Parameter(Mandatory = $true)]
+		[hashtable]$SafeRemediations,
+
+		[Parameter(Mandatory = $false)]
+		[psobject]$SmbConfig
+	)
+
+	if ($null -eq $SmbConfig) {
+		return @([PSCustomObject]@{
+			Target = 'SMB Server'
+			Status = 'Skipped'
+			PreviousValue = $null
+			NewValue = $null
+			Reason = 'SMB Server configuration not available (SmbServer module missing or query failed)'
+		})
+	}
+
+	$PartialResults = [System.Collections.ArrayList]::new()
+
+	foreach ($Key in $SafeRemediations.Keys) {
+		if ($Key -notmatch '^SMB\.') { continue }
+
+		$Rule = $SafeRemediations[$Key]
+		$Property = $Rule.Property
+
+		# Match this rule against the finding text
+		if (-not ($Finding.Title -match $Property -or $Finding.Problem -match $Property -or $Finding.Resolution -match $Property)) {
+			continue
+		}
+
+		$CurrentValue = $SmbConfig.$Property
+		$TargetValue = $Rule.Value
+
+		if ($CurrentValue -eq $TargetValue) {
+			Write-Verbose "SMB: $Property is already at target value $TargetValue"
+			continue
+		}
+
+		if ($PSCmdlet.ShouldProcess("SMB Server Configuration", "Set $Property from $CurrentValue to $TargetValue")) {
+			try {
+				$Params = @{ $Property = $TargetValue; Force = $true; Confirm = $false }
+				Set-SmbServerConfiguration @Params -ErrorAction Stop
+				$null = $PartialResults.Add([PSCustomObject]@{
+					Target = 'SMB Server'
+					Status = 'Remediated'
+					PreviousValue = $CurrentValue
+					NewValue = $TargetValue
+					Reason = $Rule.Description
+				})
+				Write-Verbose "Remediated SMB: $($Rule.Description)"
+			} catch {
+				$null = $PartialResults.Add([PSCustomObject]@{
+					Target = 'SMB Server'
+					Status = 'Failed'
+					PreviousValue = $CurrentValue
+					NewValue = $TargetValue
+					Reason = "Failed to set ${Property}: $_"
+				})
+			}
+		} else {
+			$null = $PartialResults.Add([PSCustomObject]@{
+				Target = 'SMB Server'
+				Status = 'Skipped'
+				PreviousValue = $CurrentValue
+				NewValue = $TargetValue
+				Reason = 'WhatIf mode - no changes made'
+			})
+		}
+	}
+
+	return @($PartialResults)
+}
+
+
+Function Invoke-OneDriveFreeUpSpace {
+<#
+	.SYNOPSIS
+		Forces OneDrive Files On-Demand to dehydrate (free local disk) or hydrate (keep local) files.
+
+	.DESCRIPTION
+		Sets the Unpinned/Pinned attribute on every file inside OneDrive (and optionally
+		SharePoint) sync folders so the OneDrive sync agent will either evict the local
+		content to the cloud (-Mode FreeSpace, default) or download and keep it on the
+		device (-Mode KeepLocal).
+
+		The function does not delete data. It runs a single recursive attrib.exe call per
+		sync folder with the OneDrive +U/-P (or -U/+P) flags. The OneDrive sync agent
+		watches the flag change and performs the actual move. The OneDrive process must be
+		running for the disk-space change to materialize; the flag change itself is instant.
+
+		By default every non-system user profile on the machine is processed. Without
+		elevation, only the current user's profile is fully accessible; other profiles
+		will produce per-folder access-denied failures.
+
+		Use -UserName to target specific profiles, or -Path to point at one specific
+		folder.
+
+	.PARAMETER Mode
+		FreeSpace (default): unpin files so OneDrive dehydrates them to cloud-only.
+		KeepLocal: pin files so OneDrive downloads and keeps them locally.
+
+	.PARAMETER UserName
+		Optional list of user profile folder names to process (case-insensitive). If
+		omitted, every non-special user profile is processed.
+
+	.PARAMETER Path
+		Optional explicit folder path to operate on instead of enumerating user profiles.
+
+	.PARAMETER FolderFilter
+		Wildcard pattern(s) matching sync folder names under each user profile. Defaults
+		to "OneDrive*", which covers both personal ("OneDrive") and business ("OneDrive -
+		Contoso") roots. Pass additional patterns for SharePoint or tenant sync folders,
+		e.g. @("OneDrive*", "SharePoint - *") or @("OneDrive*", "*Contoso*").
+
+	.EXAMPLE
+		Invoke-OneDriveFreeUpSpace
+		Free local space across every user's OneDrive folders on this machine.
+
+	.EXAMPLE
+		Invoke-OneDriveFreeUpSpace -Mode KeepLocal -UserName 'jdoe'
+		Re-pin all of jdoe's OneDrive files so they download locally.
+
+	.EXAMPLE
+		Invoke-OneDriveFreeUpSpace -Path 'C:\Users\jdoe\OneDrive - Contoso' -WhatIf
+		Preview the dehydrate action against that exact folder.
+
+	.EXAMPLE
+		Invoke-OneDriveFreeUpSpace -FolderFilter @('OneDrive*', 'SharePoint - *')
+		Include SharePoint sync folders in addition to OneDrive.
+
+	.OUTPUTS
+		PSCustomObject with FoldersProcessed, FoldersFailed, and Folders properties.
+		Folders is a list of per-folder result objects (Folder, Status, Detail).
+
+	.NOTES
+		Adapted from a long-running community pattern (originally posted by u/criostage on
+		r/SCCM). The +U / -P attrib flags are the OneDrive Files On-Demand pin state
+		markers; see https://learn.microsoft.com/onedrive/files-on-demand-overview.
+
+		Uses one recursive attrib.exe call per sync folder rather than walking individual
+		files, which is many orders of magnitude faster on populated trees.
+#>
+	[CmdletBinding(SupportsShouldProcess = $true, ConfirmImpact = 'Low')]
+	param(
+		[Parameter()]
+		[ValidateSet('FreeSpace', 'KeepLocal')]
+		[string]$Mode = 'FreeSpace',
+
+		[Parameter()]
+		[string[]]$UserName,
+
+		[Parameter()]
+		[ValidateNotNullOrEmpty()]
+		[string]$Path,
+
+		[Parameter()]
+		[ValidateNotNullOrEmpty()]
+		[string[]]$FolderFilter = @('OneDrive*')
+	)
+
+	$ModeConfig = @{
+		FreeSpace = @{ AttribArgs = @('+U', '-P'); Verb = 'Dehydrate (free local space)' }
+		KeepLocal = @{ AttribArgs = @('-U', '+P'); Verb = 'Hydrate (keep local copy)'   }
+	}
+	$AttribArgs = $ModeConfig[$Mode].AttribArgs
+	$ActionVerb = $ModeConfig[$Mode].Verb
+
+	$FoldersToProcess = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+
+	if ($Path) {
+		$Resolved = Resolve-Path -LiteralPath $Path -ErrorAction SilentlyContinue
+		if (-not $Resolved) {
+			Write-Warning "Path not found: $Path"
+			return
+		}
+		$null = $FoldersToProcess.Add($Resolved.Path)
+	} else {
+		# Push Special = false to WMI so SYSTEM/LocalService/NetworkService/defaultuser0
+		# are filtered server-side. LocalPath honors a redirected ProfilesDirectory.
+		try {
+			$Profiles = @(Get-CimInstance -ClassName Win32_UserProfile -Filter 'Special = false' -ErrorAction Stop |
+				Where-Object { Test-Path -LiteralPath $_.LocalPath })
+		} catch {
+			Write-Warning "Could not query Win32_UserProfile: $($_.Exception.Message)"
+			return
+		}
+
+		if ($UserName) {
+			$Profiles = $Profiles | Where-Object { $UserName -contains (Split-Path $_.LocalPath -Leaf) }
+		}
+
+		$IsAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+		if (-not $IsAdmin) {
+			$CurrentUserLeaf = [System.Environment]::UserName
+			$HasOtherProfiles = $Profiles | Where-Object { (Split-Path $_.LocalPath -Leaf) -ne $CurrentUserLeaf } | Select-Object -First 1
+			if ($HasOtherProfiles) {
+				Write-Warning "Not running elevated; other users' profile folders will be skipped silently. Run as Administrator to process all profiles."
+			}
+		}
+
+		foreach ($UserProfile in $Profiles) {
+			foreach ($Filter in $FolderFilter) {
+				foreach ($Found in Get-ChildItem -LiteralPath $UserProfile.LocalPath -Directory -Filter $Filter -ErrorAction SilentlyContinue) {
+					$null = $FoldersToProcess.Add($Found.FullName)
+				}
+			}
+		}
+	}
+
+	if ($FoldersToProcess.Count -eq 0) {
+		Write-Warning "No matching sync folders found."
+		return
+	}
+
+	Write-Host "Invoke-OneDriveFreeUpSpace: $ActionVerb" -ForegroundColor Cyan
+	Write-Host "Folders to process: $($FoldersToProcess.Count)" -ForegroundColor Cyan
+
+	$FoldersDone = 0
+	$FoldersFailed = 0
+	$FolderResults = [System.Collections.Generic.List[pscustomobject]]::new()
+
+	foreach ($Folder in $FoldersToProcess) {
+		Write-Host "Processing: $Folder" -ForegroundColor Cyan
+
+		if (-not $PSCmdlet.ShouldProcess($Folder, $ActionVerb)) {
+			continue
+		}
+
+		# Push-Location with -LiteralPath handles paths containing [ ] & ( ) that
+		# PowerShell's native-command argument parser mangles. Running attrib with cwd
+		# at the folder root and the literal arg '*' /S /D walks the whole tree in one
+		# process spawn.
+		$global:LASTEXITCODE = 0
+		$AttribOutput = ''
+		$Pushed = $false
+		try {
+			Push-Location -LiteralPath $Folder -ErrorAction Stop
+			$Pushed = $true
+			$AttribOutput = (& attrib.exe @AttribArgs '*' /S /D 2>&1 | Out-String).Trim()
+		} catch {
+			$AttribOutput = $_.Exception.Message
+			$global:LASTEXITCODE = 1
+		} finally {
+			if ($Pushed) { Pop-Location }
+		}
+
+		# attrib is silent on success and writes to stderr on per-file failure. Any
+		# captured output (locale-independent) means at least one item failed, even when
+		# the process exit code is 0.
+		$Failed = $LASTEXITCODE -ne 0 -or -not [string]::IsNullOrWhiteSpace($AttribOutput)
+		if ($Failed) {
+			$FoldersFailed++
+			Write-Verbose "attrib.exe issues in ${Folder}: $AttribOutput"
+			$FolderResults.Add([pscustomobject]@{ Folder = $Folder; Status = 'Failed'; Detail = $AttribOutput })
+		} else {
+			$FoldersDone++
+			$FolderResults.Add([pscustomobject]@{ Folder = $Folder; Status = 'Done'; Detail = '' })
+		}
+	}
+
+	Write-Host ""
+	Write-Host "Invoke-OneDriveFreeUpSpace summary:" -ForegroundColor Green
+	Write-Host "  Folders processed   : $FoldersDone" -ForegroundColor Green
+	$FailColor = if ($FoldersFailed -gt 0) { 'Red' } else { 'Gray' }
+	Write-Host "  Folders with errors : $FoldersFailed" -ForegroundColor $FailColor
+	Write-Host "Note: OneDrive sync agent must be running for the disk-space change to materialize." -ForegroundColor Gray
+
+	[pscustomobject]@{
+		FoldersProcessed = $FoldersDone
+		FoldersFailed    = $FoldersFailed
+		Folders          = $FolderResults
 	}
 }
 

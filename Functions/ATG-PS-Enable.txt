@@ -149,13 +149,33 @@ Function Enable-O365AuditLog {
 	Function Enable-SSL {
 		Write-Host "Enabling SSL"
 		try {
-		# Set TLS 1.2 (3072), then TLS 1.1 (768), then TLS 1.0 (192)
-		# Use integers because the enumeration values for TLS 1.2 and TLS 1.1 won't
-		# exist in .NET 4.0, even though they are addressable if .NET 4.5+ is
-		# installed (.NET 4.5 is an in-place upgrade).
-		[System.Net.ServicePointManager]::SecurityProtocol = 3072 -bor 768 -bor 192
+			# Set TLS 1.2 (3072) via integer literal, dropping deprecated TLS 1.1 (768) and TLS 1.0 (192)
+			# Use integers because the enumeration values for TLS 1.2 won't exist in .NET 4.0,
+			# even though they are addressable if .NET 4.5+ is installed (.NET 4.5 is an in-place upgrade).
+			[System.Net.ServicePointManager]::SecurityProtocol = 3072
 		} catch {
-		Write-Output 'Unable to set PowerShell to use TLS 1.2 and TLS 1.1 due to old .NET Framework installed. If you see underlying connection closed or trust errors, you may need to upgrade to .NET Framework 4.5+ and PowerShell v3+.'
+			Write-Output 'Unable to set PowerShell to use TLS 1.2 due to old .NET Framework installed. If you see underlying connection closed or trust errors, you may need to upgrade to .NET Framework 4.5+ and PowerShell v3+.'
+		}
+
+		# Attempt to add TLS 1.3 (12288) in a separate try/catch
+		try {
+			[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 12288
+		} catch {
+			# Silently continue if TLS 1.3 is not available (older .NET Framework)
+		}
+
+		# Persist SchUseStrongCrypto = 1 (DWORD) to the registry for .NET Framework
+		try {
+			Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\.NETFramework\v4.0.30319' -Name 'SchUseStrongCrypto' -Value 1 -Type DWord -ErrorAction SilentlyContinue
+			Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\.NETFramework\v2.0.50727' -Name 'SchUseStrongCrypto' -Value 1 -Type DWord -ErrorAction SilentlyContinue
+
+			# For 64-bit systems, also set the Wow6432Node keys
+			if ([Environment]::Is64BitOperatingSystem) {
+				Set-ItemProperty -Path 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\.NETFramework\v4.0.30319' -Name 'SchUseStrongCrypto' -Value 1 -Type DWord -ErrorAction SilentlyContinue
+				Set-ItemProperty -Path 'HKLM:\SOFTWARE\Wow6432Node\Microsoft\.NETFramework\v2.0.50727' -Name 'SchUseStrongCrypto' -Value 1 -Type DWord -ErrorAction SilentlyContinue
+			}
+		} catch {
+			Write-Output 'Unable to persist TLS settings to registry. Non-admin sessions may not have permission.'
 		}
 	}
 
@@ -197,6 +217,537 @@ Function Enable-O365AuditLog {
 	}
 	
 	
+Function Enable-RDP {
+	<#
+		.SYNOPSIS
+			Enables Remote Desktop Protocol (RDP) on a computer, configures firewall rules, resolves common issues, and lists users/groups with RDP access.
+
+		.DESCRIPTION
+			This function performs the following actions:
+			- Enables Remote Desktop connections via registry
+			- Configures Network Level Authentication (NLA)
+			- Enables and starts required RDP services
+			- Configures Windows Firewall rules for RDP
+			- Lists all users and groups with Remote Desktop access
+			- Proactively resolves common issues that prevent RDP from working
+
+		.EXAMPLE
+			Enable-RDP
+
+		.NOTES
+			Requires Administrator privileges
+	#>
+
+	# Check for Administrator privileges
+	$IsAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+	If (-not $IsAdmin) {
+		Write-Warning "This function requires Administrator privileges. Please run as Administrator."
+		return
+	}
+
+	Write-Host "=== Enabling Remote Desktop Protocol ===" -ForegroundColor Cyan
+
+	# 1. Enable Remote Desktop via Registry
+	Write-Host "`nStep 1: Configuring Remote Desktop registry settings..." -ForegroundColor Yellow
+	Try {
+		$RDPPath = "HKLM:\System\CurrentControlSet\Control\Terminal Server"
+		$CurrentValue = Get-ItemProperty -Path $RDPPath -Name "fDenyTSConnections" -ErrorAction SilentlyContinue
+
+		If ($CurrentValue.fDenyTSConnections -eq 0) {
+			Write-Host "  [OK] Remote Desktop is already enabled in registry" -ForegroundColor Green
+		} Else {
+			Set-ItemProperty -Path $RDPPath -Name "fDenyTSConnections" -Value 0 -ErrorAction Stop
+			Write-Host "  [SUCCESS] Remote Desktop enabled in registry" -ForegroundColor Green
+		}
+
+		# Enable Network Level Authentication (more secure)
+		$NLAPath = "HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp"
+		$NLAValue = Get-ItemProperty -Path $NLAPath -Name "UserAuthentication" -ErrorAction SilentlyContinue
+
+		If ($NLAValue.UserAuthentication -eq 1) {
+			Write-Host "  [OK] Network Level Authentication is already enabled" -ForegroundColor Green
+		} Else {
+			Set-ItemProperty -Path $NLAPath -Name "UserAuthentication" -Value 1 -ErrorAction Stop
+			Write-Host "  [SUCCESS] Network Level Authentication enabled" -ForegroundColor Green
+		}
+	} Catch {
+		Write-Warning "  [ERROR] Failed to configure registry: $_"
+	}
+
+	# 2. Enable and Start RDP Services
+	Write-Host "`nStep 2: Configuring Remote Desktop services..." -ForegroundColor Yellow
+	$Services = @("TermService", "SessionEnv", "UmRdpService")
+
+	ForEach ($ServiceName in $Services) {
+		Try {
+			$Service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+			If ($Service) {
+				# Set service to Automatic startup
+				If ($Service.StartType -ne "Automatic") {
+					Set-Service -Name $ServiceName -StartupType Automatic -ErrorAction Stop
+					Write-Host "  [SUCCESS] $ServiceName set to Automatic startup" -ForegroundColor Green
+				} Else {
+					Write-Host "  [OK] $ServiceName already set to Automatic" -ForegroundColor Green
+				}
+
+				# Start service if not running
+				If ($Service.Status -ne "Running") {
+					Start-Service -Name $ServiceName -ErrorAction Stop
+					Write-Host "  [SUCCESS] $ServiceName started" -ForegroundColor Green
+				} Else {
+					Write-Host "  [OK] $ServiceName is already running" -ForegroundColor Green
+				}
+			}
+		} Catch {
+			Write-Warning "  [WARNING] Issue with service $ServiceName : $_"
+		}
+	}
+
+	# 3. Configure Windows Firewall Rules
+	Write-Host "`nStep 3: Configuring Windows Firewall rules..." -ForegroundColor Yellow
+	Try {
+		# Enable predefined Remote Desktop firewall rules
+		$FirewallRules = Get-NetFirewallRule -DisplayGroup "Remote Desktop" -ErrorAction SilentlyContinue
+
+		If ($FirewallRules) {
+			ForEach ($Rule in $FirewallRules) {
+				If ($Rule.Enabled -eq $false) {
+					Enable-NetFirewallRule -Name $Rule.Name -ErrorAction Stop
+					Write-Host "  [SUCCESS] Enabled firewall rule: $($Rule.DisplayName)" -ForegroundColor Green
+				} Else {
+					Write-Host "  [OK] Firewall rule already enabled: $($Rule.DisplayName)" -ForegroundColor Green
+				}
+			}
+		} Else {
+			# Fallback: Create firewall rules manually
+			Write-Host "  [INFO] Predefined rules not found, creating custom rules..." -ForegroundColor Cyan
+
+			# TCP Rule
+			$TCPRule = Get-NetFirewallRule -Name "RemoteDesktop-UserMode-In-TCP" -ErrorAction SilentlyContinue
+			If (-not $TCPRule) {
+				New-NetFirewallRule -DisplayName "Remote Desktop - User Mode (TCP-In)" `
+					-Name "RemoteDesktop-UserMode-In-TCP" `
+					-Protocol TCP `
+					-LocalPort 3389 `
+					-Direction Inbound `
+					-Action Allow `
+					-Enabled True `
+					-ErrorAction Stop | Out-Null
+				Write-Host "  [SUCCESS] Created TCP firewall rule for RDP" -ForegroundColor Green
+			} Else {
+				Enable-NetFirewallRule -Name "RemoteDesktop-UserMode-In-TCP" -ErrorAction Stop
+				Write-Host "  [SUCCESS] Enabled existing TCP firewall rule" -ForegroundColor Green
+			}
+
+			# UDP Rule
+			$UDPRule = Get-NetFirewallRule -Name "RemoteDesktop-UserMode-In-UDP" -ErrorAction SilentlyContinue
+			If (-not $UDPRule) {
+				New-NetFirewallRule -DisplayName "Remote Desktop - User Mode (UDP-In)" `
+					-Name "RemoteDesktop-UserMode-In-UDP" `
+					-Protocol UDP `
+					-LocalPort 3389 `
+					-Direction Inbound `
+					-Action Allow `
+					-Enabled True `
+					-ErrorAction Stop | Out-Null
+				Write-Host "  [SUCCESS] Created UDP firewall rule for RDP" -ForegroundColor Green
+			} Else {
+				Enable-NetFirewallRule -Name "RemoteDesktop-UserMode-In-UDP" -ErrorAction Stop
+				Write-Host "  [SUCCESS] Enabled existing UDP firewall rule" -ForegroundColor Green
+			}
+		}
+	} Catch {
+		Write-Warning "  [ERROR] Failed to configure firewall rules: $_"
+	}
+
+	# 4. Check RDP Port Availability
+	Write-Host "`nStep 4: Checking RDP port availability..." -ForegroundColor Yellow
+	Try {
+		$RDPPort = Get-ItemProperty -Path "HKLM:\System\CurrentControlSet\Control\Terminal Server\WinStations\RDP-Tcp" -Name "PortNumber" -ErrorAction SilentlyContinue
+		$Port = $RDPPort.PortNumber
+		If (-not $Port) { $Port = 3389 }
+		Write-Host "  [INFO] RDP is configured to use port: $Port" -ForegroundColor Cyan
+
+		# Check if port is listening
+		$Listener = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
+		If ($Listener) {
+			Write-Host "  [OK] Port $Port is listening for connections" -ForegroundColor Green
+		} Else {
+			Write-Warning "  [WARNING] Port $Port is not listening yet. Services may still be starting..."
+		}
+	} Catch {
+		Write-Warning "  [WARNING] Could not verify port status: $_"
+	}
+
+	# 5. List Users and Groups with RDP Access
+	Write-Host "`nStep 5: Users and Groups with Remote Desktop Access" -ForegroundColor Yellow
+	Write-Host "========================================" -ForegroundColor Cyan
+
+	Try {
+		# Get Remote Desktop Users group members
+		$RDPUsers = Get-LocalGroupMember -Group "Remote Desktop Users" -ErrorAction SilentlyContinue
+
+		Write-Host "`n  Remote Desktop Users Group Members:" -ForegroundColor White
+		If ($RDPUsers) {
+			ForEach ($User in $RDPUsers) {
+				Write-Host "    - $($User.Name) ($($User.ObjectClass))" -ForegroundColor Green
+			}
+		} Else {
+			Write-Host "    - No users explicitly added to Remote Desktop Users group" -ForegroundColor Yellow
+		}
+
+		# Get Administrators group members (they automatically have RDP access)
+		Write-Host "`n  Administrators Group Members (automatic RDP access):" -ForegroundColor White
+		$Admins = Get-LocalGroupMember -Group "Administrators" -ErrorAction SilentlyContinue
+		If ($Admins) {
+			ForEach ($Admin in $Admins) {
+				Write-Host "    - $($Admin.Name) ($($Admin.ObjectClass))" -ForegroundColor Green
+			}
+		}
+	} Catch {
+		Write-Warning "  [ERROR] Failed to enumerate user groups: $_"
+	}
+
+	# 6. Final Summary
+	Write-Host "`n========================================" -ForegroundColor Cyan
+	Write-Host "=== Remote Desktop Configuration Complete ===" -ForegroundColor Green
+	Write-Host "`nTo add users to Remote Desktop access, run:" -ForegroundColor Cyan
+	Write-Host "  Add-LocalGroupMember -Group 'Remote Desktop Users' -Member 'DOMAIN\Username'" -ForegroundColor White
+	Write-Host "`nTo connect to this computer remotely, use:" -ForegroundColor Cyan
+	Write-Host "  mstsc /v:$($env:COMPUTERNAME)" -ForegroundColor White
+	Write-Host "========================================`n" -ForegroundColor Cyan
+}
+
+Function Enable-RemoteManagement {
+	<#
+		.SYNOPSIS
+			Enables remote management capabilities on a Windows computer including Remote Registry, Admin Shares, PowerShell Remoting, WMI, PSExec support, and PRTG monitoring access. Also calls Enable-RDP.
+
+		.DESCRIPTION
+			This function configures a Windows computer to accept common remote management protocols:
+			- Remote Registry service (started and set to Automatic)
+			- Administrative Shares (ADMIN$, C$) via registry and Server service restart
+			- PowerShell Remoting (WinRM via Enable-PSRemoting)
+			- WMI firewall rules for remote management
+			- File and Printer Sharing firewall rules (required for PSExec)
+			- ICMP (ping) firewall rules for PRTG and general monitoring
+			- Remote Desktop Protocol via Enable-RDP
+
+		.EXAMPLE
+			Enable-RemoteManagement
+
+		.NOTES
+			Requires Administrator privileges.
+			Should be run locally on the target machine.
+	#>
+
+	# Check for Administrator privileges
+	$IsAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+	If (-not $IsAdmin) {
+		Write-Warning "This function requires Administrator privileges. Please run as Administrator."
+		return
+	}
+
+	Write-Host "=== Enabling Remote Management ===" -ForegroundColor Cyan
+
+	# 1. Enable Remote Registry
+	Write-Host "`nStep 1: Enabling Remote Registry service..." -ForegroundColor Yellow
+	Try {
+		$RemoteRegistry = Get-Service -Name "RemoteRegistry" -ErrorAction Stop
+		If ($RemoteRegistry.StartType -ne "Automatic") {
+			Set-Service -Name "RemoteRegistry" -StartupType Automatic -ErrorAction Stop
+			Write-Host "  [SUCCESS] RemoteRegistry set to Automatic startup" -ForegroundColor Green
+		} Else {
+			Write-Host "  [OK] RemoteRegistry already set to Automatic" -ForegroundColor Green
+		}
+		If ($RemoteRegistry.Status -ne "Running") {
+			Start-Service -Name "RemoteRegistry" -ErrorAction Stop
+			Write-Host "  [SUCCESS] RemoteRegistry service started" -ForegroundColor Green
+		} Else {
+			Write-Host "  [OK] RemoteRegistry service is already running" -ForegroundColor Green
+		}
+	} Catch {
+		Write-Warning "  [ERROR] Failed to configure Remote Registry: $_"
+	}
+
+	# 2. Enable Administrative Shares (ADMIN$, C$)
+	Write-Host "`nStep 2: Enabling Administrative Shares..." -ForegroundColor Yellow
+	Try {
+		$RegPath = "HKLM:\SYSTEM\CurrentControlSet\Services\LanmanServer\Parameters"
+		$ShareSettingChanged = $false
+
+		$CurrentValue = Get-ItemProperty -Path $RegPath -Name "AutoShareWks" -ErrorAction SilentlyContinue
+
+		# AutoShareWks = 1 enables admin shares on workstations, absence of the value also means enabled (default)
+		If ($CurrentValue.AutoShareWks -eq 0) {
+			Set-ItemProperty -Path $RegPath -Name "AutoShareWks" -Value 1 -Type DWord -ErrorAction Stop
+			Write-Host "  [SUCCESS] Administrative Shares enabled via AutoShareWks registry value" -ForegroundColor Green
+			$ShareSettingChanged = $true
+		} Else {
+			Write-Host "  [OK] Administrative Shares are already enabled (AutoShareWks)" -ForegroundColor Green
+		}
+
+		# Also check AutoShareServer for server OS
+		$ServerValue = Get-ItemProperty -Path $RegPath -Name "AutoShareServer" -ErrorAction SilentlyContinue
+		If ($ServerValue.AutoShareServer -eq 0) {
+			Set-ItemProperty -Path $RegPath -Name "AutoShareServer" -Value 1 -Type DWord -ErrorAction Stop
+			Write-Host "  [SUCCESS] Administrative Shares enabled via AutoShareServer registry value" -ForegroundColor Green
+			$ShareSettingChanged = $true
+		} Else {
+			Write-Host "  [OK] Administrative Shares are already enabled (AutoShareServer)" -ForegroundColor Green
+		}
+
+		# Only restart the Server service if we changed a registry value
+		If ($ShareSettingChanged) {
+			$LanmanServer = Get-Service -Name "LanmanServer" -ErrorAction SilentlyContinue
+			If ($LanmanServer -and $LanmanServer.Status -eq "Running") {
+				Restart-Service -Name "LanmanServer" -Force -ErrorAction Stop
+				Write-Host "  [SUCCESS] Server service restarted to apply share settings" -ForegroundColor Green
+			}
+		}
+
+		# Verify shares exist
+		$AdminShare = Get-SmbShare -Name "ADMIN$" -ErrorAction SilentlyContinue
+		$CShare = Get-SmbShare -Name "C$" -ErrorAction SilentlyContinue
+		If ($AdminShare -and $CShare) {
+			Write-Host "  [OK] ADMIN$ and C$ shares are present" -ForegroundColor Green
+		} Else {
+			Write-Warning "  [WARNING] Admin shares may require a reboot to appear"
+		}
+	} Catch {
+		Write-Warning "  [ERROR] Failed to configure Administrative Shares: $_"
+	}
+
+	# 3. Enable PowerShell Remoting (WinRM)
+	Write-Host "`nStep 3: Enabling PowerShell Remoting (WinRM)..." -ForegroundColor Yellow
+	Try {
+		$WinRM = Get-Service -Name "WinRM" -ErrorAction Stop
+		If ($WinRM.Status -eq "Running") {
+			# Test if PSRemoting is already functional
+			$SessionConfig = Get-PSSessionConfiguration -Name "Microsoft.PowerShell" -ErrorAction SilentlyContinue
+			If ($SessionConfig) {
+				Write-Host "  [OK] PowerShell Remoting is already enabled and configured" -ForegroundColor Green
+			} Else {
+				Enable-PSRemoting -Force -SkipNetworkProfileCheck -ErrorAction Stop
+				Write-Host "  [SUCCESS] PowerShell Remoting enabled" -ForegroundColor Green
+			}
+		} Else {
+			Enable-PSRemoting -Force -SkipNetworkProfileCheck -ErrorAction Stop
+			Write-Host "  [SUCCESS] PowerShell Remoting enabled and WinRM started" -ForegroundColor Green
+		}
+
+		# Refresh service object since Enable-PSRemoting may have changed startup type
+		$WinRM = Get-Service -Name "WinRM" -ErrorAction Stop
+		If ($WinRM.StartType -ne "Automatic") {
+			Set-Service -Name "WinRM" -StartupType Automatic -ErrorAction Stop
+			Write-Host "  [SUCCESS] WinRM set to Automatic startup" -ForegroundColor Green
+		}
+	} Catch {
+		Write-Warning "  [ERROR] Failed to configure PowerShell Remoting: $_"
+	}
+
+	# 4. Enable WMI Through Firewall
+	Write-Host "`nStep 4: Enabling WMI firewall rules..." -ForegroundColor Yellow
+	Try {
+		$WMIRules = Get-NetFirewallRule -DisplayGroup "Windows Management Instrumentation (WMI)" -ErrorAction SilentlyContinue
+
+		If ($WMIRules) {
+			ForEach ($Rule in $WMIRules) {
+				If ($Rule.Enabled -eq $false) {
+					Enable-NetFirewallRule -Name $Rule.Name -ErrorAction Stop
+					Write-Host "  [SUCCESS] Enabled firewall rule: $($Rule.DisplayName)" -ForegroundColor Green
+				} Else {
+					Write-Host "  [OK] Firewall rule already enabled: $($Rule.DisplayName)" -ForegroundColor Green
+				}
+			}
+		} Else {
+			Write-Warning "  [WARNING] WMI firewall rule group not found"
+		}
+	} Catch {
+		Write-Warning "  [ERROR] Failed to configure WMI firewall rules: $_"
+	}
+
+	# 5. Enable File and Printer Sharing (required for PSExec and admin share access)
+	Write-Host "`nStep 5: Enabling File and Printer Sharing firewall rules (PSExec support)..." -ForegroundColor Yellow
+	Try {
+		$FPSRules = Get-NetFirewallRule -DisplayGroup "File and Printer Sharing" -ErrorAction SilentlyContinue
+
+		If ($FPSRules) {
+			ForEach ($Rule in $FPSRules) {
+				If ($Rule.Enabled -eq $false) {
+					Enable-NetFirewallRule -Name $Rule.Name -ErrorAction Stop
+					Write-Host "  [SUCCESS] Enabled firewall rule: $($Rule.DisplayName)" -ForegroundColor Green
+				} Else {
+					Write-Host "  [OK] Firewall rule already enabled: $($Rule.DisplayName)" -ForegroundColor Green
+				}
+			}
+		} Else {
+			Write-Warning "  [WARNING] File and Printer Sharing firewall rule group not found"
+		}
+	} Catch {
+		Write-Warning "  [ERROR] Failed to configure File and Printer Sharing firewall rules: $_"
+	}
+
+	# 6. Enable ICMP (Ping) for PRTG and monitoring tools
+	Write-Host "`nStep 6: Enabling ICMP (Ping) for PRTG and monitoring..." -ForegroundColor Yellow
+	Try {
+		# Enable ICMPv4 Echo Request
+		$ICMPv4Rule = Get-NetFirewallRule -Name "CoreNet-Diag-ICMP4-EchoRequest-In" -ErrorAction SilentlyContinue
+		If ($ICMPv4Rule) {
+			If ($ICMPv4Rule.Enabled -eq $false) {
+				Enable-NetFirewallRule -Name "CoreNet-Diag-ICMP4-EchoRequest-In" -ErrorAction Stop
+				Write-Host "  [SUCCESS] Enabled ICMPv4 Echo Request (Ping)" -ForegroundColor Green
+			} Else {
+				Write-Host "  [OK] ICMPv4 Echo Request (Ping) already enabled" -ForegroundColor Green
+			}
+		} Else {
+			# Create the rule if it doesn't exist
+			New-NetFirewallRule -DisplayName "Allow ICMPv4 Echo Request" `
+				-Name "Custom-ICMPv4-EchoRequest-In" `
+				-Protocol ICMPv4 `
+				-IcmpType 8 `
+				-Direction Inbound `
+				-Action Allow `
+				-Enabled True `
+				-ErrorAction Stop | Out-Null
+			Write-Host "  [SUCCESS] Created ICMPv4 Echo Request firewall rule" -ForegroundColor Green
+		}
+
+		# Enable Remote Event Log Management for PRTG WMI sensors
+		$EventLogRules = Get-NetFirewallRule -DisplayGroup "Remote Event Log Management" -ErrorAction SilentlyContinue
+		If ($EventLogRules) {
+			ForEach ($Rule in $EventLogRules) {
+				If ($Rule.Enabled -eq $false) {
+					Enable-NetFirewallRule -Name $Rule.Name -ErrorAction Stop
+					Write-Host "  [SUCCESS] Enabled firewall rule: $($Rule.DisplayName)" -ForegroundColor Green
+				} Else {
+					Write-Host "  [OK] Firewall rule already enabled: $($Rule.DisplayName)" -ForegroundColor Green
+				}
+			}
+		}
+	} Catch {
+		Write-Warning "  [ERROR] Failed to configure ICMP/monitoring firewall rules: $_"
+	}
+
+	# 7. Enable Remote Desktop via Enable-RDP
+	Write-Host "`nStep 7: Enabling Remote Desktop..." -ForegroundColor Yellow
+	Try {
+		Enable-RDP
+	} Catch {
+		Write-Warning "  [ERROR] Failed to run Enable-RDP: $_"
+	}
+
+	# Final Summary
+	Write-Host "`n========================================" -ForegroundColor Cyan
+	Write-Host "=== Remote Management Configuration Complete ===" -ForegroundColor Green
+	Write-Host "`nThe following remote management capabilities have been configured:" -ForegroundColor Cyan
+	Write-Host "  - Remote Registry (service running, set to Automatic)" -ForegroundColor White
+	Write-Host "  - Administrative Shares (ADMIN$, C$)" -ForegroundColor White
+	Write-Host "  - PowerShell Remoting (WinRM)" -ForegroundColor White
+	Write-Host "  - WMI (firewall rules enabled)" -ForegroundColor White
+	Write-Host "  - PSExec (File and Printer Sharing enabled)" -ForegroundColor White
+	Write-Host "  - PRTG Monitoring (ICMP, WMI, Remote Event Log)" -ForegroundColor White
+	Write-Host "  - Remote Desktop (RDP)" -ForegroundColor White
+	Write-Host "========================================`n" -ForegroundColor Cyan
+}
+
+Function Enable-DellTPM {
+	<#
+		.SYNOPSIS
+			On Dell/Alienware systems, attempts to enable TPM via DellBIOSProvider.
+
+		.DESCRIPTION
+			Tries the discrete TPM path (DellSmbios:\TpmSecurity\Tpm) first, then
+			falls back to Intel PTT (DellSmbios:\AdvancedBootOptions\PttSwitch) for
+			firmware-TPM systems. Never touches TpmClear (destructive: wipes keys).
+
+			When a TPM enable is actually being performed, this function also flips
+			the PPI bypass settings (TpmPpiBypassEnable / TpmPpiAcpiOptOut) so the
+			firmware does NOT prompt the operator to press F10/F12 at next boot to
+			confirm the TPM change. This is necessary for fully-unattended remote
+			runs where no one is physically at the machine. Only the Enable prompt
+			is bypassed; Clear and Disable prompts are left at their default state.
+
+			BIOS changes typically take effect on next reboot, so callers should
+			reboot to actually activate TPM. On Dells with a BIOS Setup admin
+			password, DellBIOSProvider requires a -Password argument that this
+			function does not currently provide; Set-Item will throw and the
+			caller will see the exception.
+
+		.EXAMPLE
+			Enable-DellTPM
+	#>
+	[CmdletBinding()]
+	param()
+
+	$Manufact = (Get-CimInstance -Class Win32_ComputerSystem -ErrorAction SilentlyContinue).Manufacturer
+	If ( $Manufact -match "Dell" -or $Manufact -match "Alienware") {
+		If (-not (Get-Module -Name DellBIOSProvider -ErrorAction SilentlyContinue) ) {
+			Import-Module PowerShellGet -Force
+			Install-Module DellBIOSProvider -Force -ErrorAction SilentlyContinue
+			Import-Module DellBIOSProvider -Force
+		}
+
+		# Discrete TPM first (DellSmbios:\TpmSecurity\Tpm)
+		$TpmSetting = Get-Item -Path DellSmbios:\TpmSecurity\Tpm -ErrorAction SilentlyContinue
+		If ($TpmSetting) {
+			if ($TpmSetting.CurrentValue -eq "Disabled") {
+				Write-Output "Dell TPM is currently disabled. Enabling it now..."
+				# Suppress the BIOS PPI prompt that would otherwise require a
+				# keypress at next boot to confirm the TPM enable. Setting names
+				# vary across Dell BIOS versions; missing paths are no-ops.
+				# Only the enable-prompt bypass is flipped -- TpmClear/Disable
+				# prompts are left at their default state.
+				Set-Item -Path DellSmbios:\TpmSecurity\TpmPpiBypassEnable -Value Enabled -ErrorAction SilentlyContinue
+				Set-Item -Path DellSmbios:\TpmSecurity\TpmPpiAcpiOptOut   -Value Enabled -ErrorAction SilentlyContinue
+				Set-Item -Path DellSmbios:\TpmSecurity\Tpm -Value Enabled -ErrorAction Stop
+
+				# Some Dells expose TpmActivation separately; activate if present and not already.
+				$TpmActivation = Get-Item -Path DellSmbios:\TpmSecurity\TpmActivation -ErrorAction SilentlyContinue
+				If ($TpmActivation -and $TpmActivation.CurrentValue -ne "Enabled" -and $TpmActivation.CurrentValue -ne "Activate") {
+					Set-Item -Path DellSmbios:\TpmSecurity\TpmActivation -Value Enabled -ErrorAction SilentlyContinue
+				}
+
+				$TpmSetting = Get-Item -Path DellSmbios:\TpmSecurity\Tpm -ErrorAction SilentlyContinue
+				$TpmSetting
+				if ($TpmSetting.CurrentValue -eq "Enabled") {
+					Write-Output "Dell TPM has been successfully enabled (reboot required to take effect)."
+				} else {
+					Write-Output "Failed to enable Dell TPM."
+				}
+			} else {
+				Write-Output "Dell TPM is already enabled."
+			}
+			Return
+		}
+
+		# Fall back to Intel PTT (firmware TPM) -- common on Dells without discrete TPM
+		$PttSetting = Get-Item -Path DellSmbios:\AdvancedBootOptions\PttSwitch -ErrorAction SilentlyContinue
+		If ($PttSetting) {
+			if ($PttSetting.CurrentValue -ne "On" -and $PttSetting.CurrentValue -ne "Enabled") {
+				Write-Output "Intel PTT (firmware TPM) is currently disabled. Enabling it now..."
+				# Suppress the BIOS PPI prompt at next boot (see notes on the discrete-TPM path above).
+				Set-Item -Path DellSmbios:\TpmSecurity\TpmPpiBypassEnable -Value Enabled -ErrorAction SilentlyContinue
+				Set-Item -Path DellSmbios:\TpmSecurity\TpmPpiAcpiOptOut   -Value Enabled -ErrorAction SilentlyContinue
+				Set-Item -Path DellSmbios:\AdvancedBootOptions\PttSwitch -Value On -ErrorAction Stop
+
+				$PttSetting = Get-Item -Path DellSmbios:\AdvancedBootOptions\PttSwitch -ErrorAction SilentlyContinue
+				$PttSetting
+				if ($PttSetting.CurrentValue -eq "On" -or $PttSetting.CurrentValue -eq "Enabled") {
+					Write-Output "Intel PTT has been successfully enabled (reboot required to take effect)."
+				} else {
+					Write-Output "Failed to enable Intel PTT."
+				}
+			} else {
+				Write-Output "Intel PTT is already enabled."
+			}
+			Return
+		}
+
+		Write-Output "TPM is not able to be set via PowerShell on this computer (no TpmSecurity\Tpm or AdvancedBootOptions\PttSwitch path)."
+	} Else { Write-Host "This is not a Dell Computer" }
+}
+
 	# SIG # Begin signature block
 	# MIIF0AYJKoZIhvcNAQcCoIIFwTCCBb0CAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 	# gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR

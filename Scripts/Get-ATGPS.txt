@@ -3,7 +3,9 @@ Function Get-ATGPS {
 	[System.Net.ServicePointManager]::SecurityProtocol = [System.Net.ServicePointManager]::SecurityProtocol -bor 3072
 	$Destination = $Env:temp + "\ATGPS.psm1"
 	Set-ExecutionPolicy Bypass -Scope Process -Force
-	(Invoke-WebRequest git.io/ATGPS -UseBasicParsing).Content | Out-File -FilePath $Destination
+	$UrlList = (Invoke-WebRequest https://raw.githubusercontent.com/AmbitionsTechnologyGroup/ATG-PS-Functions/master/Functions/URL-List.csv -UseBasicParsing).Content | ConvertFrom-Csv
+	$Combined = ForEach ($Entry in $UrlList) { (Invoke-WebRequest $Entry.URL -UseBasicParsing).Content }
+	$Combined -join "`n`n" | Out-File -FilePath $Destination -Encoding utf8
 	Import-Module $Destination -Global -Force
 	If (Get-Module -Name ATGPS -ErrorAction SilentlyContinue){
 		# List imported functions from ATGPS
