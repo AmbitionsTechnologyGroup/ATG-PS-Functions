@@ -1081,11 +1081,7 @@ Function Update-PowershellModules {
 			}
 		}
 		Install-Module -Name $Mod -Scope AllUsers -Force -AllowClobber -ErrorAction SilentlyContinue -WarningAction SilentlyContinue
-		Try {
-			Import-Module -Name $Mod -Scope AllUsers -Force -ErrorAction Stop -WarningAction SilentlyContinue
-		} Catch {
-			Import-Module -Name $Mod -Force -WarningAction SilentlyContinue
-		}
+		Import-Module -Name $Mod -Force -WarningAction SilentlyContinue
 		Clear-Variable -Name Mod -Force
 	}
 	Write-Host "Updating all modules"
@@ -1095,9 +1091,9 @@ Function Update-PowershellModules {
 		Update-Module -Force -WarningAction SilentlyContinue
 	}
 	Write-Host "Settings Prediction Source"
-	Try {
-		Set-PSReadLineOption -PredictionSource HistoryAndPlugin -ErrorAction Stop
-	} Catch {
+	If ($PSVersionTable.PSVersion -ge [Version]"7.2") {
+		Set-PSReadLineOption -PredictionSource HistoryAndPlugin
+	} Else {
 		Set-PSReadLineOption -PredictionSource History
 	}
 	Get-Module | Select-Object Name, Version, Description
