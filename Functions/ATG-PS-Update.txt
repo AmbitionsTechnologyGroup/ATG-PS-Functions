@@ -1061,7 +1061,7 @@ Function Update-PowerShellModule {
 }
 
 Function Update-PowershellModules {
-	Set-ExecutionPolicy RemoteSigned -Scope Process -Force
+	Set-ExecutionPolicy RemoteSigned -Scope LocalMachine -Force
 	[Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
 	$Providers = (Get-PackageProvider).Name
 	If ($Providers -NotContains "Nuget") {
